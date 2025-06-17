@@ -1,7 +1,11 @@
-# app.py  –  EnerMat Perovskite Explorer v9.6 with Benchmark & Download Plot
+# app.py  –  EnerMat Perovskite Explorer v9.6 with Benchmark & Download Plot (CSV path fix)
 # Author: Dr Gbadebo Taofeek Yusuf
 
-import io, os, uuid, datetime
+import io
+import os
+import uuid
+import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
 import streamlit as st
@@ -19,6 +23,9 @@ from backend.perovskite_utils import screen, END_MEMBERS, _summary
 # ───────────────────────────────────── App config ────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+
+# Determine repo root (where app.py lives)
+BASE_DIR = Path(__file__).parent
 
 # Session history
 if "history" not in st.session_state:
@@ -188,22 +195,25 @@ with tab_bench:
         if entry: bench.append({"Formula":f,"DFT Eg":entry.band_gap})
     dfb=pd.DataFrame(bench)
     # exp
-    exp=pd.read_csv("exp_bandgaps.csv").loc[:,["formula","exp_gap"]]
-    exp.columns=["Formula","Exp Eg"]
-    dfm=dfb.merge(exp,on="Formula")
-    dfm["Δ Eg"]=dfm["DFT Eg"]-dfm["Exp Eg"]
-    # stats
-    mae=dfm["Δ Eg"].abs().mean(); rmse=(dfm["Δ Eg"]**2).mean()**0.5
+    exp = pd.read_csv(BASE_DIR / "exp_bandgaps.csv")
+    exp = exp.loc[:,["formula","exp_gap"]].rename(columns={"formula":"Formula","exp_gap":"Exp Eg"})
+    dfm = dfb.merge(exp,on="Formula")
+    dfm["Δ Eg"] = dfm["DFT Eg"] - dfm["Exp Eg"]
+    mae = dfm["Δ Eg"].abs().mean(); rmse = (dfm["Δ Eg"]**2).mean()**0.5
     st.write(f"MAE={mae:.3f} eV  RMSE={rmse:.3f} eV")
-    # parity
-    fig1,ax=plt.subplots(); ax.scatter(dfm["Exp Eg"],dfm["DFT Eg"],s=60)
-    mn,mx=dfm[["Exp Eg","DFT Eg"]].min().min(),dfm[["Exp Eg","DFT Eg"]].max().max()
-    ax.plot([mn,mx],[mn,mx],"--",color="gray"); ax.set_xlabel("Exp Eg"); ax.set_ylabel("DFT Eg")
+    # parity plot
+    fig1, ax = plt.subplots()
+    ax.scatter(dfm["Exp Eg"], dfm["DFT Eg"], s=60)
+    mn = min(dfm["Exp Eg"].min(), dfm["DFT Eg"].min())
+    mx = max(dfm["Exp Eg"].max(), dfm["DFT Eg"].max())
+    ax.plot([mn,mx],[mn,mx],"--",color="gray")
+    ax.set_xlabel("Exp Eg (eV)"); ax.set_ylabel("DFT Eg (eV)")
     st.pyplot(fig1)
-    # download
-    buf1=io.BytesIO(); fig1.savefig(buf1,format="png",dpi=200); buf1.seek(0)
+    # download parity
+    buf1 = io.BytesIO(); fig1.savefig(buf1,format="png",dpi=200); buf1.seek(0)
     st.download_button("Download parity plot",buf1,"parity.png","image/png")
     # histogram
-    fig2,ax2=plt.subplots(); ax2.hist(dfm["Δ Eg"],bins=5,edgecolor="black")
-    ax2.set_xlabel("Δ Eg"); ax2.set_ylabel("Count")
+    fig2, ax2 = plt.subplots()
+    ax2.hist(dfm["Δ Eg"],bins=5,edgecolor="black")
+    ax2.set_xlabel("Δ Eg (eV)"); ax2.set_ylabel("Count")
     st.pyplot(fig2)
