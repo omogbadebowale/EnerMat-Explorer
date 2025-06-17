@@ -1,9 +1,8 @@
-# app.py  –  EnerMat Perovskite Explorer v9.6 with Benchmark & Download Plot
+# app.py  –  EnerMat Perovskite Explorer v9.6 with Publication-Ready Plots & Benchmark  
 # Author: Dr Gbadebo Taofeek Yusuf
 
 import io
 import os
-import uuid
 import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -13,8 +12,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-import nbformat as nbf
-import matplotlib.pyplot as plt
 from docx import Document
 from mp_api.client import MPRester
 
@@ -74,7 +71,7 @@ with st.sidebar:
 def run_screen(**kw):
     return screen(**kw)
 
-# ──────────────────────────────── Run / Back logic ──────────────────────────
+# ─────────────────────────────── Run / Back logic ──────────────────────────
 col_run, col_back = st.columns([3, 1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_back = col_back.button("⏪ Previous", disabled=len(st.session_state["history"]) < 1)
@@ -126,39 +123,58 @@ with tab_tbl:
 
     st.dataframe(df, height=400, use_container_width=True)
 
-# ─────────── Plot Tab ───────────
+# ─────────── Plot Tab (Publication-Ready) ───────────
 with tab_plot:
     st.caption("ℹ️ **Tip**: Hover circles; scroll to zoom; drag to pan")
+
+    # highlight top-20%
     top_cut = df["score"].quantile(0.80)
     df["is_top"] = df["score"] >= top_cut
 
+    # scatter
     fig = px.scatter(
-        df, x="stability", y="band_gap",
+        df,
+        x="stability", y="band_gap",
         color="score", color_continuous_scale="plasma",
-        hover_data=["formula","x","band_gap","stability","score"],
-        height=450
+        hover_data=["formula","x","band_gap","stability","score"]
     )
-    fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
+    fig.update_traces(
+        marker=dict(size=20, line=dict(width=1.5, color="black")),
+        selector=dict(mode="markers")
+    )
     outline = go.Scatter(
-        x=df.loc[df.is_top,"stability"], y=df.loc[df.is_top,"band_gap"],
+        x=df.loc[df.is_top, "stability"],
+        y=df.loc[df.is_top, "band_gap"],
         mode="markers", hoverinfo="skip",
-        marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+        marker=dict(size=24, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
         showlegend=False
     )
     fig.add_trace(outline)
-    fig.update_xaxes(title="<b>Stability</b>", range=[0.75,1.00], dtick=0.05)
-    fig.update_yaxes(title="<b>Band-gap (eV)</b>", range=[0,3.5], dtick=0.5)
+
     fig.update_layout(
         template="simple_white",
-        margin=dict(l=70, r=40, t=25, b=65),
-        coloraxis_colorbar=dict(title="<b>Score</b>")
+        font=dict(family="Times New Roman", size=16, color="black"),
+        xaxis=dict(
+            title=dict(text="<b>Thermodynamic Stability</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True,
+            range=[0.75,1.00], dtick=0.05
+        ),
+        yaxis=dict(
+            title=dict(text="<b>Band-gap (eV)</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True,
+            range=[0,3.5], dtick=0.5
+        ),
+        coloraxis_colorbar=dict(
+            title=dict(text="<b>Composite Score</b>", font=dict(size=16)),
+            tickfont=dict(size=14), thickness=15, lenmode="fraction", len=0.5
+        ),
+        margin=dict(l=80, r=40, t=50, b=80)
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ─── Download plot for publication ─────────────────────────────
-    png = fig.to_image(format="png", scale=2)
+    png = fig.to_image(format="png", scale=3)
     st.download_button(
-        "📥 Download plot as PNG",
+        "📥 Download stability vs gap plot (PNG)",
         png, "stability_vs_gap.png", "image/png",
         use_container_width=True
     )
@@ -183,89 +199,125 @@ with tab_dl:
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top['formula']}")
     tbl = doc.add_table(rows=1, cols=2)
-    for k, v in [("Band-gap", top['band_gap']), ("Stability", top['stability']), ("Score", top['score'])]:
+    for k, v in [
+        ("Band-gap", top['band_gap']),
+        ("Stability", top['stability']),
+        ("Score", top['score'])
+    ]:
         row = tbl.add_row()
         row.cells[0].text = k
         row.cells[1].text = str(v)
-    buf = io.BytesIO()
-    doc.save(buf); buf.seek(0)
+    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
     st.download_button(
         "📥 DOCX report",
         buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        use_container_width=True
     )
 
-# ─────────── Benchmark Tab (auto-download from GitHub) ───────────
+# ─────────── Benchmark Tab (Publication-Ready) ───────────
 with tab_bench:
     st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # 1) Try user upload first
     uploaded = st.file_uploader(
-        "Upload experimental band-gap CSV (`formula`, `exp_gap`)", type="csv"
+        "Upload experimental CSV (`formula`,`exp_gap`)",
+        type="csv", help="Columns: formula, exp_gap"
     )
 
-    # 2) If no upload, fall back to GitHub raw URL
     if uploaded is None:
-        st.info("No file uploaded — fetching from GitHub…")
+        st.info("No upload — fetching fallback from GitHub…")
         exp_url = (
             "https://raw.githubusercontent.com/"
             "omogbadebowale/EnerMat-Explorer/main/exp_bandgaps.csv"
         )
-        try:
-            exp_df = pd.read_csv(exp_url)
-            st.success("Loaded experimental data from GitHub")
-        except Exception as e:
-            st.error("Failed to load experimental CSV from GitHub. Please upload your own.")
-            st.stop()
+        exp_df = pd.read_csv(exp_url)
     else:
         exp_df = pd.read_csv(uploaded)
 
-    # Validate columns
-    if not {"formula","exp_gap"}.issubset(exp_df.columns):
-        st.error("CSV must contain `formula` and `exp_gap` columns.")
+    if not {"formula", "exp_gap"}.issubset(exp_df.columns):
+        st.error("Your CSV must contain `formula` and `exp_gap` columns.")
         st.stop()
 
-    # 3) Fetch DFT band gaps from Materials Project
     load_dotenv()
-    mpr = MPRester(os.getenv("MP_API_KEY",""))
+    mpr = MPRester(os.getenv("MP_API_KEY", ""))
     bench = []
     for f in END_MEMBERS:
-        docs  = mpr.summary.search(formula=f, fields=["band_gap"])
-        entry = next(iter(docs), None)
+        entry = next(mpr.summary.search(formula=f, fields=["band_gap"]), None)
         if entry:
-            bench.append({"Formula": f, "DFT Eg (eV)": entry.band_gap})
-    dfb = pd.DataFrame(bench)
+            bench.append({"formula": f, "dft_gap": entry.band_gap})
+    dft_df = pd.DataFrame(bench)
 
-    # 4) Prepare experimental DataFrame
-    exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
-    dfm = dfb.merge(exp_df, on="Formula", how="inner")
-    dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
+    merged = (
+        dft_df.merge(
+            exp_df.rename(columns={"formula": "formula", "exp_gap": "exp_gap"}),
+            on="formula"
+        )
+        .assign(error=lambda d: d["dft_gap"] - d["exp_gap"])
+    )
+    if merged.empty:
+        st.error("No matching formulas between DFT and experimental data.")
+        st.stop()
 
-    # 5) Show stats
-    mae  = dfm["Δ Eg (eV)"].abs().mean()
-    rmse = (dfm["Δ Eg (eV)"]**2).mean()**0.5
+    mae  = merged["error"].abs().mean()
+    rmse = np.sqrt((merged["error"]**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # 6) Parity Plot
+    # Parity plot
     fig1 = px.scatter(
-        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
-        text="Formula", title="Parity: DFT vs. Experimental"
+        merged, x="exp_gap", y="dft_gap", text="formula",
+        labels={"exp_gap": "Experimental Eg (eV)", "dft_gap": "DFT Eg (eV)"},
+        title="Parity Plot: DFT vs. Experimental"
     )
-    mn = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min()
-    mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
+    mn = merged[["exp_gap", "dft_gap"]].min().min()
+    mx = merged[["exp_gap", "dft_gap"]].max().max()
     fig1.add_shape(
         type="line", x0=mn, y0=mn, x1=mx, y1=mx,
-        line=dict(dash="dash", color="gray")
+        line=dict(dash="dash", color="black", width=1.5)
+    )
+    fig1.update_layout(
+        template="simple_white",
+        font=dict(family="Times New Roman", size=16),
+        xaxis=dict(
+            title=dict(text="<b>Experimental Eg (eV)</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True
+        ),
+        yaxis=dict(
+            title=dict(text="<b>DFT Eg (eV)</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True
+        ),
+        margin=dict(l=80, r=40, t=50, b=80)
     )
     st.plotly_chart(fig1, use_container_width=True)
 
-    png1 = fig1.to_image(format="png", scale=2)
-    st.download_button("📥 Download parity plot (PNG)",
-                       png1, "parity_plot.png", "image/png")
+    png1 = fig1.to_image(format="png", scale=3)
+    st.download_button(
+        "📥 Download Parity Plot (PNG)",
+        png1, "parity_plot.png", "image/png"
+    )
 
-    # 7) Error Histogram
+    # Error histogram
     fig2 = px.histogram(
-        dfm, x="Δ Eg (eV)", nbins=10,
-        title="Error Distribution (DFT – Experimental)"
+        merged, x="error", nbins=12,
+        labels={"error": "DFT – Experimental (eV)"},
+        title="Error Distribution"
+    )
+    fig2.update_layout(
+        template="simple_white",
+        font=dict(family="Times New Roman", size=16),
+        xaxis=dict(
+            title=dict(text="<b>Δ Eg (eV)</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True
+        ),
+        yaxis=dict(
+            title=dict(text="<b>Count</b>", font=dict(size=18)),
+            ticks="outside", showline=True, linecolor="black", linewidth=2, mirror=True
+        ),
+        margin=dict(l=80, r=40, t=50, b=80)
     )
     st.plotly_chart(fig2, use_container_width=True)
+
+    png2 = fig2.to_image(format="png", scale=3)
+    st.download_button(
+        "📥 Download Error Histogram (PNG)",
+        png2, "error_histogram.png", "image/png"
+    )
