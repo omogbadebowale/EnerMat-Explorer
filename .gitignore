@@ -1,0 +1,9 @@
+﻿# venv
+.venv/
+# Streamlit & Python caches
+__pycache__/
+*.pyc
+# IDE settings
+.vscode/
+# API key file
+.env

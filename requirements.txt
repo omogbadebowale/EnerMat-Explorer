@@ -1,0 +1,7 @@
+﻿python-dotenv
+streamlit>=1.35
+plotly
+mp-api
+pymatgen
+numpy
+pandas
