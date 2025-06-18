@@ -5,3 +5,4 @@ mp-api
 pymatgen
 numpy
 pandas
+statsmodels
