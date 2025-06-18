@@ -240,25 +240,36 @@ with tab_bench:
     st.write(f"**MAE:** {mae:.3f} eV  **RMSE:** {rmse:.3f} eV")
 
     # 4) Parity plot
-    fig1 = px.scatter(
-        merged, x="Exp Eg (eV)", y="DFT Eg (eV)",
-        text="formula", title="Parity Plot: DFT vs. Experimental"
-    )
-    mn, mx = merged[["Exp Eg (eV)","DFT Eg (eV)"]].min().min(), merged[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
-    fig1.add_shape(
-        type="line", x0=mn, y0=mn, x1=mx, y1=mx,
-        line=dict(dash="dash", color="gray")
-    )
-    fig1.update_layout(template="simple_white", margin=dict(l=60,r=40,t=40,b=60))
-    st.plotly_chart(fig1, use_container_width=True)
-    png1 = fig1.to_image(format="png", scale=2)
-    st.download_button("📥 Download Parity Plot (PNG)", png1, "parity_plot.png", "image/png")
+    # Parity: DFT vs. Experimental (publication style)
+fig1 = px.scatter(
+    dfm,
+    x="Exp Eg (eV)", y="DFT Eg (eV)",
+    hover_name="Formula",  # hover to see formula
+    title="Parity Plot: DFT vs. Experimental",
+    labels={
+        "Exp Eg (eV)": "Experimental Eg (eV)",
+        "DFT Eg (eV)":    "DFT Eg (eV)"
+    },
+    trendline="ols", trendline_color_override="gray"
+)
 
-    # 5) Error histogram
-    fig2 = px.histogram(
-        merged, x="Δ Eg (eV)", nbins=10, title="Error Distribution (DFT – Experimental)"
-    )
-    fig2.update_layout(template="simple_white", margin=dict(l=60,r=40,t=40,b=60))
-    st.plotly_chart(fig2, use_container_width=True)
-    png2 = fig2.to_image(format="png", scale=2)
-    st.download_button("📥 Download Error Histogram (PNG)", png2, "error_histogram.png", "image/png")
+# style
+fig1.update_traces(
+    marker=dict(size=8),
+    selector=dict(mode="markers")
+)
+fig1.update_layout(
+    template="simple_white",
+    font=dict(size=12),
+    margin=dict(l=60, r=20, t=40, b=50)
+)
+
+st.plotly_chart(fig1, use_container_width=True)
+
+# Download button
+png1 = fig1.to_image(format="png", scale=2)
+st.download_button(
+    "📥 Download Parity Plot (PNG)",
+    png1, "parity_plot.png", "image/png",
+    use_container_width=True
+)
