@@ -79,10 +79,11 @@ elif st.session_state.history:
 else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
-
-# ───────────────────────────────────── Tabs ─────────────────────────────────
-tab_tbl, tab_plot, tab_dl, tab_bench = st.tabs(["📊 Table","📈 Plot","⬇ Download","⚖ Benchmark"])
-
+    
+# ─── Define all five tabs ────────────────────────────────────────────────────
+tab_table, tab_plot, tab_dl, tab_bench, tab_results = st.tabs(
+    ["📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"]
+)
 # Table
 with tab_tbl:
     params = pd.DataFrame({
@@ -213,35 +214,47 @@ with tab_bench:
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format='png', scale=2)
     st.download_button('📥 Download error histogram (PNG)', png2,'error_histogram.png','image/png')
+    
 # ─── After your existing tab definitions ─────────────────────────────────────
-tab_results = st.tabs()[4]  # a fifth tab “📑 Results Summary”
-
 with tab_results:
     st.header("📑 Results Summary")
 
-    # 1) Top-10 Table
-    top10 = df.sort_values("score", ascending=False).head(10)
+    # 1) Top-10 Candidate Table
     st.subheader("Top 10 Candidates")
-    st.dataframe(top10.style.format({
-        "band_gap": "{:.3f}", "stability": "{:.3f}", "score": "{:.3f}"
-    }), use_container_width=True)
+    top10 = df.sort_values("score", ascending=False).head(10)
+    st.dataframe(
+        top10.style.format({
+            "band_gap": "{:.3f}", "stability": "{:.3f}", "score": "{:.3f}"
+        }),
+        use_container_width=True
+    )
 
-    # 2) Screening Plot
+    # 2) Screening Plot (stability vs. band-gap)
     st.subheader("Screening: Stability vs. Band-Gap")
     fig_s = px.scatter(
-        df, x="stability", y="band_gap",
-        color="score", color_continuous_scale="plasma",
-        size="score", hover_data=["formula","x"], height=400
+        df,
+        x="stability",
+        y="band_gap",
+        color="score",
+        color_continuous_scale="plasma",
+        size="score",
+        hover_data=["formula", "x"],
+        height=400
     )
-    top_cut = df["score"].quantile(0.8)
-    outline = go.Scatter(
-        x=df.loc[df.score>=top_cut,"stability"],
-        y=df.loc[df.score>=top_cut,"band_gap"],
-        mode="markers", marker=dict(size=22, color="rgba(0,0,0,0)",
-        line=dict(width=2, color="black")), showlegend=False
+    # outline top 20% by score
+    cutoff = df["score"].quantile(0.8)
+    fig_s.add_trace(
+        go.Scatter(
+            x=df.loc[df.score>=cutoff, "stability"],
+            y=df.loc[df.score>=cutoff, "band_gap"],
+            mode="markers",
+            marker=dict(size=22, color="rgba(0,0,0,0)",
+                        line=dict(width=2, color="black")),
+            showlegend=False
+        )
     )
-    fig_s.add_trace(outline)
-    fig_s.update_layout(template="simple_white", margin=dict(l=40,r=20,t=30,b=40))
+    fig_s.update_layout(template="simple_white",
+                        margin=dict(l=40, r=20, t=30, b=40))
     st.plotly_chart(fig_s, use_container_width=True)
 
     # 3) Benchmark Metrics & Plots
@@ -252,48 +265,38 @@ with tab_results:
 
     # Parity Plot
     fig_p = px.scatter(
-        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
-        color="Formula", title="Parity: DFT vs. Experimental",
-        width=700, height=400
+        dfm,
+        x="Exp Eg (eV)",
+        y="DFT Eg (eV)",
+        color="Formula",
+        title="Parity Plot: DFT vs. Experimental",
+        width=700,
+        height=400
     )
-    # add 1:1 line
-    mn, mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min(), dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
-    fig_p.add_shape("line", x0=mn, y0=mn, x1=mx, y1=mx,
-                    line=dict(dash="dash", color="gray"))
-    fig_p.update_layout(template="simple_white", margin=dict(l=50,r=20,t=40,b=50))
+    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
+    fig_p.add_shape(
+        type="line",
+        x0=mn, y0=mn, x1=mx, y1=mx,
+        line=dict(dash="dash", color="gray")
+    )
+    fig_p.update_layout(template="simple_white",
+                        margin=dict(l=50, r=20, t=40, b=50))
     st.plotly_chart(fig_p, use_container_width=True)
 
-    # Error Histogram
+    # Error histogram
     st.subheader("Error Distribution (DFT − Exp)")
     fig_h = px.histogram(
-        dfm, x=dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"],
-        nbins=20, title="", width=700, height=350
+        dfm,
+        x=dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"],
+        nbins=20,
+        width=700,
+        height=350
     )
-    fig_h.update_layout(template="simple_white", margin=dict(l=50,r=20,t=20,b=40),
-                        xaxis_title="Δ Eg (eV)", yaxis_title="Count")
+    fig_h.update_layout(
+        template="simple_white",
+        margin=dict(l=50, r=20, t=20, b=40),
+        xaxis_title="Δ Eg (eV)",
+        yaxis_title="Count"
+    )
     st.plotly_chart(fig_h, use_container_width=True)
-
-    # 4) Downloadable DOCX Report
-    if st.button("⬇️ Download Full Report"):
-        import io
-        from docx import Document
-        doc = Document()
-        doc.add_heading("EnerMat Results Summary", level=1)
-        doc.add_paragraph(f"Run parameters: Humidity={rh} %, T={temp} °C, Bowing={bow:.2f} eV, x-step={dx:.2f}")
-        doc.add_paragraph(f"MAE = {mae:.3f} eV RMSE = {rmse:.3f} eV")
-        # Add table
-        tbl = doc.add_table(rows=1, cols=len(top10.columns))
-        hdr_cells = tbl.rows[0].cells
-        for i, col in enumerate(top10.columns):
-            hdr_cells[i].text = col
-        for _, row in top10.iterrows():
-            cells = tbl.add_row().cells
-            for i, col in enumerate(top10.columns):
-                cells[i].text = str(row[col])
-        # Save to buffer
-        buf = io.BytesIO()
-        doc.save(buf); buf.seek(0)
-        st.download_button("Download Report (DOCX)", buf,
-                           file_name="EnerMat_Results_Summary.docx",
-                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
