@@ -1,4 +1,4 @@
-# app.py - EnerMat Perovskite Explorer v9.6
+# app.py  —  EnerMat Perovskite Explorer v9.6
 # Author: Dr Gbadebo Taofeek Yusuf
 
 import io
@@ -12,6 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from docx import Document
 from mp_api.client import MPRester
 
@@ -59,6 +60,12 @@ with st.sidebar:
         "4. 📊 Sort **Table** by header click  \n"
         "5. ⬇ Download results"
     )
+    with st.expander("🔎 About this tool", expanded=False):
+        st.image("https://your-cdn.com/images/logo.png", width=100)
+        st.markdown(
+            "This app screens perovskite alloys for band-gap and stability "
+            "using Materials Project data and Monte Carlo sampling."
+        )
 
 # ─────────────────────────────────── Backend call ────────────────────────────
 @st.cache_data(show_spinner="Monte-Carlo sampling …")
@@ -115,7 +122,7 @@ with tab_tbl:
         st.write(f"MP band gap: {docB.band_gap:.2f} eV")
         st.write(f"MP E_above_hull: {docB.energy_above_hull:.3f} eV/atom")
 
-    st.dataframe(df.astype(str), height=400, use_container_width=True)
+    st.dataframe(df, height=400, use_container_width=True)
 
 # ─────────── Plot Tab ───────────
 with tab_plot:
@@ -131,7 +138,8 @@ with tab_plot:
     )
     fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
     outline = go.Scatter(
-        x=df.loc[df.is_top,"stability"], y=df.loc[df.is_top,"band_gap"],
+        x=df.loc[df.is_top,"stability"],
+        y=df.loc[df.is_top,"band_gap"],
         mode="markers", hoverinfo="skip",
         marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
         showlegend=False
@@ -146,107 +154,113 @@ with tab_plot:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ─── Download plot for publication ─────────────────────────────
+    # Download plot
     png = fig.to_image(format="png", scale=2)
     st.download_button(
-        "📥 Download stability vs gap (PNG)",
-        png, "stability_vs_gap.png", "image/png",
+        "📥 Download plot as PNG", png,
+        "stability_vs_gap.png", "image/png",
         use_container_width=True
     )
 
 # ─────────── Download Tab ───────────
 with tab_dl:
-    st.download_button("CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+    csv = df.to_csv(index=False).encode()
+    st.download_button("CSV", csv, "EnerMat_results.csv", "text/csv")
+
     top = df.iloc[0]
-    report_txt = (
+    txt = (
         f"EnerMat report ({datetime.date.today()})\n"
         f"Top candidate : {top['formula']}\n"
-        f"Band-gap     : {top['band_gap']:.2f}\n"
-        f"Stability    : {top['stability']:.2f}\n"
-        f"Score        : {top['score']:.3f}\n"
+        f"Band-gap     : {top['band_gap']}\n"
+        f"Stability    : {top['stability']}\n"
+        f"Score        : {top['score']}\n"
     )
-    st.download_button("TXT report", report_txt, "EnerMat_report.txt", "text/plain")
+    st.download_button("TXT report", txt, "EnerMat_report.txt", "text/plain")
 
-    # DOCX
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top['formula']}")
     tbl = doc.add_table(rows=1, cols=2)
-    for k,v in [("Band-gap", top['band_gap']), ("Stability", top['stability']), ("Score", top['score'])]:
+    for k, v in [("Band-gap", top['band_gap']), ("Stability", top['stability']), ("Score", top['score'])]:
         row = tbl.add_row()
-        row.cells[0].text, row.cells[1].text = k, str(v)
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
+        row.cells[0].text = k
+        row.cells[1].text = str(v)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
     st.download_button(
-        "📥 DOCX report",
-        buf, "EnerMat_report.docx",
+        "📥 DOCX report", buf,
+        "EnerMat_report.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-# ─────────── Benchmark Tab ────────────────────────────────────────────────
+# ─────────── Benchmark Tab ───────────
 with tab_bench:
     st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # — load experimental CSV (bundled or uploaded) —
-    uploaded = st.file_uploader("Upload experimental CSV (`formula`,`exp_gap`)", type="csv")
-    if uploaded:
+    # 1) Upload or fallback
+    uploaded = st.file_uploader(
+        "Upload experimental CSV (`formula`, `exp_gap`)", type="csv"
+    )
+    if uploaded is None:
+        st.info("No file uploaded — loading bundled CSV…")
+        exp_df = pd.read_csv("exp_bandgaps.csv")
+        st.success("Loaded experimental data from bundled CSV")
+    else:
         exp_df = pd.read_csv(uploaded)
         st.success("Loaded experimental data from local file")
-    else:
-        exp_path = Path(__file__).parent / "exp_bandgaps.csv"
-        exp_df = pd.read_csv(exp_path)
-        st.info("Loaded experimental data from bundled CSV")
 
     if not {"formula","exp_gap"}.issubset(exp_df.columns):
         st.error("CSV must contain `formula` and `exp_gap` columns.")
         st.stop()
 
-    # — load DFT CSV —
-    dft_path = Path(__file__).parent / "pbe_bandgaps.csv"
-    dft_df = pd.read_csv(dft_path)
-    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
+    # 2) Load DFT from bundled
+    dft_df = pd.read_csv("pbe_bandgaps.csv")
     if not {"formula","pbe_gap"}.issubset(dft_df.columns):
-        st.error("DFT CSV needs columns: formula, pbe_gap")
+        st.error("DFT CSV needs columns: `formula`, `pbe_gap`.")
         st.stop()
+    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
 
-    # — merge & compute errors —
-    dfm = (
-        dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
-              .merge(exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"}),
-                     on="Formula", how="inner")
-    )
+    # 3) Merge & compute
+    exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
+    dft_df = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
+    dfm = pd.merge(dft_df, exp_df, on="Formula", how="inner")
     dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
 
+    # 4) Error stats
     mae  = dfm["Δ Eg (eV)"].abs().mean()
     rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # — pick which formulas to label —
-    default_labels = dfm["Formula"].unique()[:5].tolist()
-    to_label = st.multiselect(
-        "Formulas to draw labels for",
-        options=dfm["Formula"].unique(),
-        default=default_labels
-    )
+    # 5) Label picker
+    all_f = sorted(dfm["Formula"].unique())
+    default_labels = all_f[:5]
+    to_label = st.multiselect("Formulas to draw labels for", all_f, default_labels)
 
-    # — parity scatter + fit line —
-    x, y = dfm["Exp Eg (eV)"], dfm["DFT Eg (eV)"]
-    m, b = np.polyfit(x, y, 1)
-    fit_x = np.array([x.min(), x.max()])
-    fit_y = m*fit_x + b
-
+    # 6) Parity plot + robust fit
+    x = dfm["Exp Eg (eV)"].to_numpy()
+    y = dfm["DFT Eg (eV)"].to_numpy()
     fig1 = go.Figure()
+    # scatter + labels
     fig1.add_trace(go.Scatter(
         x=x, y=y, mode="markers+text",
         text=np.where(dfm["Formula"].isin(to_label), dfm["Formula"], ""),
         textposition="top center",
         marker=dict(size=6, opacity=0.8)
     ))
-    fig1.add_trace(go.Scatter(
-        x=fit_x, y=fit_y, mode="lines",
-        line=dict(dash="dash", color="gray"),
-        name="Fit"
-    ))
+    # attempt fit line
+    try:
+        m, b = np.polyfit(x, y, 1)
+        fx = np.array([x.min(), x.max()])
+        fy = m * fx + b
+        fig1.add_trace(go.Scatter(
+            x=fx, y=fy, mode="lines",
+            line=dict(dash="dash", color="gray"), name="Fit"
+        ))
+    except np.linalg.LinAlgError:
+        st.warning("Could not compute fit (degenerate data). Skipping trendline.")
+
     fig1.update_layout(
         title="Parity Plot: DFT vs. Experimental",
         xaxis_title="Exp Eg (eV)",
@@ -256,14 +270,25 @@ with tab_bench:
     )
     st.plotly_chart(fig1, use_container_width=True)
     png1 = fig1.to_image(format="png", scale=2)
-    st.download_button("📥 Download parity plot (PNG)", png1, "parity_plot.png", "image/png")
+    st.download_button(
+        "📥 Download parity plot (PNG)", png1,
+        "parity_plot.png", "image/png"
+    )
 
-    # — error histogram —
+    # 7) Error histogram
     fig2 = px.histogram(
-        dfm, x="Δ Eg (eV)", nbins=15,
+        dfm, x="Δ Eg (eV)", nbins=10,
         title="Error Distribution (DFT – Experimental)"
     )
-    fig2.update_layout(template="simple_white", margin=dict(l=60, r=20, t=50, b=50))
+    fig2.update_layout(
+        template="simple_white",
+        margin=dict(l=60, r=20, t=50, b=50),
+        xaxis_title="Δ Eg (eV)",
+        yaxis_title="count"
+    )
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format="png", scale=2)
-    st.download_button("📥 Download error histogram (PNG)", png2, "error_hist.png", "image/png")
+    st.download_button(
+        "📥 Download error histogram (PNG)", png2,
+        "error_histogram.png", "image/png"
+    )
