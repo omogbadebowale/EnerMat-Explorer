@@ -1,154 +1,207 @@
-```python
+import io
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
+from docx import Document
+from backend.perovskite_utils import screen, END_MEMBERS, _summary
 
-# Page config
+# ─── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(layout="wide", page_title="EnerMat Perovskite Explorer v9.6")
 
-# --- Sidebar ---
+# ─── Sidebar ─────────────────────────────────────────────────────────────────
 st.sidebar.header("Environment")
-humidity = st.sidebar.slider("Humidity [%]", 0, 100, 50)
-temperature = st.sidebar.slider("Temperature [°C]", -20, 100, 25)
+humidity   = st.sidebar.slider("Humidity [%]",          0, 100,  50)
+temperature= st.sidebar.slider("Temperature [°C]",   -20, 100,  25)
+
 st.sidebar.markdown("---")
-target_low, target_high = st.sidebar.slider(
-    "Target gap [eV]", 0.5, 3.0, (1.0, 1.4), step=0.01
+bg_lo, bg_hi = st.sidebar.slider(
+    "Target gap [eV]", 0.0, 3.0, (0.8, 1.4), step=0.01
 )
+
 st.sidebar.markdown("---")
-
 st.sidebar.header("Parent formulas")
-preset_a = st.sidebar.selectbox("Preset A", ["CsPbBr3", "CsSnBr3"], index=0)
-preset_b = st.sidebar.selectbox("Preset B", ["CsSnBr3", "CsPbBr3"], index=1)
-custom_a = st.sidebar.text_input("Custom A (optional)")
-custom_b = st.sidebar.text_input("Custom B (optional)")
+# include FA/M Sn variants for lead-free screening
+ALL_ENDS = ["CsPbBr3","CsSnBr3","CsSnCl3","CsPbI3","FASnBr3","MASnBr3"]
+A_pick = st.sidebar.selectbox("Preset A", ALL_ENDS, index=0)
+B_pick = st.sidebar.selectbox("Preset B", ALL_ENDS, index=1)
+A = st.sidebar.text_input("Custom A (optional)", "").strip() or A_pick
+B = st.sidebar.text_input("Custom B (optional)", "").strip() or B_pick
 
-if st.sidebar.button("▶ Run screening"):
+st.sidebar.markdown("---")
+st.sidebar.header("Model knobs")
+bow        = st.sidebar.number_input("Bowing [eV]",            0.0, 1.0, 0.30, 0.05)
+dx         = st.sidebar.number_input("x-step",                 0.01,0.50, 0.05, 0.01)
+sn_penalty = st.sidebar.slider(
+    "Sn oxidation penalty (α)", 0.0, 1.0, 0.50, 0.05,
+    help="Lower ⇒ less penalty on Sn²⁺ under humidity"
+)
+
+st.sidebar.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
+if st.sidebar.button("🗑 Clear history"):
+    st.session_state.clear()
     st.experimental_rerun()
 
-# --- Main tabs ---
+# ─── Keep history of runs ─────────────────────────────────────────────────────
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# ─── Cached screening call ────────────────────────────────────────────────────
+@st.cache_data(show_spinner="Monte-Carlo sampling…")
+def run_screen_cached(**kw):
+    return screen(**kw)
+
+# ─── Run / Back logic ─────────────────────────────────────────────────────────
+col_run, col_back = st.columns([3,1])
+do_run  = col_run.button("▶ Run screening", type="primary")
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history)<1)
+
+if do_back:
+    st.session_state.history.pop()
+    A,B,humidity,temperature,df = st.session_state.history[-1]
+    st.success("Showing previous result")
+elif do_run:
+    # validate MP data
+    if not (_summary(A) and _summary(B)):
+        st.error("Could not fetch MP data for A or B")
+        st.stop()
+    df = run_screen_cached(
+        A=A, B=B,
+        rh=humidity, temp=temperature,
+        bg=(bg_lo,bg_hi),
+        bow=bow, dx=dx,
+        sn_penalty=sn_penalty
+    )
+    if df.empty:
+        st.error("No candidates found — relax filters")
+        st.stop()
+    st.session_state.history.append((A,B,humidity,temperature,df))
+else:
+    if st.session_state.history:
+        A,B,humidity,temperature,df = st.session_state.history[-1]
+    else:
+        st.info("Press ▶ Run screening to begin")
+        st.stop()
+
+# ─── Tabs ─────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🖼 Structure",
     "📊 Table",
-    "🖼 Plot",
-    "📥 Download",
-    "⚖ Benchmark"
-])([
-    "📊 Table",
-    "🖼 Plot",
+    "📈 Plot",
     "📥 Download",
     "⚖ Benchmark"
 ])
 
-# --- Structure tab ---
+# ─── Structure tab ────────────────────────────────────────────────────────────
 with tab1:
     st.header("🖼 Perovskite Structure Visualization")
-    # Display a generic perovskite crystal structure image
-    # You can replace the URL with your own generated structure images
-    structure_url = st.selectbox(
-        "Choose structure image:",
-        options=[
-            ("CsPbBr3", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/CsPbBr3_structure.png"),
-            ("CsSnBr3", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/CsSnBr3_structure.png"),
-            ("Custom A-B", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/perovskite_generic.png")
-        ], format_func=lambda x: x[0]
-    )[1]
-    st.image(structure_url, use_column_width=True, caption="Perovskite ABX3 Structure")
+    choice = st.selectbox("Choose image:", [
+        ("pero", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/pero.png"),
+        ("CsPbBr3", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/CsPbBr3_structure.png"),
+        ("CsSnBr3", "https://raw.githubusercontent.com/omogbadebowale/EnerMat-Explorer/main/images/CsSnBr3_structure.png")
+    ], format_func=lambda x: x[0])[1]
+    st.image(choice, use_column_width=True, caption="ABX₃ perovskite")
 
-# --- Benchmark tab ---
-with tab4:
-    st.header("⚖ Benchmark: DFT vs. Experimental Gaps")
+# ─── Table tab ─────────────────────────────────────────────────────────────────
+with tab2:
+    st.header("📊 Candidates Table")
+    st.dataframe(df, use_container_width=True, height=500)
 
-    # 1) Upload experimental data
-    uploaded = st.file_uploader(
-        "Upload experimental CSV (formula, exp_gap)", type="csv"
-    )
-    if uploaded:
-        df_exp = pd.read_csv(uploaded)
-        st.success("Loaded experimental data from uploaded file")
-    else:
-        df_exp = pd.read_csv("exp_bandgaps.csv")
-        st.info("Loaded experimental data from bundled CSV")
-
-    # Validate exp
-    if not {"formula", "exp_gap"}.issubset(df_exp.columns):
-        st.error("CSV must contain 'formula' and 'exp_gap' columns.")
-        st.stop()
-
-    # 2) Load DFT data
-    df_dft = pd.read_csv("pbe_bandgaps.csv")
-    if not {"formula", "pbe_gap"}.issubset(df_dft.columns):
-        st.error("DFT CSV needs columns 'formula' and 'pbe_gap'.")
-        st.stop()
-    st.info(f"Loaded {len(df_dft)} DFT band gaps from bundled CSV")
-
-    # 3) Merge and rename
-    dfm = pd.merge(df_exp, df_dft, on="formula").rename(
-        columns={"exp_gap": "Exp Eg (eV)", "pbe_gap": "DFT Eg (eV)"}
-    )
-    x = dfm["Exp Eg (eV)"].values
-    y = dfm["DFT Eg (eV)"].values
-
-    # 4) Metrics
-    mae = np.mean(np.abs(y - x))
-    rmse = np.sqrt(np.mean((y - x) ** 2))
-    st.markdown(f"**MAE:** {mae:.3f} eV  **RMSE:** {rmse:.3f} eV")
-
-    # 5) Label selection
-    formulas = sorted(dfm["formula"].unique())
-    to_label = st.multiselect(
-        "Formulas to draw labels for", options=formulas, default=formulas[:5]
-    )
-
-    # 6) Build parity plot
-    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
-    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
-    m, b = np.polyfit(x, y, 1)
-
+# ─── Plot tab ──────────────────────────────────────────────────────────────────
+with tab3:
+    st.header("📈 Stability vs. Band-gap")
+    # highlight top 20%
+    cutoff = df.score.quantile(0.80)
+    df["is_top"]=df.score>=cutoff
     fig = px.scatter(
-        dfm,
-        x="Exp Eg (eV)",
-        y="DFT Eg (eV)",
-        hover_data=["formula"],
-        labels={"Exp Eg (eV)": "Experimental Eg (eV)", "DFT Eg (eV)": "DFT Eg (eV)"},
+        df, x="stability", y="band_gap",
+        color="score", color_continuous_scale="plasma",
+        hover_data=["formula","x","band_gap","stability","score"],
+        height=500
     )
-    # 1:1 line
-    fig.add_shape(
-        type="line", x0=mn, y0=mn, x1=mx, y1=mx,
-        line=dict(color="lightgray", dash="dash"),
-    )
-    # best-fit line
-    fig.add_shape(
-        type="line", x0=mn, y0=m*mn + b, x1=mx, y1=m*mx + b,
-        line=dict(color="gray", dash="dash"),
-    )
-    # annotate
-    for _, row in dfm[dfm.formula.isin(to_label)].iterrows():
-        fig.add_annotation(
-            x=row["Exp Eg (eV)"], y=row["DFT Eg (eV)"],
-            text=row["formula"], showarrow=False,
-            font=dict(size=12)
-        )
-    fig.update_layout(margin=dict(l=50, r=50, t=50, b=50))
+    # outline top
+    fig.add_trace(go.Scatter(
+        x=df.loc[df.is_top,"stability"],
+        y=df.loc[df.is_top,"band_gap"],
+        mode="markers", marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2,color="black")),
+        showlegend=False, hoverinfo="skip"
+    ))
+    fig.update_layout(template="simple_white", margin=dict(l=50,r=50,t=50,b=50))
     st.plotly_chart(fig, use_container_width=True)
+    png = fig.to_image(format="png", scale=2)
+    st.download_button("📥 Download plot (PNG)", png, "stability_vs_gap.png", "image/png")
 
-    # 7) Download parity
-    img1 = fig.to_image(format="png", width=800, height=500, scale=2)
-    st.download_button(
-        "📥 Download parity plot (PNG)", data=img1, file_name="parity.png", mime="image/png"
+# ─── Download tab ──────────────────────────────────────────────────────────────
+with tab4:
+    st.header("📥 Download Results & Reports")
+    st.download_button("Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv","text/csv")
+    # TXT
+    top = df.iloc[0]
+    txt = (
+f"EnerMat report {pd.Timestamp.today().date()}\n"
+f"Top: {top.formula}\n"
+f"Gap: {top.band_gap:.3f} eV\n"
+f"Stability: {top.stability:.3f}\n"
+f"Score: {top.score:.3f}\n"
     )
+    st.download_button("Download TXT report", txt, "report.txt","text/plain")
+    # DOCX
+    doc = Document()
+    doc.add_heading("EnerMat Report",0)
+    doc.add_paragraph(f"Date: {pd.Timestamp.today().date()}")
+    doc.add_paragraph(f"Top candidate: {top.formula}")
+    tbl=doc.add_table(rows=1,cols=2)
+    for k,v in [("Gap",top.band_gap),("Stab",top.stability),("Score",top.score)]:
+        r=tbl.add_row(); r.cells[0].text=k; r.cells[1].text=str(v)
+    buf=io.BytesIO(); doc.save(buf); buf.seek(0)
+    st.download_button("Download DOCX report",buf,"report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
-    # 8) Error histogram
-    errors = y - x
-    fig2 = px.histogram(
-        errors, nbins=20,
-        labels={"value": "Δ Eg (eV)"},
+# ─── Benchmark tab ────────────────────────────────────────────────────────────
+with tab5:
+    st.header("⚖ Benchmark: DFT vs. Experimental")
+    # 1) experimental
+    upload = st.file_uploader("Upload experimental CSV", type="csv")
+    if upload:
+        df_exp=pd.read_csv(upload); st.success("Loaded uploaded CSV")
+    else:
+        df_exp=pd.read_csv("exp_bandgaps.csv"); st.info("Loaded bundled CSV")
+    if not {"formula","exp_gap"}.issubset(df_exp.columns):
+        st.error("Need formula & exp_gap cols"); st.stop()
+    # 2) DFT
+    df_dft=pd.read_csv("pbe_bandgaps.csv")
+    if not {"formula","pbe_gap"}.issubset(df_dft.columns):
+        st.error("Need formula & pbe_gap cols"); st.stop()
+    st.info(f"Loaded {len(df_dft)} DFT entries")
+    # 3) merge
+    dfm = pd.merge(df_exp, df_dft, on="formula").rename(
+        columns={"exp_gap":"Exp Eg (eV)","pbe_gap":"DFT Eg (eV)"}
     )
-    fig2.update_layout(title_text="Error Distribution (DFT – Experimental)")
-    st.plotly_chart(fig2, use_container_width=True)
-
-    img2 = fig2.to_image(format="png", width=800, height=400, scale=2)
-    st.download_button(
-        "📥 Download error histogram (PNG)", data=img2, file_name="error_hist.png", mime="image/png"
-    )
-```
+    x,y = dfm["Exp Eg (eV)"].values, dfm["DFT Eg (eV)"].values
+    # metrics
+    mae  = np.mean(np.abs(y-x))
+    rmse = np.sqrt(np.mean((y-x)**2))
+    st.markdown(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    # select labels
+    fm = sorted(dfm.formula.unique())
+    pick = st.multiselect("Formulas to label", fm, default=fm[:5])
+    # parity
+    mn = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
+    m,b=np.polyfit(x,y,1)
+    figp=px.scatter(dfm,x="Exp Eg (eV)",y="DFT Eg (eV)",hover_data=["formula"])
+    figp.add_shape("line",x0=mn,y0=mn,x1=mx,y1=mx,line=dict(color="gray",dash="dash"))
+    figp.add_shape("line",x0=mn,y0=m*mn+b,x1=mx,y1=m*mx+b,line=dict(color="black"))
+    for _,r in dfm[dfm.formula.isin(pick)].iterrows():
+        figp.add_annotation(x=r["Exp Eg (eV)"],y=r["DFT Eg (eV)"],text=r.formula,showarrow=False)
+    figp.update_layout(margin=dict(l=50,r=50,t=50,b=50))
+    st.plotly_chart(figp,use_container_width=True)
+    imgp=figp.to_image(format="png",scale=2)
+    st.download_button("Download parity PNG",imgp,"parity.png","image/png")
+    # histogram
+    errs=y-x
+    figh=px.histogram(errs,nbins=20,labels={"value":"Δ Eg (eV)"})
+    figh.update_layout(title_text="Error distribution")
+    st.plotly_chart(figh,use_container_width=True)
+    imgh=figh.to_image(format="png",scale=2)
+    st.download_button("Download error hist PNG",imgh,"err_hist.png","image/png")
