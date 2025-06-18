@@ -192,8 +192,6 @@ with tab_bench:
         template='simple_white')
     mn = dfm[['Exp Eg (eV)','DFT Eg (eV)']].min().min()
     mx = dfm[['Exp Eg (eV)','DFT Eg (eV)']].max().max()
-    fig1.add_shape(type='line', x0=mn, y0=mn, x1=mx, y1=mx,
-                   line=dict(dash='dash', color='gray'), xref='x', yref='y')
     fig1.update_layout(
         xaxis=dict(title=dict(text='<b>Experimental Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
         yaxis=dict(title=dict(text='<b>DFT Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
@@ -206,8 +204,7 @@ with tab_bench:
 
     # Error Histogram
     fig2 = px.histogram(
-        dfm, x='Δ Eg (eV)', nbins=10, title='Error Distribution (DFT – Experimental)',
-        template='simple_white')
+        dfm, x='Δ Eg (eV)', nbins=10, title='Error Distribution (DFT – Experimental)', template='simple_white')
     fig2.update_layout(
         xaxis=dict(title=dict(text='<b>Δ Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
         yaxis=dict(title=dict(text='<b>Count</b>', font=dict(size=18)), tickfont=dict(size=14)),
