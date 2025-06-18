@@ -161,109 +161,82 @@ with tab_dl:
 with tab_bench:
     st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # 1) Try user upload first
+    # 1️⃣ Load experimental CSV (upload or bundled)
     uploaded = st.file_uploader(
         "Upload experimental CSV (`formula`, `exp_gap`)", type="csv"
     )
-
-    # 2) If no upload, fall back to bundled CSV
-    if uploaded is None:
-        st.info("No file uploaded — using bundled experimental data…")
-        exp_path = Path(__file__).parent / "exp_bandgaps.csv"
-        try:
-            exp_df = pd.read_csv(exp_path)
-            st.success("Loaded experimental data from bundled CSV")
-        except Exception:
-            st.error("Failed to load bundled CSV. Please upload your own.")
-            st.stop()
-    else:
+    if uploaded:
         exp_df = pd.read_csv(uploaded)
-        st.success("Loaded experimental data from uploaded file")
+        st.success("Loaded experimental data from local file")
+    else:
+        try:
+            exp_url = (
+                "https://raw.githubusercontent.com/"
+                "omogbadebowale/EnerMat-Explorer/main/exp_bandgaps.csv"
+            )
+            exp_df = pd.read_csv(exp_url)
+            st.info("No file uploaded — fetched from GitHub 📦")
+        except:
+            st.error("Failed to load experimental CSV — please upload your own.")
+            st.stop()
 
-    # Validate columns
-    if not {"formula", "exp_gap"}.issubset(exp_df.columns):
-        st.error("CSV must contain columns: `formula` and `exp_gap`.")
+    if not {"formula","exp_gap"}.issubset(exp_df.columns):
+        st.error("CSV must contain `formula` and `exp_gap` columns.")
         st.stop()
 
-    # 3) Load DFT band gaps from bundled CSV
-    pbe_path = Path(__file__).parent / "pbe_bandgaps.csv"
-    try:
-        dft_df = pd.read_csv(pbe_path)
-        st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
-    except Exception:
-        st.error("Failed to load DFT CSV. Please bundle `pbe_bandgaps.csv`.")
+    # 2️⃣ Load DFT gaps from bundled CSV
+    dft_df = pd.read_csv("pbe_bandgaps.csv")
+    if not {"formula","pbe_gap"}.issubset(dft_df.columns):
+        st.error("DFT CSV needs columns: `formula`, `pbe_gap`.")
         st.stop()
+    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
 
-    if not {"formula", "pbe_gap"}.issubset(dft_df.columns):
-        st.error("DFT CSV must contain columns: `formula` and `pbe_gap`.")
-        st.stop()
-
-    # 4) Merge
-    exp_df = exp_df.rename(columns={"formula": "Formula", "exp_gap": "Exp Eg (eV)"})
-    dft_df = dft_df.rename(columns={"formula": "Formula", "pbe_gap": "DFT Eg (eV)"})
-    dfm = pd.merge(dft_df, exp_df, on="Formula", how="inner")
-    if dfm.empty:
-        st.error("No matching formulas between DFT and experimental data.")
-        st.stop()
-
+    # 3️⃣ Merge and compute errors
+    dft_df = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
+    exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
+    dfm = dft_df.merge(exp_df, on="Formula", how="inner")
     dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
 
-    # 5) Show stats (fixed parentheses!)
-    mae = dfm["Δ Eg (eV)"].abs().mean()
-    rmse = np.sqrt((dfm["Δ Eg (eV)"] ** 2).mean())
+    # 4️⃣ Stats
+    mae  = dfm["Δ Eg (eV)"].abs().mean()
+    rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # 6) Parity Plot with guarded trendline
-    x = dfm["Exp Eg (eV)"].to_numpy()
-    y = dfm["DFT Eg (eV)"].to_numpy()
+    # 5️⃣ Parity Plot w/ linear fit
+    x, y = dfm["Exp Eg (eV)"].values, dfm["DFT Eg (eV)"].values
+    m, b = np.polyfit(x, y, 1)
+    fig1 = px.scatter(dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
+                      text="Formula", title="Parity Plot: DFT vs. Experimental")
     mn, mx = x.min(), x.max()
-
-    try:
-        m, b = np.polyfit(x, y, 1)
-    except np.linalg.LinAlgError:
-        m, b = 1.0, 0.0  # fallback to y=x
-
-    fig1 = px.scatter(
-        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", hover_name="Formula",
-        title="Parity Plot: DFT vs. Experimental"
+    fig1.add_shape(
+        type="line", x0=mn, y0=m*mn + b, x1=mx, y1=m*mx + b,
+        line=dict(dash="dash", color="gray"), name="Fit"
     )
-    fig1.add_trace(go.Scatter(
-        x=[mn, mx],
-        y=[m * mn + b, m * mx + b],
-        mode="lines",
-        line=dict(dash="dash", color="gray"),
-        name="Fit" if b != 0 else "y = x"
-    ))
-    fig1.update_layout(template="simple_white", margin=dict(l=60, r=20, t=40, b=60))
+    fig1.update_layout(template="simple_white",
+                       margin=dict(l=60, r=20, t=50, b=50))
     st.plotly_chart(fig1, use_container_width=True)
-
     png1 = fig1.to_image(format="png", scale=2)
-    st.download_button("📥 Download parity plot (PNG)",
-                       png1, "parity_plot.png", "image/png"
-                       
-    # 7) Error Histogram (publication-ready)
-errors = dfm["Δ Eg (eV)"]
-fig2 = px.histogram(
-    dfm,
-    x="Δ Eg (eV)",
-    nbins=20,                   # more bins for detail
-    title="Error Distribution (DFT – Experimental)",
-    range_x=[-1.0, 1.0],        # clamp to ±1 eV
-)
-fig2.update_xaxes(title="<b>Δ Eg (eV)</b>")
-fig2.update_yaxes(title="<b>Count</b>")
-fig2.update_layout(
-    template="simple_white",
-    margin=dict(l=60, r=20, t=40, b=50),
-)
-st.plotly_chart(fig2, use_container_width=True)
+    st.download_button(
+        "📥 Download Parity Plot (PNG)",
+        png1,
+        "parity_plot.png",
+        "image/png"
+    )
 
-# Download button
-png2 = fig2.to_image(format="png", scale=2)
-st.download_button(
-    "📥 Download Error Histogram (PNG)",
-    png2,
-    "error_histogram.png",
-    "image/png",
-    use_container_width=False,
-)
+    # 6️⃣ Error histogram (±1 eV window)
+    fig2 = px.histogram(
+        dfm, x="Δ Eg (eV)", nbins=20, range_x=[-1.0, 1.0],
+        title="Error Distribution (DFT – Experimental)"
+    )
+    fig2.update_xaxes(title="<b>Δ Eg (eV)</b>")
+    fig2.update_yaxes(title="<b>Count</b>")
+    fig2.update_layout(template="simple_white",
+                       margin=dict(l=60, r=20, t=50, b=50))
+    st.plotly_chart(fig2, use_container_width=True)
+    png2 = fig2.to_image(format="png", scale=2)
+    st.download_button(
+        "📥 Download Error Histogram (PNG)",
+        png2,
+        "error_histogram.png",
+        "image/png"
+    )
