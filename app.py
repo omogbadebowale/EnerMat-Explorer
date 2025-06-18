@@ -122,9 +122,14 @@ with tab_plot:
         hoverinfo='skip', showlegend=False
     )
     fig.add_trace(outline)
-    fig.update_xaxes(title='<b>Stability</b>', range=[0.75,1.0], dtick=0.05)
-    fig.update_yaxes(title='<b>Band-gap (eV)</b>', range=[0,3.5], dtick=0.5)
-    fig.update_layout(template='simple_white', margin=dict(l=70,r=40,t=25,b=65), coloraxis_colorbar=dict(title='<b>Score</b>'))
+    fig.update_xaxes(title='<b>Stability</b>', range=[0.75,1.0], dtick=0.05, title_font_size=18, tickfont_size=14)
+    fig.update_yaxes(title='<b>Band-gap (eV)</b>', range=[0,3.5], dtick=0.5, title_font_size=18, tickfont_size=14)
+    fig.update_layout(
+        template='simple_white',
+        margin=dict(l=70,r=40,t=25,b=65),
+        coloraxis_colorbar=dict(title='<b>Score</b>', title_font_size=16, tickfont_size=14),
+        font=dict(family='Arial', size=16)
+    )
     st.plotly_chart(fig, use_container_width=True)
     png = fig.to_image(format='png', scale=2)
     st.download_button('📥 Download plot as PNG', png, 'stability_vs_gap.png', 'image/png', use_container_width=True)
@@ -179,23 +184,35 @@ with tab_bench:
     rmse = np.sqrt((dfm['Δ Eg (eV)']**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # Parity
-    fig1 = px.scatter(dfm, x='Exp Eg (eV)', y='DFT Eg (eV)', color='Formula',
-                      hover_data=['Formula','Exp Eg (eV)','DFT Eg (eV)'],
-                      title='Parity Plot: DFT vs. Experimental')
+    # Parity Plot
+    fig1 = px.scatter(
+        dfm, x='Exp Eg (eV)', y='DFT Eg (eV)', color='Formula',
+        hover_data=['Formula','Exp Eg (eV)','DFT Eg (eV)'],
+        title='Parity Plot: DFT vs. Experimental',
+        template='simple_white')
     mn = dfm[['Exp Eg (eV)','DFT Eg (eV)']].min().min()
     mx = dfm[['Exp Eg (eV)','DFT Eg (eV)']].max().max()
     fig1.add_shape(type='line', x0=mn, y0=mn, x1=mx, y1=mx,
                    line=dict(dash='dash', color='gray'), xref='x', yref='y')
-    fig1.update_layout(template='simple_white')
+    fig1.update_layout(
+        xaxis=dict(title=dict(text='<b>Experimental Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
+        yaxis=dict(title=dict(text='<b>DFT Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
+        title_font_size=20, legend_title_text='<b>Formula</b>', legend_font_size=14,
+        font=dict(family='Arial', size=16), margin=dict(l=70,r=40,t=60,b=60)
+    )
     st.plotly_chart(fig1, use_container_width=True)
     png1 = fig1.to_image(format='png', scale=2)
-    st.download_button('📥 Download parity plot (PNG)', png1,'parity_plot.png','image/png')
+    st.download_button('📥 Download parity plot (PNG)', png1, 'parity_plot.png','image/png')
 
-    # Histogram
-    fig2 = px.histogram(dfm, x='Δ Eg (eV)', nbins=10,
-                        title='Error Distribution (DFT – Experimental)')
-    fig2.update_layout(template='simple_white')
+    # Error Histogram
+    fig2 = px.histogram(
+        dfm, x='Δ Eg (eV)', nbins=10, title='Error Distribution (DFT – Experimental)',
+        template='simple_white')
+    fig2.update_layout(
+        xaxis=dict(title=dict(text='<b>Δ Eg (eV)</b>', font=dict(size=18)), tickfont=dict(size=14)),
+        yaxis=dict(title=dict(text='<b>Count</b>', font=dict(size=18)), tickfont=dict(size=14)),
+        title_font_size=20, font=dict(family='Arial', size=16), margin=dict(l=70,r=40,t=60,b=60)
+    )
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format='png', scale=2)
     st.download_button('📥 Download error histogram (PNG)', png2,'error_histogram.png','image/png')
