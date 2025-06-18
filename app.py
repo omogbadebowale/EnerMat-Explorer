@@ -176,85 +176,70 @@ with tab_plot:
     )
 
 # ─────────── Download Tab ───────────
-with tab_dl:
-    csv = df.to_csv(index=False).encode()
-    st.download_button("CSV", csv, "EnerMat_results.csv", "text/csv")
-
-    top = df.iloc[0]
-    txt = (
-        f"EnerMat report ({datetime.date.today()})\n"
-        f"Top candidate : {top['formula']}\n"
-        f"Band-gap     : {top['band_gap']}\n"
-        f"Stability    : {top['stability']}\n"
-        f"Score        : {top['score']}\n"
-    )
-    st.download_button("TXT report", txt, "EnerMat_report.txt", "text/plain")
-
-    doc = Document()
-    doc.add_heading("EnerMat Report", 0)
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {top['formula']}")
-    tbl = doc.add_table(rows=1, cols=2)
-    for k,v in [("Band-gap",top['band_gap']),("Stability",top['stability']),("Score",top['score'])]:
-        row=tbl.add_row(); row.cells[0].text=k; row.cells[1].text=str(v)
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
-    st.download_button(
-        "📥 DOCX report",
-        buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        use_container_width=True
-    )
-
-# ─────────── Benchmark Tab ───────────
 with tab_bench:
-    st.header("⚖ Benchmark: DFT vs. Experimental Gaps")
+    st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # 1) Load experimental set from our repo
-    exp_df = pd.read_csv("exp_bandgaps.csv").loc[:, ["formula","exp_gap"]]
-    st.success(f"Loaded {len(exp_df)} experimental entries from exp_bandgaps.csv")
-
-    # 2) Load DFT data from our repo too
-    #    here we assume you’ve generated pbe_bandgaps.csv with columns: formula, pbe_gap
-    dft_df = pd.read_csv("pbe_bandgaps.csv").loc[:, ["formula","pbe_gap"]]
-    st.success(f"Loaded {len(dft_df)} DFT entries from pbe_bandgaps.csv")
-
-    # 3) Merge and compute errors
-    dfm = (
-        dft_df.rename(columns={"pbe_gap":"DFT Eg (eV)", "formula":"Formula"})
-        .merge(
-           exp_df.rename(columns={"exp_gap":"Exp Eg (eV)", "formula":"Formula"}),
-           on="Formula", how="inner"
-        )
+    # 1) Allow user to upload experimental CSV if they like
+    uploaded = st.file_uploader(
+        "Upload experimental band-gap CSV (`formula`, `exp_gap`)", type="csv"
     )
-    dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
 
-    # 4) Show metrics
+    # 2) Load experimental data
+    if uploaded:
+        exp_df = pd.read_csv(uploaded)
+        st.success("Loaded experimental data from uploaded file")
+    else:
+        exp_df = pd.read_csv("exp_bandgaps.csv")
+        st.success("Loaded experimental data from bundled CSV")
+
+    # 3) Load DFT/reference data from your bundled file
+    dft_df = pd.read_csv("pbe_bandgaps.csv")
+    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
+
+    # 4) Sanity‐check columns
+    if not {"formula","exp_gap"}.issubset(exp_df.columns):
+        st.error("Experimental CSV needs columns: formula, exp_gap")
+        st.stop()
+    if not {"formula","pbe_gap"}.issubset(dft_df.columns):
+        st.error("DFT CSV needs columns: formula, pbe_gap")
+        st.stop()
+
+    # 5) Prepare & merge
+    exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
+    dft_df = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
+    dfm = pd.merge(dft_df, exp_df, on="Formula")
+
+    # 6) Compute error metrics
+    dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
     mae  = dfm["Δ Eg (eV)"].abs().mean()
     rmse = (dfm["Δ Eg (eV)"]**2).mean()**0.5
-    st.markdown(f"**MAE:** {mae:.3f} eV  **RMSE:** {rmse:.3f} eV")
+    st.write(f"**MAE:** {mae:.3f} eV  **RMSE:** {rmse:.3f} eV")
 
-    # 5) Parity plot
+    # 7) Parity plot
     fig1 = px.scatter(
         dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
-        text="Formula", title="Parity Plot: DFT vs. Experimental",
-        labels={"Exp Eg (eV)":"Experimental Eg (eV)", "DFT Eg (eV)":"DFT Eg (eV)"}
+        text="Formula", title="Parity: DFT vs. Experimental",
+        labels={"Exp Eg (eV)":"Experimental Eg (eV)",
+                "DFT Eg (eV)":"DFT Eg (eV)"}
     )
-    mn, mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min(), dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
-    fig1.add_shape("line", x0=mn, y0=mn, x1=mx, y1=mx,
-                   line=dict(dash="dash", color="gray"))
-    fig1.update_layout(template="simple_white", width=700, height=500)
+    mn = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
+    fig1.add_shape("line", x0=mn,y0=mn,x1=mx,y1=mx,
+                   line=dict(dash="dash",color="gray"))
     st.plotly_chart(fig1, use_container_width=True)
-
-    # 6) Download parity plot
     png1 = fig1.to_image(format="png", scale=2)
-    st.download_button("📥 Download Parity Plot (PNG)", png1, "parity_plot.png", "image/png")
+    st.download_button("📥 Download Parity Plot (PNG)",
+                       png1, "parity_plot.png", "image/png",
+                       use_container_width=True)
 
-    # 7) Error distribution
+    # 8) Error histogram
     fig2 = px.histogram(
         dfm, x="Δ Eg (eV)", nbins=10,
-        title="Error Distribution (DFT – Exp)", labels={"Δ Eg (eV)":"Δ Eg (eV)"}
+        title="Error Distribution (DFT – Experimental)",
+        labels={"Δ Eg (eV)":"ΔEg (eV)"}
     )
-    fig2.update_layout(template="simple_white", width=700, height=400)
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format="png", scale=2)
-    st.download_button("📥 Download Error Histogram (PNG)", png2, "error_hist.png", "image/png")
+    st.download_button("📥 Download Error Histogram (PNG)",
+                       png2, "error_histogram.png", "image/png",
+                       use_container_width=True)
