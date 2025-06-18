@@ -1,8 +1,6 @@
-# app.py  —  EnerMat Perovskite Explorer v9.6
-# Author: Dr Gbadebo Taofeek Yusuf
-
 import io
 import os
+import uuid
 import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -12,7 +10,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from docx import Document
 from mp_api.client import MPRester
 
@@ -60,12 +57,6 @@ with st.sidebar:
         "4. 📊 Sort **Table** by header click  \n"
         "5. ⬇ Download results"
     )
-    with st.expander("🔎 About this tool", expanded=False):
-        st.image("https://your-cdn.com/images/logo.png", width=100)
-        st.markdown(
-            "This app screens perovskite alloys for band-gap and stability "
-            "using Materials Project data and Monte Carlo sampling."
-        )
 
 # ─────────────────────────────────── Backend call ────────────────────────────
 @st.cache_data(show_spinner="Monte-Carlo sampling …")
@@ -81,16 +72,29 @@ if do_back and st.session_state["history"]:
     st.session_state["history"].pop()
     A, B, rh, temp, df = st.session_state["history"][-1]
     st.success("Showing previous result")
+
 elif do_run:
     dA, dB = _summary(A), _summary(B)
     if not dA or not dB:
         st.error("Failed to fetch Materials Project data for endmembers.")
         st.stop()
+
     df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
     if df.empty:
         st.error("No candidates found – try widening your window.")
         st.stop()
+
+    # ───────────────── Calibration: PBE→Experimental ──────────────────
+    # Replace m, b below with your fitted slope & intercept!
+    m, b = 0.75, 0.40
+    df["corr_gap"] = m * df["band_gap"] + b
+
+    # Filter by corrected gap window
+    df = df.loc[(df.corr_gap >= bg_lo) & (df.corr_gap <= bg_hi)].reset_index(drop=True)
+    # ───────────────────────────────────────────────────────────────────
+
     st.session_state["history"].append((A, B, rh, temp, df))
+
 elif st.session_state["history"]:
     A, B, rh, temp, df = st.session_state["history"][-1]
 else:
@@ -131,22 +135,21 @@ with tab_plot:
     df["is_top"] = df["score"] >= top_cut
 
     fig = px.scatter(
-        df, x="stability", y="band_gap",
+        df, x="stability", y="corr_gap",
         color="score", color_continuous_scale="plasma",
-        hover_data=["formula","x","band_gap","stability","score"],
+        hover_data=["formula","x","band_gap","corr_gap","stability","score"],
         height=450
     )
     fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
     outline = go.Scatter(
-        x=df.loc[df.is_top,"stability"],
-        y=df.loc[df.is_top,"band_gap"],
+        x=df.loc[df.is_top,"stability"], y=df.loc[df.is_top,"corr_gap"],
         mode="markers", hoverinfo="skip",
         marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
         showlegend=False
     )
     fig.add_trace(outline)
     fig.update_xaxes(title="<b>Stability</b>", range=[0.75,1.00], dtick=0.05)
-    fig.update_yaxes(title="<b>Band-gap (eV)</b>", range=[0,3.5], dtick=0.5)
+    fig.update_yaxes(title="<b>Corrected Band-gap (eV)</b>", range=[0,3.5], dtick=0.5)
     fig.update_layout(
         template="simple_white",
         margin=dict(l=70, r=40, t=25, b=65),
@@ -154,11 +157,11 @@ with tab_plot:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Download plot
+    # ─── Download plot for publication ─────────────────────────────
     png = fig.to_image(format="png", scale=2)
     st.download_button(
-        "📥 Download plot as PNG", png,
-        "stability_vs_gap.png", "image/png",
+        "📥 Download plot as PNG",
+        png, "stability_vs_corrected_gap.png", "image/png",
         use_container_width=True
     )
 
@@ -171,9 +174,9 @@ with tab_dl:
     txt = (
         f"EnerMat report ({datetime.date.today()})\n"
         f"Top candidate : {top['formula']}\n"
-        f"Band-gap     : {top['band_gap']}\n"
-        f"Stability    : {top['stability']}\n"
-        f"Score        : {top['score']}\n"
+        f"Corrected band-gap: {top['corr_gap']:.2f} eV\n"
+        f"Stability         : {top['stability']:.3f}\n"
+        f"Score             : {top['score']:.3f}\n"
     )
     st.download_button("TXT report", txt, "EnerMat_report.txt", "text/plain")
 
@@ -182,16 +185,15 @@ with tab_dl:
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top['formula']}")
     tbl = doc.add_table(rows=1, cols=2)
-    for k, v in [("Band-gap", top['band_gap']), ("Stability", top['stability']), ("Score", top['score'])]:
+    for k, v in [("Corrected band-gap", top['corr_gap']), ("Stability", top['stability']), ("Score", top['score'])]:
         row = tbl.add_row()
         row.cells[0].text = k
         row.cells[1].text = str(v)
     buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
+    doc.save(buf); buf.seek(0)
     st.download_button(
-        "📥 DOCX report", buf,
-        "EnerMat_report.docx",
+        "📥 DOCX report",
+        buf, "EnerMat_report.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
@@ -199,96 +201,62 @@ with tab_dl:
 with tab_bench:
     st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # 1) Upload or fallback
     uploaded = st.file_uploader(
         "Upload experimental CSV (`formula`, `exp_gap`)", type="csv"
     )
     if uploaded is None:
-        st.info("No file uploaded — loading bundled CSV…")
+        st.info("No file uploaded — using bundled exp_bandgaps.csv")
         exp_df = pd.read_csv("exp_bandgaps.csv")
-        st.success("Loaded experimental data from bundled CSV")
     else:
         exp_df = pd.read_csv(uploaded)
-        st.success("Loaded experimental data from local file")
 
     if not {"formula","exp_gap"}.issubset(exp_df.columns):
         st.error("CSV must contain `formula` and `exp_gap` columns.")
         st.stop()
 
-    # 2) Load DFT from bundled
-    dft_df = pd.read_csv("pbe_bandgaps.csv")
-    if not {"formula","pbe_gap"}.issubset(dft_df.columns):
-        st.error("DFT CSV needs columns: `formula`, `pbe_gap`.")
-        st.stop()
-    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
+    # Fetch DFT gaps from bundle
+    dfp = pd.read_csv("pbe_bandgaps.csv")
+    dfp = dfp.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
 
-    # 3) Merge & compute
+    # Prepare comparison
     exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
-    dft_df = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
-    dfm = pd.merge(dft_df, exp_df, on="Formula", how="inner")
-    dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
+    cmp = dfp.merge(exp_df, on="Formula", how="inner")
+    cmp["Δ Eg (eV)"] = cmp["DFT Eg (eV)"] - cmp["Exp Eg (eV)"]
 
-    # 4) Error stats
-    mae  = dfm["Δ Eg (eV)"].abs().mean()
-    rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
+    # Stats
+    mae  = cmp["Δ Eg (eV)"].abs().mean()
+    rmse = np.sqrt((cmp["Δ Eg (eV)"]**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # 5) Label picker
-    all_f = sorted(dfm["Formula"].unique())
-    default_labels = all_f[:5]
-    to_label = st.multiselect("Formulas to draw labels for", all_f, default_labels)
+    # Parity with fit
+    x = cmp["Exp Eg (eV)"].values
+    y = cmp["DFT Eg (eV)"].values
+    # Protect against degenerate:
+    if len(cmp) >= 2:
+        m_fit, b_fit = np.polyfit(x, y, 1)
+        line_x = np.array([x.min(), x.max()])
+        line_y = m_fit*line_x + b_fit
+    else:
+        m_fit, b_fit = 1,0
+        line_x = line_y = []
 
-    # 6) Parity plot + robust fit
-    x = dfm["Exp Eg (eV)"].to_numpy()
-    y = dfm["DFT Eg (eV)"].to_numpy()
-    fig1 = go.Figure()
-    # scatter + labels
-    fig1.add_trace(go.Scatter(
-        x=x, y=y, mode="markers+text",
-        text=np.where(dfm["Formula"].isin(to_label), dfm["Formula"], ""),
-        textposition="top center",
-        marker=dict(size=6, opacity=0.8)
-    ))
-    # attempt fit line
-    try:
-        m, b = np.polyfit(x, y, 1)
-        fx = np.array([x.min(), x.max()])
-        fy = m * fx + b
+    fig1 = px.scatter(
+        cmp, x="Exp Eg (eV)", y="DFT Eg (eV)",
+        text="Formula", title="Parity Plot: DFT vs. Experimental"
+    )
+    if len(line_x):
         fig1.add_trace(go.Scatter(
-            x=fx, y=fy, mode="lines",
+            x=line_x, y=line_y, mode="lines",
             line=dict(dash="dash", color="gray"), name="Fit"
         ))
-    except np.linalg.LinAlgError:
-        st.warning("Could not compute fit (degenerate data). Skipping trendline.")
-
-    fig1.update_layout(
-        title="Parity Plot: DFT vs. Experimental",
-        xaxis_title="Exp Eg (eV)",
-        yaxis_title="DFT Eg (eV)",
-        template="simple_white",
-        margin=dict(l=60, r=20, t=50, b=50)
-    )
+    fig1.update_layout(template="simple_white", margin=dict(l=60,r=20,t=40,b=60))
     st.plotly_chart(fig1, use_container_width=True)
     png1 = fig1.to_image(format="png", scale=2)
-    st.download_button(
-        "📥 Download parity plot (PNG)", png1,
-        "parity_plot.png", "image/png"
-    )
+    st.download_button("📥 Download parity plot (PNG)", png1, "parity_plot.png", "image/png")
 
-    # 7) Error histogram
-    fig2 = px.histogram(
-        dfm, x="Δ Eg (eV)", nbins=10,
-        title="Error Distribution (DFT – Experimental)"
-    )
-    fig2.update_layout(
-        template="simple_white",
-        margin=dict(l=60, r=20, t=50, b=50),
-        xaxis_title="Δ Eg (eV)",
-        yaxis_title="count"
-    )
+    # Error histogram
+    fig2 = px.histogram(cmp, x="Δ Eg (eV)", nbins=20, title="Error Distribution (DFT – Experimental)")
+    fig2.update_layout(template="simple_white", margin=dict(l=60,r=20,t=40,b=60))
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format="png", scale=2)
-    st.download_button(
-        "📥 Download error histogram (PNG)", png2,
-        "error_histogram.png", "image/png"
-    )
+    st.download_button("📥 Download error histogram (PNG)", png2, "error_histogram.png", "image/png")
