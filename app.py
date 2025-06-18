@@ -1,6 +1,7 @@
 # app.py  —  EnerMat Perovskite Explorer v9.6
-# Author: Dr Gbadebo Taofeek Yusufimport io
+# Author: Dr Gbadebo Taofeek Yusuf
 
+import io
 import os
 import datetime
 from pathlib import Path
