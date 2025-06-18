@@ -44,7 +44,7 @@ with st.sidebar:
 
     if st.button("🗑 Clear history"):
         st.session_state["history"].clear()
-        st.experimental_rerun()
+        st.rerun()
 
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
     GIT_SHA = st.secrets.get("GIT_SHA", "dev")
