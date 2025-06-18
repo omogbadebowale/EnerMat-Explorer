@@ -239,16 +239,31 @@ with tab_bench:
 
     png1 = fig1.to_image(format="png", scale=2)
     st.download_button("📥 Download parity plot (PNG)",
-                       png1, "parity_plot.png", "image/png")
+                       png1, "parity_plot.png", "image/png"
+                       
+    # 7) Error Histogram (publication-ready)
+errors = dfm["Δ Eg (eV)"]
+fig2 = px.histogram(
+    dfm,
+    x="Δ Eg (eV)",
+    nbins=20,                   # more bins for detail
+    title="Error Distribution (DFT – Experimental)",
+    range_x=[-1.0, 1.0],        # clamp to ±1 eV
+)
+fig2.update_xaxes(title="<b>Δ Eg (eV)</b>")
+fig2.update_yaxes(title="<b>Count</b>")
+fig2.update_layout(
+    template="simple_white",
+    margin=dict(l=60, r=20, t=40, b=50),
+)
+st.plotly_chart(fig2, use_container_width=True)
 
-    # 7) Error Histogram
-    fig2 = px.histogram(
-        dfm, x="Δ Eg (eV)", nbins=10, title="Error Distribution (DFT – Experimental)"
-    )
-    fig2.update_layout(template="simple_white", margin=dict(l=60, r=20, t=40, b=60))
-    st.plotly_chart(fig2, use_container_width=True)
-
-    png2 = fig2.to_image(format="png", scale=2)
-    st.download_button("📥 Download error histogram (PNG)",
-                       png2, "error_histogram.png", "image/png")
-
+# Download button
+png2 = fig2.to_image(format="png", scale=2)
+st.download_button(
+    "📥 Download Error Histogram (PNG)",
+    png2,
+    "error_histogram.png",
+    "image/png",
+    use_container_width=False,
+)
