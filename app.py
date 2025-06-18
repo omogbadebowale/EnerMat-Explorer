@@ -18,8 +18,8 @@ temp = st.sidebar.slider("Temperature [°C]", -20, 100, 25)
 st.sidebar.markdown("---")
 st.sidebar.header("Screening knobs")
 bg_lo, bg_hi = st.sidebar.slider("Target gap [eV]", 0.0, 3.0, (0.8, 1.4), 0.01)
-bowing      = st.sidebar.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
-dx_mix      = st.sidebar.select_slider(
+bowing       = st.sidebar.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
+dx_mix       = st.sidebar.select_slider(
     "Mix Δx step", options=[0.1, 0.25, 0.5, 1.0], value=0.25
 )
 
@@ -30,12 +30,7 @@ st.sidebar.caption("© 2025 Dr. Gbadebo Taofeek Yusuf")
 A_POOL = ["Cs", "Rb", "MA", "FA"]
 B_POOL = ["Pb", "Sn", "Ge"]
 X_POOL = ["I", "Br", "Cl"]
-END_MEMBERS = [
-    f"{A}{B}{X}3"
-    for A in A_POOL
-    for B in B_POOL
-    for X in X_POOL
-]
+END_MEMBERS = [f"{A}{B}{X}3" for A in A_POOL for B in B_POOL for X in X_POOL]
 
 # ─── Run discovery when button clicked ────────────────────────────────────────
 if st.sidebar.button("▶ Run full discovery"):
@@ -44,12 +39,12 @@ if st.sidebar.button("▶ Run full discovery"):
     # 1) Pure end-members
     for M in END_MEMBERS:
         df1 = screen(
-            formula_A=M,
-            formula_B=M,
+            A=M,
+            B=M,
             rh=rh,
             temp=temp,
             bg=(bg_lo, bg_hi),
-            bowing=bowing,
+            bow=bowing,
             dx=1.0
         )
         records.append(df1)
@@ -57,20 +52,19 @@ if st.sidebar.button("▶ Run full discovery"):
     # 2) Binary mixes at dx_mix
     for a, b in itertools.combinations(END_MEMBERS, 2):
         df2 = screen(
-            formula_A=a,
-            formula_B=b,
+            A=a,
+            B=b,
             rh=rh,
             temp=temp,
             bg=(bg_lo, bg_hi),
-            bowing=bowing,
+            bow=bowing,
             dx=dx_mix
         )
         records.append(df2)
 
     # concatenate & sort by composite_score
     results = pd.concat(records, ignore_index=True)
-    results = results.sort_values("composite_score", ascending=False) \
-                     .reset_index(drop=True)
+    results = results.sort_values("score", ascending=False).reset_index(drop=True)
 
     st.session_state["results"] = results
 
@@ -102,28 +96,20 @@ with tab2:
     fig = px.scatter(
         df,
         x="stability", y="band_gap",
-        color="composite_score",
-        size="composite_score",
+        color="score", size="score",
         color_continuous_scale="plasma",
-        hover_data=["formula_pretty", "x", "composite_score"],
+        hover_data=["formula", "x", "score"],
         title="Discovery Pareto Front"
     )
     fig.add_trace(go.Scatter(
         x=df.loc[df.pareto, "stability"],
         y=df.loc[df.pareto, "band_gap"],
         mode="markers",
-        marker=dict(
-            symbol="circle-open-dot",
-            size=18,
-            line=dict(width=2)
-        ),
+        marker=dict(symbol="circle-open-dot", size=18, line=dict(width=2)),
         showlegend=False,
         hoverinfo="skip"
     ))
-    fig.update_layout(
-        template="simple_white",
-        margin=dict(l=50, r=50, t=50, b=50)
-    )
+    fig.update_layout(template="simple_white", margin=dict(l=50, r=50, t=50, b=50))
     st.plotly_chart(fig, use_container_width=True)
 
 with tab3:
