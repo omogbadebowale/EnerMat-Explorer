@@ -1,15 +1,17 @@
-# app.py — EnerMat Perovskite Explorer v9.6 w/ Benchmark & Download Plot
+# app.py  –  EnerMat Perovskite Explorer v9.6 with Benchmark & Download Plot 
 # Author: Dr Gbadebo Taofeek Yusuf
 
-import io, os, datetime
+import io
+import os
+import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
 import streamlit as st
-import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
 from docx import Document
 from mp_api.client import MPRester
 
@@ -49,6 +51,21 @@ with st.sidebar:
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
 
+    st.markdown("### How to explore")
+    st.markdown(
+        "1. ▶️ Run screening → open **Plot** tab  \n"
+        "2. 🔍 Hover for formula & scores  \n"
+        "3. 🖱️ Scroll/drag to zoom & pan  \n"
+        "4. 📊 Sort **Table** by header click  \n"
+        "5. ⬇ Download results"
+    )
+    with st.expander("🔎 About this tool", expanded=False):
+        st.image("https://your-cdn.com/images/logo.png", width=100)
+        st.markdown(
+            "This app screens perovskite alloys for band-gap and stability "
+            "using Materials Project data and Monte Carlo sampling."
+        )
+
 # ─────────────────────────────────── Backend call ────────────────────────────
 @st.cache_data(show_spinner="Monte-Carlo sampling …")
 def run_screen(**kw):
@@ -57,13 +74,15 @@ def run_screen(**kw):
 # ──────────────────────────────── Run / Back logic ──────────────────────────
 col_run, col_back = st.columns([3, 1])
 do_run  = col_run.button("▶ Run screening", type="primary")
-do_back = col_back.button("⏪ Previous", disabled=not st.session_state["history"])
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state["history"]) < 1)
 
-if do_back:
+if do_back and st.session_state["history"]:
     st.session_state["history"].pop()
     A, B, rh, temp, df = st.session_state["history"][-1]
+    st.success("Showing previous result")
 elif do_run:
-    if not (_summary(A) and _summary(B)):
+    dA, dB = _summary(A), _summary(B)
+    if not dA or not dB:
         st.error("Failed to fetch Materials Project data for endmembers.")
         st.stop()
     df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
@@ -126,17 +145,18 @@ with tab_plot:
     fig.add_trace(outline)
     fig.update_xaxes(title="<b>Stability</b>", range=[0.75,1.00], dtick=0.05)
     fig.update_yaxes(title="<b>Band-gap (eV)</b>", range=[0,3.5], dtick=0.5)
-    fig.update_layout(template="simple_white",
-                      margin=dict(l=70, r=40, t=25, b=65),
-                      coloraxis_colorbar=dict(title="<b>Score</b>"))
+    fig.update_layout(
+        template="simple_white",
+        margin=dict(l=70, r=40, t=25, b=65),
+        coloraxis_colorbar=dict(title="<b>Score</b>")
+    )
     st.plotly_chart(fig, use_container_width=True)
 
+    # ─── Download plot for publication ─────────────────────────────
     png = fig.to_image(format="png", scale=2)
     st.download_button(
-        "📥 Download plot as PNG",
-        png,
-        "stability_vs_gap.png",
-        "image/png",
+        "📥 Download stability vs gap (PNG)",
+        png, "stability_vs_gap.png", "image/png",
         use_container_width=True
     )
 
@@ -144,6 +164,7 @@ with tab_plot:
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("CSV", csv, "EnerMat_results.csv", "text/csv")
+
     top = df.iloc[0]
     txt = (
         f"EnerMat report ({datetime.date.today()})\n"
@@ -153,6 +174,7 @@ with tab_dl:
         f"Score        : {top['score']}\n"
     )
     st.download_button("TXT report", txt, "EnerMat_report.txt", "text/plain")
+
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
@@ -166,89 +188,98 @@ with tab_dl:
     doc.save(buf); buf.seek(0)
     st.download_button(
         "📥 DOCX report",
-        buf,
-        "EnerMat_report.docx",
+        buf, "EnerMat_report.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-# ─────────── Benchmark Tab ───────────
+# ─────────── Benchmark Tab (auto-download from GitHub or upload) ───────────
 with tab_bench:
     st.markdown("## ⚖ Benchmark: DFT vs. Experimental Gaps")
 
-    # Experimental CSV
+    # 1) Try user upload first
     uploaded = st.file_uploader(
         "Upload experimental CSV (`formula`, `exp_gap`)", type="csv"
     )
-    if uploaded:
-        exp_df = pd.read_csv(uploaded)
-        st.success("Loaded experimental data from local file")
-    else:
-        try:
-            exp_url = (
-                "https://raw.githubusercontent.com/"
-                "omogbadebowale/EnerMat-Explorer/main/exp_bandgaps.csv"
-            )
-            exp_df = pd.read_csv(exp_url)
-            st.info("No file uploaded — fetched from GitHub 📦")
-        except:
-            st.error("Failed to load experimental CSV — please upload your own.")
-            st.stop()
 
+    # 2) If no upload, fall back to bundled exp_bandgaps.csv
+    if uploaded is None:
+        st.info("No file uploaded — loading bundled experimental data…")
+        try:
+            exp_df = pd.read_csv(Path(__file__).parent / "exp_bandgaps.csv")
+            st.success("Loaded experimental data from bundled CSV")
+        except Exception:
+            st.error("Failed to load bundled experimental CSV. Please upload your own.")
+            st.stop()
+    else:
+        exp_df = pd.read_csv(uploaded)
+        st.success("Loaded experimental data from uploaded file")
+
+    # Validate experimental CSV
     if not {"formula","exp_gap"}.issubset(exp_df.columns):
         st.error("CSV must contain `formula` and `exp_gap` columns.")
         st.stop()
 
-    # DFT CSV
-    dft_df = pd.read_csv("pbe_bandgaps.csv")
-    if not {"formula","pbe_gap"}.issubset(dft_df.columns):
-        st.error("DFT CSV needs columns: `formula`, `pbe_gap`.")
+    # 3) Load bundled DFT CSV
+    try:
+        dft_df = pd.read_csv(Path(__file__).parent / "pbe_bandgaps.csv")
+        st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
+    except Exception:
+        st.error("Failed to load bundled DFT CSV. Please include `pbe_bandgaps.csv`.")
         st.stop()
-    st.info(f"Loaded {len(dft_df)} DFT band gaps from bundled CSV")
 
-    # Merge & compute
-    dft_df = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
+    # Validate DFT CSV
+    if not {"formula","pbe_gap"}.issubset(dft_df.columns):
+        st.error("DFT CSV must contain `formula` and `pbe_gap` columns.")
+        st.stop()
+
+    # 4) Merge
+    dfb = dft_df.rename(columns={"formula":"Formula","pbe_gap":"DFT Eg (eV)"})
     exp_df = exp_df.rename(columns={"formula":"Formula","exp_gap":"Exp Eg (eV)"})
-    dfm = dft_df.merge(exp_df, on="Formula", how="inner")
+    dfm = dfb.merge(exp_df, on="Formula", how="inner")
     dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
 
-    # Stats
+    # 5) Stats
     mae  = dfm["Δ Eg (eV)"].abs().mean()
     rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
-    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    st.write(f"**MAE:** {mae:.3f} eV  **RMSE:** {rmse:.3f} eV")
 
-    # Parity with fit
-    x, y = dfm["Exp Eg (eV)"].values, dfm["DFT Eg (eV)"].values
-    m, b = np.polyfit(x, y, 1)
-    fig1 = px.scatter(dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", text="Formula",
-                      title="Parity Plot: DFT vs. Experimental")
-    mn, mx = x.min(), x.max()
-    fig1.add_shape(
-        type="line", x0=mn, y0=m*mn + b, x1=mx, y1=m*mx + b,
-        line=dict(dash="dash", color="gray")
+    # 6) Parity Plot with optional trendline
+    fig1 = px.scatter(
+        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
+        text="Formula", title="Parity Plot: DFT vs. Experimental",
+        height=450
     )
-    fig1.update_layout(template="simple_white",
-                       margin=dict(l=60, r=20, t=50, b=50))
+    # attempt linear fit
+    x = dfm["Exp Eg (eV)"].values
+    y = dfm["DFT Eg (eV)"].values
+    try:
+        m, b = np.polyfit(x, y, 1)
+        mn, mx = float(x.min()), float(x.max())
+        fig1.add_shape(
+            type="line",
+            x0=mn, y0=m*mn + b,
+            x1=mx, y1=m*mx + b,
+            line=dict(dash="dash", color="gray"),
+            name="Fit"
+        )
+    except np.linalg.LinAlgError:
+        st.warning("⚠️ Could not compute a linear trendline for this dataset.")
+
     st.plotly_chart(fig1, use_container_width=True)
     png1 = fig1.to_image(format="png", scale=2)
     st.download_button(
-        "📥 Download Parity Plot (PNG)",
-        png1,
-        "parity_plot.png",
-        "image/png"
+        "📥 Download parity plot (PNG)",
+        png1, "parity_plot.png", "image/png"
     )
 
-    # Error histogram (±1 eV)
-    fig2 = px.histogram(dfm, x="Δ Eg (eV)", nbins=20, range_x=[-1.0, 1.0],
-                        title="Error Distribution (DFT – Experimental)")
-    fig2.update_xaxes(title="<b>Δ Eg (eV)</b>")
-    fig2.update_yaxes(title="<b>Count</b>")
-    fig2.update_layout(template="simple_white",
-                       margin=dict(l=60, r=20, t=50, b=50))
+    # 7) Error Histogram
+    fig2 = px.histogram(
+        dfm, x="Δ Eg (eV)", nbins=20, title="Error Distribution (DFT – Experimental)",
+        height=300
+    )
     st.plotly_chart(fig2, use_container_width=True)
     png2 = fig2.to_image(format="png", scale=2)
     st.download_button(
-        "📥 Download Error Histogram (PNG)",
-        png2,
-        "error_histogram.png",
-        "image/png"
+        "📥 Download error histogram (PNG)",
+        png2, "error_histogram.png", "image/png"
     )
