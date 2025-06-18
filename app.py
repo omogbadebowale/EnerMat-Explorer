@@ -1,6 +1,3 @@
-# app.py  –  EnerMat Perovskite Explorer v9.6
-# Author: Dr Gbadebo Taofeek Yusuf
-
 import io
 import os
 import datetime
@@ -196,39 +193,17 @@ with tab_bench:
     rmse = np.sqrt((dfm['Δ Eg (eV)']**2).mean())
     st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # Parity Plot
-    fig_p = px.scatter(
-        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", color="Formula",
-        title="Parity: DFT vs. Experimental", width=700, height=400
-    )
-    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
-    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
-    fig_p.add_shape(type="line", x0=mn, y0=mn, x1=mx, y1=mx,
-                     line=dict(dash="dash", color="gray"))
-    fig_p.update_layout(template="simple_white", margin=dict(l=50, r=20, t=40, b=50),
-                        xaxis_title="Exp Eg (eV)", yaxis_title="DFT Eg (eV)",
-                        font=dict(family='Arial', size=16), title_font_size=20)
-    st.plotly_chart(fig_p, use_container_width=True)
-
-    # Error Histogram
-    fig_h = px.histogram(
-        dfm, x="DFT Eg (eV)"-dfm["Exp Eg (eV)"], nbins=20,
-        width=700, height=350
-    )
-    fig_h.update_layout(xaxis_title="Δ Eg (eV)", yaxis_title="Count",
-                        template="simple_white", margin=dict(l=50, r=20, t=20, b=40),
-                        font=dict(family='Arial', size=16), title_font_size=20)
-    st.plotly_chart(fig_h, use_container_width=True)
-
 # Results Summary Tab
 with tab_results:
     st.header("📑 Results Summary")
+    # Top 10 Table
     st.subheader("Top 10 Candidates")
     top10 = df.sort_values("score", ascending=False).head(10)
     st.dataframe(top10.style.format({
         "band_gap": "{:.3f}", "stability": "{:.3f}", "score": "{:.3f}"
     }), use_container_width=True)
 
+    # Screening Plot
     st.subheader("Screening: Stability vs. Band-Gap")
     fig_s = px.scatter(
         df, x="stability", y="band_gap",
@@ -245,6 +220,30 @@ with tab_results:
             showlegend=False
         )
     )
-    fig_s.update_layout(template="simple_white", margin=dict(l=40, r=20, t=30, b=40),
-                        font=dict(family='Arial', size=16), title_font_size=20)
+    fig_s.update_layout(template="simple_white", margin=dict(l=40, r=20, t=30, b=40))
     st.plotly_chart(fig_s, use_container_width=True)
+
+    # Benchmark Metrics & Plots
+    st.subheader("Benchmark: DFT vs. Experimental")
+    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    # Parity Plot
+    fig_p = px.scatter(
+        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", color="Formula",
+        title="Parity Plot: DFT vs. Experimental", width=700, height=400
+    )
+    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
+    fig_p.add_shape(type="line", x0=mn, y0=mn, x1=mx, y1=mx,
+                     line=dict(dash="dash", color="gray"))
+    fig_p.update_layout(template="simple_white", margin=dict(l=50, r=20, t=40, b=50))
+    st.plotly_chart(fig_p, use_container_width=True)
+
+    # Error Histogram
+    st.subheader("Error Distribution (DFT − Exp)")
+    fig_h = px.histogram(
+        dfm, x=dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"], nbins=20,
+        width=700, height=350
+    )
+    fig_h.update_layout(xaxis_title="Δ Eg (eV)", yaxis_title="Count",
+                        template="simple_white", margin=dict(l=50, r=20, t=20, b=40))
+    st.plotly_chart(fig_h, use_container_width=True)
