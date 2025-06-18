@@ -203,7 +203,6 @@ with tab_bench:
     )
     mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
     mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
-
     fig_p.add_shape(type="line", x0=mn, y0=mn, x1=mx, y1=mx,
                      line=dict(dash="dash", color="gray"))
     fig_p.update_layout(template="simple_white", margin=dict(l=50, r=20, t=40, b=50),
