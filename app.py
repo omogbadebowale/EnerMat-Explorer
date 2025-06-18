@@ -1,6 +1,5 @@
- app.py  –  EnerMat Perovskite Explorer v9.6
+app.py  –  EnerMat Perovskite Explorer v9.6
 # Author: Dr Gbadebo Taofeek Yusuf
-
 import io
 import os
 import uuid
