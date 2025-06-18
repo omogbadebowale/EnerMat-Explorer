@@ -181,33 +181,52 @@ with tab_bench:
     dfm = pd.merge(pbe_df,exp_df,on="Formula",how="inner")
     dfm["Δ Eg (eV)"] = dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"]
 
-    # — show stats
-    mae  = dfm["Δ Eg (eV)"].abs().mean()
-    rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
-    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    # … after loading & merging your two CSVs …
 
-    # — parity plot
-    fig1 = px.scatter(dfm, x="Exp Eg (eV)", y="DFT Eg (eV)",
-                      text="Formula", title="Parity Plot: DFT vs. Experimental")
-    mn,mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min(),\
-            dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
-    fig1.add_shape("line",x0=mn,y0=mn,x1=mx,y1=mx,
-                   line=dict(dash="dash",color="gray"))
-    fig1.update_layout(template="simple_white",
-                       font=dict(family="serif",size=14),
-                       margin=dict(l=70,r=40,t=50,b=60))
-    st.plotly_chart(fig1,use_container_width=True)
-    png1 = fig1.to_image(format="png",scale=2)
-    st.download_button("📥 Download Parity Plot (PNG)",
-                       png1,"parity_plot.png","image/png")
+# 5) Show stats
+mae  = dfm["Δ Eg (eV)"].abs().mean()
+rmse = np.sqrt((dfm["Δ Eg (eV)"]**2).mean())
+st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
 
-    # — error histogram
-    fig2 = px.histogram(dfm, x="Δ Eg (eV)", nbins=10,
-                        title="Error Distribution (DFT – Exp)")
-    fig2.update_layout(template="simple_white",
-                       font=dict(family="serif",size=14),
-                       margin=dict(l=70,r=40,t=50,b=60))
-    st.plotly_chart(fig2,use_container_width=True)
-    png2 = fig2.to_image(format="png",scale=2)
-    st.download_button("📥 Download Error Histogram (PNG)",
-                       png2,"error_histogram.png","image/png")
+# 6) Parity Plot: fix add_shape
+dfm = dfm.dropna(subset=["Exp Eg (eV)", "DFT Eg (eV)"])
+mn = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].min().min()
+mx = dfm[["Exp Eg (eV)","DFT Eg (eV)"]].max().max()
+
+fig1 = px.scatter(
+    dfm,
+    x="Exp Eg (eV)",
+    y="DFT Eg (eV)",
+    text="Formula",
+    title="Parity Plot: DFT vs. Experimental",
+    template="simple_white"
+)
+fig1.add_shape(
+    type="line",
+    x0=mn, y0=mn, x1=mx, y1=mx,
+    line=dict(dash="dash", color="gray"),
+    xref="x", yref="y"
+)
+fig1.update_layout(margin=dict(l=70,r=40,t=50,b=60),
+                   font=dict(family="serif", size=14))
+st.plotly_chart(fig1, use_container_width=True)
+
+png1 = fig1.to_image(format="png", scale=2)
+st.download_button("📥 Download Parity Plot (PNG)",
+                   png1, "parity_plot.png", "image/png")
+
+# 7) Error Histogram
+fig2 = px.histogram(
+    dfm,
+    x="Δ Eg (eV)",
+    nbins=10,
+    title="Error Distribution (DFT – Exp)",
+    template="simple_white"
+)
+fig2.update_layout(margin=dict(l=70,r=40,t=50,b=60),
+                   font=dict(family="serif", size=14))
+st.plotly_chart(fig2, use_container_width=True)
+
+png2 = fig2.to_image(format="png", scale=2)
+st.download_button("📥 Download Error Histogram (PNG)",
+                   png2, "error_histogram.png", "image/png")
