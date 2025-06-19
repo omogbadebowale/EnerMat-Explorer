@@ -47,8 +47,16 @@ with st.sidebar:
         st.rerun()
 
     # Optional footer for tracking version and timestamp
+        # Optional footer for tracking version and timestamp
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Safe fallback for local run
+    try:
+        GIT_SHA = st.secrets["GIT_SHA"]
+    except Exception:
+        GIT_SHA = "dev"
+    
     st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
 
 #───────────────────────────────── Backend Call ───────────────────────────────
