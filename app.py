@@ -29,19 +29,21 @@ with st.sidebar:
     temp = st.slider("Temperature [°C]", -20, 100, 25)
     bg_lo, bg_hi = st.slider("Target gap [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
-    st.header("Parent formulas")
-    A_pick = st.selectbox("Preset A", END_MEMBERS, index=0)
-    B_pick = st.selectbox("Preset B", END_MEMBERS, index=1)
-    A = st.text_input("Custom A (optional)", "").strip() or A_pick
-    B = st.text_input("Custom B (optional)", "").strip() or B_pick
+   st.header("Parent formulas")
+preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
 
-    st.header("Model knobs")
-    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
-    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+custom_A = st.text_input("Custom A (optional)", "").strip()
+custom_B = st.text_input("Custom B (optional)", "").strip()
 
-    if st.button("🗑 Clear history"):
-        st.session_state.history.clear()
-        st.experimental_rerun()
+# Use custom input if available, else fall back to preset
+A = custom_A if custom_A else preset_A
+B = custom_B if custom_B else preset_B
+
+if st.button("🗑 Clear history"):
+    if "history" in st.session_state:
+        del st.session_state["history"]
+    st.experimental_rerun()
 
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
     GIT_SHA = st.secrets.get("GIT_SHA", "dev")
