@@ -23,6 +23,7 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 #─────────────────────────────────── Sidebar ───────────────────────────────────
+# ─────────────────────────────────── Sidebar ───────────────────────────────────
 with st.sidebar:
     st.header("Environment")
     RH = st.slider("Humidity [%]", 0, 100, 50)
@@ -46,6 +47,7 @@ with st.sidebar:
             del st.session_state["history"]
         st.rerun()
 
+    # Optional footer for tracking version and timestamp
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
     GIT_SHA = st.secrets.get("GIT_SHA", "dev")
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
