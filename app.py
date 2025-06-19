@@ -56,7 +56,7 @@ if st.button("▶️ Run screening"):
     st.session_state["params"] = dict(A=A, B=B, bow=bow, dx=dx, RH=RH, T=T, Eg_min=Eg_min, Eg_max=Eg_max)
     st.success("✅ Screening completed successfully!")
 
-# ───────────────────── Results Display ─────────────────────
+# ───────────────────── Results Display ────────────────────
 if "results" in st.session_state:
     st.subheader("📊 Results Summary")
     df = st.session_state["results"]
@@ -66,10 +66,10 @@ if "results" in st.session_state:
     fig = px.scatter(df, x="x", y="score", color="formula", title="Composite Score vs. Composition")
     st.plotly_chart(fig, use_container_width=True)
 
-    # Export as PNG using kaleido with fallback
-    try:
-        png = pio.to_image(fig, format='png', scale=2)
-        st.download_button("📥 Download Plot as PNG", data=png, file_name="perovskite_plot.png", mime="image/png")
-    except Exception as e:
-        st.warning("⚠️ PNG export unavailable – ensure `kaleido` is installed.")
-        st.text(f"Details: {e}")
+    # OPTIONAL: Remove or comment this block if Kaleido is not supported
+    # try:
+    #     png = pio.to_image(fig, format='png', scale=2)
+    #     st.download_button("📥 Download Plot as PNG", data=png, file_name="perovskite_plot.png", mime="image/png")
+    # except Exception as e:
+    #     st.warning("⚠️ PNG export unavailable – Kaleido or Chromium not found.")
+    #     st.text(f"Details: {e}")
