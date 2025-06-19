@@ -25,18 +25,16 @@ if "history" not in st.session_state:
 #─────────────────────────────────── Sidebar ───────────────────────────────────
 with st.sidebar:
     st.header("Environment")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
-    bg_lo, bg_hi = st.slider("Target gap [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
+    RH = st.slider("Humidity [%]", 0, 100, 50)
+    T = st.slider("Temperature [°C]", -20, 100, 25)
+    Eg_min, Eg_max = st.slider("Target gap [eV]", 0.5, 3.0, (0.5, 2.59))
 
    st.header("Parent formulas")
+st.header("Parent formulas")
 preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
 preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
-
-custom_A = st.text_input("Custom A (optional)", "").strip()
-custom_B = st.text_input("Custom B (optional)", "").strip()
-
-# Use custom input if available, else fall back to preset
+custom_A = st.text_input("Custom A (optional)", value="").strip()
+custom_B = st.text_input("Custom B (optional)", value="").strip()
 A = custom_A if custom_A else preset_A
 B = custom_B if custom_B else preset_B
 
