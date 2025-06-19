@@ -136,9 +136,18 @@ with tab_plot:
         font=dict(family='Arial', size=16)
     )
     st.plotly_chart(fig, use_container_width=True)
-    png = fig.to_image(format='png', scale=2)
-    st.download_button('📥 Download plot as PNG', png,
-                       'stability_vs_gap.png', 'image/png', use_container_width=True)
+    import base64
+
+def fig_to_base64(fig):
+    img_bytes = fig.to_image(format="png", engine="kaleido", width=800, height=600)
+    return base64.b64encode(img_bytes).decode("utf-8")
+
+try:
+    img_b64 = fig_to_base64(fig)
+    href = f'<a href="data:image/png;base64,{img_b64}" download="stability_vs_gap.png">📥 Download plot as PNG</a>'
+    st.markdown(href, unsafe_allow_html=True)
+except Exception:
+    st.warning("⚠️ Image export is not supported on this server. Please use screenshot or download data as CSV.")
 
 # Download Tab
 with tab_dl:
