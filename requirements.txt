@@ -6,5 +6,5 @@ pymatgen
 numpy
 pandas
 statsmodels
-python-docx
-kaleido
+
+
