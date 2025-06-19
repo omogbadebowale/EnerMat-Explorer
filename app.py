@@ -151,16 +151,55 @@ with tab_plot:
     st.plotly_chart(fig, use_container_width=True)
     import base64
 
-def fig_to_base64(fig):
-    img_bytes = fig.to_image(format="png", engine="kaleido", width=800, height=600)
-    return base64.b64encode(img_bytes).decode("utf-8")
+with tab_plot:
+    st.caption("ℹ️ **Tip**: Hover circles; scroll to zoom; drag to pan")
+    top_cut = df.score.quantile(0.80)
+    df["is_top"] = df.score >= top_cut
 
-try:
-    img_b64 = fig_to_base64(fig)
-    href = f'<a href="data:image/png;base64,{img_b64}" download="stability_vs_gap.png">📥 Download plot as PNG</a>'
-    st.markdown(href, unsafe_allow_html=True)
-except Exception:
-    st.warning("⚠️ Image export is not supported on this server. Please use screenshot or download data as CSV.")
+    fig = px.scatter(
+        df, x="stability", y="band_gap",
+        color="score", color_continuous_scale="plasma",
+        hover_data=["formula", "x", "band_gap", "stability", "score"], height=450
+    )
+
+    fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
+    fig.add_trace(
+        go.Scatter(
+            x=df.loc[df.is_top, "stability"],
+            y=df.loc[df.is_top, "band_gap"],
+            mode="markers",
+            marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+            hoverinfo="skip", showlegend=False
+        )
+    )
+
+    fig.update_xaxes(title="<b>Stability</b>", range=[0.75, 1.0], dtick=0.05,
+                     title_font_size=18, tickfont_size=14)
+    fig.update_yaxes(title="<b>Band-gap (eV)</b>", range=[0, 3.5], dtick=0.5,
+                     title_font_size=18, tickfont_size=14)
+    fig.update_layout(
+        template="simple_white",
+        margin=dict(l=70, r=40, t=25, b=65),
+        coloraxis_colorbar=dict(title="<b>Score</b>", title_font_size=16, tickfont_size=14),
+        font=dict(family="Arial", size=16)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    try:
+        # Try direct PNG generation
+        png = fig.to_image(format="png", scale=2)
+        st.download_button(
+            label="📥 Download plot as PNG",
+            data=png,
+            file_name="stability_vs_gap.png",
+            mime="image/png",
+            use_container_width=True
+        )
+    except Exception as e:
+        # Fallback message
+        st.warning("⚠️ PNG export failed in this session. Try taking a screenshot instead.")
+        st.caption("📸 Tip: Right-click the chart → 'Save image as…' or use your OS screenshot tool.")
 
 # Download Tab
 with tab_dl:
