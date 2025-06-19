@@ -136,14 +136,7 @@ with tab_plot:
         font=dict(family='Arial', size=16)
     )
     st.plotly_chart(fig, use_container_width=True)
-   import plotly.io as pio
-
-try:
-    png = pio.to_image(fig, format='png', scale=2)
-except Exception as e:
-    st.warning(f"Could not export figure to image. Reason: {e}")
-    png = None
-    
+    png = fig.to_image(format='png', scale=2)
     st.download_button('📥 Download plot as PNG', png,
                        'stability_vs_gap.png', 'image/png', use_container_width=True)
 
