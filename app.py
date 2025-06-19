@@ -53,23 +53,37 @@ with st.sidebar:
 def run_screen(**kw):
     return screen(**kw)
 
-#──────────────────────────── Run / Back Logic ────────────────────────────────
-col_run, col_back = st.columns([3,1])
+# ────────────────────────────────── Backend Call ──────────────────────────────
+@st.cache_data(show_spinner="⏳ Monte-Carlo sampling …")
+def run_screen(**kw):
+    return screen(**kw)
+
+# ───────────────────────────────── Run / Back Logic ───────────────────────────
+col_run, col_back = st.columns([3, 1])
 do_run = col_run.button("▶ Run screening", type="primary")
-do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history)<1)
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history) < 1)
 
 if do_back and st.session_state.history:
     st.session_state.history.pop()
     A, B, rh, temp, df = st.session_state.history[-1]
     st.success("Showing previous result")
 elif do_run:
-    dA, dB = _summary(A), _summary(B)
-    if not dA or not dB:
-        st.error("Failed to fetch Materials Project data for endmembers.")
+    try:
+        dA, dB = _summary(A), _summary(B)
+    except Exception as e:
+        st.error(f"❌ Error querying Materials Project: {e}")
         st.stop()
+
+    if not dA:
+        st.error(f"❌ Invalid or unsupported formula: `{A}`")
+        st.stop()
+    if not dB:
+        st.error(f"❌ Invalid or unsupported formula: `{B}`")
+        st.stop()
+
     df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
     if df.empty:
-        st.error("No candidates found – try widening your window.")
+        st.error("No candidates found – try widening your gap or composition window.")
         st.stop()
     st.session_state.history.append((A, B, rh, temp, df))
 elif st.session_state.history:
