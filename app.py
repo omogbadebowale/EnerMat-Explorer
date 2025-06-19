@@ -24,16 +24,17 @@ if "history" not in st.session_state:
 
 #─────────────────────────────────── Sidebar ───────────────────────────────────
 with st.sidebar:
-    st.header("Environment")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
-    bg_lo, bg_hi = st.slider("Target gap [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
-
     st.header("Parent formulas")
-    A_pick = st.selectbox("Preset A", END_MEMBERS, index=0)
-    B_pick = st.selectbox("Preset B", END_MEMBERS, index=1)
-    A = st.text_input("Custom A (optional)", "").strip() or A_pick
-    B = st.text_input("Custom B (optional)", "").strip() or B_pick
+
+preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+
+custom_A = st.text_input("Custom A (optional)", "").strip()
+custom_B = st.text_input("Custom B (optional)", "").strip()
+
+# Use custom input if available, else fall back to preset
+A = custom_A if custom_A else preset_A
+B = custom_B if custom_B else preset_B
 
     st.header("Model knobs")
     bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
@@ -58,32 +59,23 @@ def run_screen(**kw):
 def run_screen(**kw):
     return screen(**kw)
 
-# ───────────────────────────────── Run / Back Logic ───────────────────────────
-col_run, col_back = st.columns([3, 1])
+# ───────────────────────────────── Run / Back Logic ──────────────────────────
+col_run, col_back = st.columns([3,1])
 do_run = col_run.button("▶ Run screening", type="primary")
-do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history) < 1)
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history)<1)
 
 if do_back and st.session_state.history:
     st.session_state.history.pop()
     A, B, rh, temp, df = st.session_state.history[-1]
     st.success("Showing previous result")
 elif do_run:
-    try:
-        dA, dB = _summary(A), _summary(B)
-    except Exception as e:
-        st.error(f"❌ Error querying Materials Project: {e}")
+    dA, dB = _summary(A), _summary(B)
+    if not dA or not dB:
+        st.error("Failed to fetch Materials Project data for endmembers.")
         st.stop()
-
-    if not dA:
-        st.error(f"❌ Invalid or unsupported formula: `{A}`")
-        st.stop()
-    if not dB:
-        st.error(f"❌ Invalid or unsupported formula: `{B}`")
-        st.stop()
-
     df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
     if df.empty:
-        st.error("No candidates found – try widening your gap or composition window.")
+        st.error("No candidates found – try widening your window.")
         st.stop()
     st.session_state.history.append((A, B, rh, temp, df))
 elif st.session_state.history:
