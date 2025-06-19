@@ -29,19 +29,22 @@ with st.sidebar:
     T = st.slider("Temperature [°C]", -20, 100, 25)
     Eg_min, Eg_max = st.slider("Target gap [eV]", 0.5, 3.0, (0.5, 2.59))
 
-   st.header("Parent formulas")
-st.header("Parent formulas")
-preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
-preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
-custom_A = st.text_input("Custom A (optional)", value="").strip()
-custom_B = st.text_input("Custom B (optional)", value="").strip()
-A = custom_A if custom_A else preset_A
-B = custom_B if custom_B else preset_B
+    st.header("Parent formulas")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+    custom_A = st.text_input("Custom A (optional)", value="").strip()
+    custom_B = st.text_input("Custom B (optional)", value="").strip()
+    A = custom_A if custom_A else preset_A
+    B = custom_B if custom_B else preset_B
 
-if st.button("🗑 Clear history"):
-    if "history" in st.session_state:
-        del st.session_state["history"]
-    st.experimental_rerun()
+    st.header("Model knobs")
+    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.35, 0.05)
+    dx = st.number_input("x-step", 0.01, 0.5, 0.05, 0.01)
+
+    if st.button("🗑 Clear history"):
+        if "history" in st.session_state:
+            del st.session_state["history"]
+        st.rerun()
 
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
     GIT_SHA = st.secrets.get("GIT_SHA", "dev")
