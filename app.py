@@ -36,7 +36,7 @@ custom_B = st.text_input("Custom B (optional)", "").strip()
 A = custom_A if custom_A else preset_A
 B = custom_B if custom_B else preset_B
 
-    st.header("Model knobs")
+st.header("Model knobs")
     bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
 
