@@ -3,125 +3,282 @@ import os
 import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from docx import Document
+from mp_api.client import MPRester
 
-# Load environment variables
-load_dotenv()
-# Try both os and Streamlit secrets
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
-if not API_KEY or len(API_KEY) != 32:
-    st.error("🛑 Please set MP_API_KEY to your 32‑character Materials Project API key")
-    st.stop()
+from backend.perovskite_utils import mix_abx3 as screen, screen_ternary, END_MEMBERS, fetch_mp_data as _summary
 
-# Backend imports
-from backend.perovskite_utils import (
-    mix_abx3 as screen_binary,
-    screen_ternary,
-    END_MEMBERS,
-    fetch_mp_data as _summary
-)
-
-# App configuration
+# ───────────────────────────────────── App Config ─────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-# Initialize session history
+# ─────────────────────────────────── Session History ──────────────────────────
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# Sidebar
+# ───────────────────────────────────── Sidebar ────────────────────────────────
 with st.sidebar:
     st.header("Mode")
     mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
-    st.markdown("---")
-    st.header("End‑members")
-    A = st.selectbox("Preset A", END_MEMBERS, index=0)
-    B = st.selectbox("Preset B", END_MEMBERS, index=1)
-    customA = st.text_input("Custom A (optional)", key="customA")
-    customB = st.text_input("Custom B (optional)", key="customB")
-    if customA:
-        A = customA.strip()
-    if customB:
-        B = customB.strip()
+    st.header("End-members")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+    custom_A = st.text_input("Custom A (optional)", "").strip()
+    custom_B = st.text_input("Custom B (optional)", "").strip()
+    A = custom_A or preset_A
+    B = custom_B or preset_B
     if mode == "Ternary A–B–C":
-        C = st.selectbox("Preset C", END_MEMBERS, index=2)
-        customC = st.text_input("Custom C (optional)", key="customC")
-        if customC:
-            C = customC.strip()
+        preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
+        custom_C = st.text_input("Custom C (optional)", "").strip()
+        C = custom_C or preset_C
 
-    st.markdown("---")
     st.header("Environment")
     rh = st.slider("Humidity [%]", 0, 100, 50)
     temp = st.slider("Temperature [°C]", -20, 100, 25)
 
-    st.markdown("---")
+    st.header("Target gap [eV]")
+    bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
+
     st.header("Model knobs")
-    bg_lo, bg_hi = st.slider("Target gap [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
     bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
-    dx = st.number_input("x-step", 0.01, 0.5, 0.05, 0.01)
+    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode == "Ternary A–B–C":
-        dy = st.number_input("y-step", 0.01, 0.5, 0.05, 0.01)
-        bows = {
-            'AB': st.number_input("Bow AB [eV]", 0.0, 1.0, 0.30, 0.05),
-            'AC': st.number_input("Bow AC [eV]", 0.0, 1.0, 0.30, 0.05),
-            'BC': st.number_input("Bow BC [eV]", 0.0, 1.0, 0.30, 0.05),
-        }
-    else:
-        dy = None
-        bows = None
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
+
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
+    GIT_SHA = st.secrets.get("GIT_SHA", "dev")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
 
-# Main run logic
-col_run, col_prev = st.columns([3,1])
+# ────────────────────────────────── Backend Call ──────────────────────────────
+@st.cache_data(show_spinner="⏳ Screening …")
+def run_screen(**kw):
+    return screen(**kw)
+
+# ───────────────────────────────── Run / Back Logic ───────────────────────────
+col_run, col_back = st.columns([3, 1])
 do_run = col_run.button("▶ Run screening", type="primary")
-do_prev = col_prev.button("⏪ Previous", disabled=len(st.session_state.history)<1)
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history) < 1)
 
-if do_prev and st.session_state.history:
-    df = st.session_state.history.pop()
+if do_back and st.session_state.history:
+    st.session_state.history.pop()
+    A, B, rh, temp, df = st.session_state.history[-1]
+    st.success("Showing previous result")
 elif do_run:
-    # Validate MP queries
     try:
-        _ = _summary(A, ["band_gap","energy_above_hull"])
-        _ = _summary(B, ["band_gap","energy_above_hull"])
-        if mode == "Ternary A–B–C": _ = _summary(C, ["band_gap","energy_above_hull"])
+        docA = _summary(A, ["band_gap", "energy_above_hull"])
+        docB = _summary(B, ["band_gap", "energy_above_hull"])
     except Exception as e:
         st.error(f"❌ Error querying Materials Project: {e}")
         st.stop()
+    if not docA or not docB:
+        st.error("❌ Invalid formula(s)")
+        st.stop()
 
-    # Run appropriate screen
     if mode == "Binary A–B":
-        df = screen_binary(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo,bg_hi), bowing=bow, dx=dx)
+        df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
     else:
-        df = screen_ternary(A=A, B=B, C=C, rh=rh, temp=temp, bg=(bg_lo,bg_hi), bows=bows, dx=dx, dy=dy)
+        try:
+            df = screen_ternary(
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
+                bg=(bg_lo, bg_hi),
+                bows={"AB": bow, "AC": bow, "BC": bow},
+                dx=dx, dy=dy, n_mc=200
+            )
+        except Exception as e:
+            st.error(f"❌ Ternary error: {e}")
+            st.stop()
 
     if df.empty:
-        st.error("No candidates found – try expanding your ranges.")
+        st.error("No candidates found – try widening your gap or composition window.")
         st.stop()
-    st.session_state.history.append(df)
+    st.session_state.history.append((A, B, rh, temp, df))
+elif st.session_state.history:
+    A, B, rh, temp, df = st.session_state.history[-1]
 else:
-    if st.session_state.history:
-        df = st.session_state.history[-1]
-    else:
-        st.info("Press ▶ Run screening to begin.")
-        st.stop()
+    st.info("Press ▶ Run screening to begin.")
+    st.stop()
 
-# Tabs and display
-tabs = st.tabs(["📊 Table","📈 Plot","📥 Download","⚖ Benchmark","📑 Results Summary"])
+# ─────────────────────────────────── Tabs ─────────────────────────────────────
+tab_tbl, tab_plot, tab_dl, tab_bench, tab_results = st.tabs([
+    "📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"
+])
 
-with tabs[0]:
+# Table Tab
+with tab_tbl:
+    params = pd.DataFrame({
+        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"] + (["y-step"] if mode == "Ternary A–B–C" else []),
+        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx] + ([dy] if mode == "Ternary A–B–C" else [])
+    })
     st.markdown("**Run parameters**")
-    params = ["Humidity [%]","Temperature [°C]","Gap [eV]","Bowing [eV]","x-step"]
-    vals = [rh,temp,f"{bg_lo:.2f}–{bg_hi:.2f}",bow,dx]
-    if dy: params.append("y-step"); vals.append(dy)
-    st.table(pd.DataFrame({"Parameter":params,"Value":vals}))
-    st.dataframe(df, height=350)
+    st.table(params)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"**A-endmember: {A}**")
+        st.write(f"MP band gap: {docA['band_gap']:.2f} eV")
+        st.write(f"MP E_above_hull: {docA['energy_above_hull']:.3f} eV/atom")
+    with c2:
+        st.markdown(f"**B-endmember: {B}**")
+        st.write(f"MP band gap: {docB['band_gap']:.2f} eV")
+        st.write(f"MP E_above_hull: {docB['energy_above_hull']:.3f} eV/atom")
+
+    st.dataframe(df, height=400, use_container_width=True)
+
+# Plot Tab
+with tab_plot:
+    if mode == "Binary A–B":
+        st.caption("ℹ️ **Tip**: Hover circles; scroll to zoom; drag to pan")
+        top_cut = df.score.quantile(0.80)
+        df['is_top'] = df.score >= top_cut
+        fig = px.scatter(
+            df, x='stability', y='band_gap',
+            color='score', color_continuous_scale='plasma',
+            hover_data=['formula','x','band_gap','stability','score'], height=450
+        )
+        fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
+        fig.add_trace(
+            go.Scatter(
+                x=df.loc[df.is_top, 'stability'],
+                y=df.loc[df.is_top, 'band_gap'],
+                mode='markers',
+                marker=dict(size=22, color='rgba(0,0,0,0)', line=dict(width=2, color='black')),
+                hoverinfo='skip', showlegend=False
+            )
+        )
+        fig.update_xaxes(title='<b>Stability</b>', range=[0.75,1.0], dtick=0.05)
+        fig.update_yaxes(title='<b>Band-gap (eV)</b>', range=[0,3.5], dtick=0.5)
+        fig.update_layout(template='simple_white', margin=dict(l=70,r=40,t=25,b=65), coloraxis_colorbar=dict(title='<b>Score</b>'))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.caption("ℹ️ Hover points; scroll to zoom; drag to rotate")
+        fig3d = px.scatter_3d(
+            df, x="x", y="y", z="score",
+            color="score",
+            hover_data=["formula","Eg","Eh"],
+            height=600
+        )
+        fig3d.update_layout(template="simple_white",
+                            scene=dict(xaxis_title="B fraction (x)", yaxis_title="C fraction (y)", zaxis_title="Score"))
+        st.plotly_chart(fig3d, use_container_width=True)
+
+
+# Download Tab
+with tab_dl:
+    csv = df.to_csv(index=False).encode()
+    st.download_button('CSV', csv, 'EnerMat_results.csv', 'text/csv')
+    top = df.iloc[0]
+    txt = (
+        f"EnerMat report ({datetime.date.today()})\n"
+        f"Top candidate : {top.formula}\n"
+        f"Band-gap     : {top.Eg}\n"
+        f"Stability    : {top.stability}\n"
+        f"Score        : {top.score}\n"
+    )
+    st.download_button('TXT report', txt, 'EnerMat_report.txt', 'text/plain')
+    doc = Document()
+    doc.add_heading('EnerMat Report', 0)
+    doc.add_paragraph(f"Date: {datetime.date.today()}")
+    doc.add_paragraph(f"Top candidate: {top.formula}")
+    tbl = doc.add_table(rows=1, cols=2)
+    for k, v in [("Band-gap", top.Eg), ("Stability", top.stability), ("Score", top.score)]:
+        row = tbl.add_row()
+        row.cells[0].text = k
+        row.cells[1].text = str(v)
+    buf = io.BytesIO()
+    doc.save(buf); buf.seek(0)
+    st.download_button('📥 DOCX report', buf, 'EnerMat_report.docx',
+                       'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+# Benchmark Tab
+with tab_bench:
+    st.markdown('## ⚖ Benchmark: DFT vs. Experimental Gaps')
+    uploaded = st.file_uploader('Upload experimental CSV (`formula`,`exp_gap`)', type='csv')
+    if uploaded:
+        exp_df = pd.read_csv(uploaded)
+        st.success('Loaded experimental data from uploaded file')
+    else:
+        exp_df = pd.read_csv('exp_bandgaps.csv')
+        st.success('Loaded experimental data from bundled CSV')
+
+    if not {'formula','exp_gap'}.issubset(exp_df.columns):
+        st.error('CSV must contain `formula` and `exp_gap` columns.'); st.stop()
+
+    dft_df = pd.read_csv('pbe_bandgaps.csv')
+    if not {'formula','pbe_gap'}.issubset(dft_df.columns):
+        st.error('DFT CSV must contain `formula` and `pbe_gap` columns.'); st.stop()
+    dft_df = dft_df.rename(columns={'formula':'Formula','pbe_gap':'DFT Eg (eV)'})
+    exp_df = exp_df.rename(columns={'formula':'Formula','exp_gap':'Exp Eg (eV)'})
+
+    dfm = dft_df.merge(exp_df, on='Formula', how='inner')
+    dfm['Δ Eg (eV)'] = dfm['DFT Eg (eV)'] - dfm['Exp Eg (eV)']
+    mae = dfm['Δ Eg (eV)'].abs().mean()
+    rmse = np.sqrt((dfm['Δ Eg (eV)']**2).mean())
+    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+
+# Results Summary Tab
+with tab_results:
+    st.header("📑 Results Summary")
+    # Top 10 Table
+    st.subheader("Top 10 Candidates")
+    top10 = df.sort_values("score", ascending=False).head(10)
+    st.dataframe(top10.style.format({
+        "band_gap": "{:.3f}", "stability": "{:.3f}", "score": "{:.3f}"
+    }), use_container_width=True)
+
+    # Screening Plot
+    st.subheader("Screening: Stability vs. Band-Gap")
+    fig_s = px.scatter(
+        df, x="stability", y="band_gap",
+        color="score", color_continuous_scale="plasma",
+        size="score", hover_data=["formula","x"], height=400
+    )
+    cutoff = df["score"].quantile(0.8)
+    fig_s.add_trace(
+        go.Scatter(
+            x=df.loc[df.score>=cutoff, "stability"],
+            y=df.loc[df.score>=cutoff, "band_gap"],
+            mode="markers",
+            marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+            showlegend=False
+        )
+    )
+    fig_s.update_layout(template="simple_white", margin=dict(l=40, r=20, t=30, b=40))
+    st.plotly_chart(fig_s, use_container_width=True)
+
+    # Benchmark Metrics & Plots
+    st.subheader("Benchmark: DFT vs. Experimental")
+    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    # Parity Plot
+    fig_p = px.scatter(
+        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", color="Formula",
+        title="Parity Plot: DFT vs. Experimental", width=700, height=400
+    )
+    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
+    fig_p.add_shape(type="line", x0=mn, y0=mn, x1=mx, y1=mx,
+                     line=dict(dash="dash", color="gray"))
+    fig_p.update_layout(template="simple_white", margin=dict(l=50, r=20, t=40, b=50))
+    st.plotly_chart(fig_p, use_container_width=True)
+
+    # Error Histogram
+    st.subheader("Error Distribution (DFT − Exp)")
+    fig_h = px.histogram(
+        dfm, x=dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"], nbins=20,
+        width=700, height=350
+    )
+    fig_h.update_layout(xaxis_title="Δ Eg (eV)", yaxis_title="Count",
+                        template="simple_white", margin=dict(l=50, r=20, t=20, b=40))
+    st.plotly_chart(fig_h, use_container_width=True)
