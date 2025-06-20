@@ -1,150 +1,284 @@
+import io
 import os
-import math
+import datetime
+from pathlib import Path
 from dotenv import load_dotenv
-import numpy as np
+
+import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
+from docx import Document
 from mp_api.client import MPRester
-from pymatgen.core import Composition
 
-# ── Load Materials Project API key ─────────────────────────────────────
-load_dotenv()
-API_KEY = os.getenv("MP_API_KEY")
-if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑 Please set MP_API_KEY to your 32-char Materials Project API key")
-mpr = MPRester(API_KEY)
+from backend.perovskite_utils import mix_abx3 as screen, screen_ternary, END_MEMBERS, fetch_mp_data as _summary
 
-# ── Supported end-members ──────────────────────────────────────────────
-END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
+# ───────────────────────────────────── App Config ─────────────────────────────
+st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
+st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-# ── Ionic radii for formability ───────────────────────────────────────
-IONIC_RADII = {
-    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
-    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81
-}
+# ─────────────────────────────────── Session History ──────────────────────────
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-# backward alias (assigned after fetch_mp_data)
-_summary = None
+# ───────────────────────────────────── Sidebar ────────────────────────────────
+with st.sidebar:
+    st.header("Mode")
+    mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
-def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
-    """Return first entry's requested fields as a dict, or None if missing."""
-    docs = mpr.summary.search(material_ids_or_formula=formula)
-    for entry in docs:
-        out: dict = {}
-        for f in fields:
-            if hasattr(entry, f):
-                out[f] = getattr(entry, f)
-        return out or None
-    return None
+    st.header("End-members")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+    custom_A = st.text_input("Custom A (optional)", "").strip()
+    custom_B = st.text_input("Custom B (optional)", "").strip()
+    A = custom_A or preset_A
+    B = custom_B or preset_B
+    if mode == "Ternary A–B–C":
+        preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
+        custom_C = st.text_input("Custom C (optional)", "").strip()
+        C = custom_C or preset_C
 
-# set alias
-_summary = fetch_mp_data
+    st.header("Environment")
+    rh = st.slider("Humidity [%]", 0, 100, 50)
+    temp = st.slider("Temperature [°C]", -20, 100, 25)
 
+    st.header("Target gap [eV]")
+    bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
-def score_band_gap(bg: float, lo: float, hi: float) -> float:
-    """Score for how close bg is to the [lo, hi] window."""
-    if bg < lo:
-        return max(0.0, 1 - (lo - bg) / (hi - lo))
-    if bg > hi:
-        return max(0.0, 1 - (bg - hi) / (hi - lo))
-    return 1.0
+    st.header("Model knobs")
+    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
+    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+    if mode == "Ternary A–B–C":
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
+    if st.button("🗑 Clear history"):
+        st.session_state.history.clear()
+        st.experimental_rerun()
 
-def mix_abx3(
-    formula_A: str,
-    formula_B: str,
-    rh: float,
-    temp: float,
-    bg_window: tuple[float, float],
-    bowing: float = 0.0,
-    dx: float = 0.05,
-    alpha: float = 1.0,
-    beta: float = 1.0
-) -> pd.DataFrame:
-    lo, hi = bg_window
+    st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
+    GIT_SHA = st.secrets.get("GIT_SHA", "dev")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
 
-    dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
-    if not (dA and dB):
-        return pd.DataFrame()
+# ────────────────────────────────── Backend Call ──────────────────────────────
+@st.cache_data(show_spinner="⏳ Screening …")
+def run_screen(**kw):
+    return screen(**kw)
 
-    comp = Composition(formula_A)
-    A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
-    B_site = next(e.symbol for e in comp.elements if e.symbol in {"Pb", "Sn"})
-    X_site = next(e.symbol for e in comp.elements if e.symbol in {"I", "Br", "Cl"})
-    rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
+# ───────────────────────────────── Run / Back Logic ───────────────────────────
+col_run, col_back = st.columns([3, 1])
+do_run = col_run.button("▶ Run screening", type="primary")
+do_back = col_back.button("⏪ Previous", disabled=len(st.session_state.history) < 1)
 
-    rows = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
-        t = (rA + rX) / (math.sqrt(2) * (rB + rX))
-        mu = rB / rX
-        form_score = float(0.75 <= t <= 1.0 and 0.41 <= mu <= 0.9)
+if do_back and st.session_state.history:
+    st.session_state.history.pop()
+    A, B, rh, temp, df = st.session_state.history[-1]
+    st.success("Showing previous result")
+elif do_run:
+    try:
+        docA = _summary(A, ["band_gap", "energy_above_hull"])
+        docB = _summary(B, ["band_gap", "energy_above_hull"])
+    except Exception as e:
+        st.error(f"❌ Error querying Materials Project: {e}")
+        st.stop()
+    if not docA or not docB:
+        st.error("❌ Invalid formula(s)")
+        st.stop()
 
-        hull = dA.get("energy_above_hull", 0.0)
-        stability = math.exp(-max(hull, 0) / 0.10)
-
-        bg_score = score_band_gap(Eg, lo, hi)
-        env_pen = math.exp((rh / 85) + (temp / 100))
-        comp_score = form_score * stability * bg_score / env_pen
-
-        rows.append({
-            "x": round(x, 4),
-            "band_gap": round(Eg, 4),
-            "stability": round(stability, 4),
-            "score": round(comp_score, 4),
-            "formula": f"{formula_A}-{formula_B} x={x:.2f}"
-        })
-
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
-
-def screen_ternary(
-    A: str, B: str, C: str,
-    rh: float, temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    dx: float = 0.1, dy: float = 0.1,
-    n_mc: int = 200
-) -> pd.DataFrame:
-    lo, hi = bg
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
-    if not (dA and dB and dC):
-        return pd.DataFrame()
-
-    rows = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        for y in np.arange(0, 1 - x + 1e-6, dy):
-            z = 1 - x - y
-            Eg = (
-                (1 - x - y) * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows['AB'] * x * (1 - x - y)
-                - bows['AC'] * y * (1 - x - y)
-                - bows['BC'] * x * y
+    if mode == "Binary A–B":
+        df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
+    else:
+        try:
+            df = screen_ternary(
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
+                bg=(bg_lo, bg_hi),
+                bows={"AB": bow, "AC": bow, "BC": bow},
+                dx=dx, dy=dy, n_mc=200
             )
-            Eh = (
-                (1 - x - y) * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-                + bows['AB'] * x * (1 - x - y)
-                + bows['AC'] * y * (1 - x - y)
-                + bows['BC'] * x * y
+        except Exception as e:
+            st.error(f"❌ Ternary error: {e}")
+            st.stop()
+
+    if df.empty:
+        st.error("No candidates found – try widening your gap or composition window.")
+        st.stop()
+    st.session_state.history.append((A, B, rh, temp, df))
+elif st.session_state.history:
+    A, B, rh, temp, df = st.session_state.history[-1]
+else:
+    st.info("Press ▶ Run screening to begin.")
+    st.stop()
+
+# ─────────────────────────────────── Tabs ─────────────────────────────────────
+tab_tbl, tab_plot, tab_dl, tab_bench, tab_results = st.tabs([
+    "📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"
+])
+
+# Table Tab
+with tab_tbl:
+    params = pd.DataFrame({
+        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"] + (["y-step"] if mode == "Ternary A–B–C" else []),
+        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx] + ([dy] if mode == "Ternary A–B–C" else [])
+    })
+    st.markdown("**Run parameters**")
+    st.table(params)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"**A-endmember: {A}**")
+        st.write(f"MP band gap: {docA['band_gap']:.2f} eV")
+        st.write(f"MP E_above_hull: {docA['energy_above_hull']:.3f} eV/atom")
+    with c2:
+        st.markdown(f"**B-endmember: {B}**")
+        st.write(f"MP band gap: {docB['band_gap']:.2f} eV")
+        st.write(f"MP E_above_hull: {docB['energy_above_hull']:.3f} eV/atom")
+
+    st.dataframe(df, height=400, use_container_width=True)
+
+# Plot Tab
+with tab_plot:
+    if mode == "Binary A–B":
+        st.caption("ℹ️ **Tip**: Hover circles; scroll to zoom; drag to pan")
+        top_cut = df.score.quantile(0.80)
+        df['is_top'] = df.score >= top_cut
+        fig = px.scatter(
+            df, x='stability', y='band_gap',
+            color='score', color_continuous_scale='plasma',
+            hover_data=['formula','x','band_gap','stability','score'], height=450
+        )
+        fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
+        fig.add_trace(
+            go.Scatter(
+                x=df.loc[df.is_top, 'stability'],
+                y=df.loc[df.is_top, 'band_gap'],
+                mode='markers',
+                marker=dict(size=22, color='rgba(0,0,0,0)', line=dict(width=2, color='black')),
+                hoverinfo='skip', showlegend=False
             )
-            compA, compB, compX = Composition(A), Composition(B), Composition(A)
-            rA = IONIC_RADII[next(e.symbol for e in compA.elements if e.symbol in IONIC_RADII)]
-            rB = IONIC_RADII[next(e.symbol for e in compB.elements if e.symbol in {"Pb","Sn"})]
-            rX = IONIC_RADII[next(e.symbol for e in compX.elements if e.symbol in {"I","Br","Cl"})]
-            t = (rA + rX) / (math.sqrt(2) * (rB + rX))
-            mu = rB / rX
-            form_score = math.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * math.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
-            stability = math.exp(-max(Eh, 0) / 0.10)
-            gap_score = score_band_gap(Eg, lo, hi)
-            env_pen = 1 + rh / 100 + temp / 100
-            comp_score = form_score * stability * gap_score / env_pen
-            rows.append({
-                "x": round(x, 4),
-                "y": round(y, 4),
-                "Eg": round(Eg, 4),
-                "Eh": round(Eh, 4),
-                "score": round(comp_score, 4)
-            })
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        )
+        fig.update_xaxes(title='<b>Stability</b>', range=[0.75,1.0], dtick=0.05)
+        fig.update_yaxes(title='<b>Band-gap (eV)</b>', range=[0,3.5], dtick=0.5)
+        fig.update_layout(template='simple_white', margin=dict(l=70,r=40,t=25,b=65), coloraxis_colorbar=dict(title='<b>Score</b>'))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.caption("ℹ️ Hover points; scroll to zoom; drag to rotate")
+        fig3d = px.scatter_3d(
+            df, x="x", y="y", z="score",
+            color="score",
+            hover_data=["formula","Eg","Eh"],
+            height=600
+        )
+        fig3d.update_layout(template="simple_white",
+                            scene=dict(xaxis_title="B fraction (x)", yaxis_title="C fraction (y)", zaxis_title="Score"))
+        st.plotly_chart(fig3d, use_container_width=True)
+
+
+# Download Tab
+with tab_dl:
+    csv = df.to_csv(index=False).encode()
+    st.download_button('CSV', csv, 'EnerMat_results.csv', 'text/csv')
+    top = df.iloc[0]
+    txt = (
+        f"EnerMat report ({datetime.date.today()})\n"
+        f"Top candidate : {top.formula}\n"
+        f"Band-gap     : {top.Eg}\n"
+        f"Stability    : {top.stability}\n"
+        f"Score        : {top.score}\n"
+    )
+    st.download_button('TXT report', txt, 'EnerMat_report.txt', 'text/plain')
+    doc = Document()
+    doc.add_heading('EnerMat Report', 0)
+    doc.add_paragraph(f"Date: {datetime.date.today()}")
+    doc.add_paragraph(f"Top candidate: {top.formula}")
+    tbl = doc.add_table(rows=1, cols=2)
+    for k, v in [("Band-gap", top.Eg), ("Stability", top.stability), ("Score", top.score)]:
+        row = tbl.add_row()
+        row.cells[0].text = k
+        row.cells[1].text = str(v)
+    buf = io.BytesIO()
+    doc.save(buf); buf.seek(0)
+    st.download_button('📥 DOCX report', buf, 'EnerMat_report.docx',
+                       'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+# Benchmark Tab
+with tab_bench:
+    st.markdown('## ⚖ Benchmark: DFT vs. Experimental Gaps')
+    uploaded = st.file_uploader('Upload experimental CSV (`formula`,`exp_gap`)', type='csv')
+    if uploaded:
+        exp_df = pd.read_csv(uploaded)
+        st.success('Loaded experimental data from uploaded file')
+    else:
+        exp_df = pd.read_csv('exp_bandgaps.csv')
+        st.success('Loaded experimental data from bundled CSV')
+
+    if not {'formula','exp_gap'}.issubset(exp_df.columns):
+        st.error('CSV must contain `formula` and `exp_gap` columns.'); st.stop()
+
+    dft_df = pd.read_csv('pbe_bandgaps.csv')
+    if not {'formula','pbe_gap'}.issubset(dft_df.columns):
+        st.error('DFT CSV must contain `formula` and `pbe_gap` columns.'); st.stop()
+    dft_df = dft_df.rename(columns={'formula':'Formula','pbe_gap':'DFT Eg (eV)'})
+    exp_df = exp_df.rename(columns={'formula':'Formula','exp_gap':'Exp Eg (eV)'})
+
+    dfm = dft_df.merge(exp_df, on='Formula', how='inner')
+    dfm['Δ Eg (eV)'] = dfm['DFT Eg (eV)'] - dfm['Exp Eg (eV)']
+    mae = dfm['Δ Eg (eV)'].abs().mean()
+    rmse = np.sqrt((dfm['Δ Eg (eV)']**2).mean())
+    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+
+# Results Summary Tab
+with tab_results:
+    st.header("📑 Results Summary")
+    # Top 10 Table
+    st.subheader("Top 10 Candidates")
+    top10 = df.sort_values("score", ascending=False).head(10)
+    st.dataframe(top10.style.format({
+        "band_gap": "{:.3f}", "stability": "{:.3f}", "score": "{:.3f}"
+    }), use_container_width=True)
+
+    # Screening Plot
+    st.subheader("Screening: Stability vs. Band-Gap")
+    fig_s = px.scatter(
+        df, x="stability", y="band_gap",
+        color="score", color_continuous_scale="plasma",
+        size="score", hover_data=["formula","x"], height=400
+    )
+    cutoff = df["score"].quantile(0.8)
+    fig_s.add_trace(
+        go.Scatter(
+            x=df.loc[df.score>=cutoff, "stability"],
+            y=df.loc[df.score>=cutoff, "band_gap"],
+            mode="markers",
+            marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+            showlegend=False
+        )
+    )
+    fig_s.update_layout(template="simple_white", margin=dict(l=40, r=20, t=30, b=40))
+    st.plotly_chart(fig_s, use_container_width=True)
+
+    # Benchmark Metrics & Plots
+    st.subheader("Benchmark: DFT vs. Experimental")
+    st.write(f"**MAE:** {mae:.3f} eV **RMSE:** {rmse:.3f} eV")
+    # Parity Plot
+    fig_p = px.scatter(
+        dfm, x="Exp Eg (eV)", y="DFT Eg (eV)", color="Formula",
+        title="Parity Plot: DFT vs. Experimental", width=700, height=400
+    )
+    mn = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].min().min()
+    mx = dfm[["Exp Eg (eV)", "DFT Eg (eV)"]].max().max()
+    fig_p.add_shape(type="line", x0=mn, y0=mn, x1=mx, y1=mx,
+                     line=dict(dash="dash", color="gray"))
+    fig_p.update_layout(template="simple_white", margin=dict(l=50, r=20, t=40, b=50))
+    st.plotly_chart(fig_p, use_container_width=True)
+
+    # Error Histogram
+    st.subheader("Error Distribution (DFT − Exp)")
+    fig_h = px.histogram(
+        dfm, x=dfm["DFT Eg (eV)"] - dfm["Exp Eg (eV)"], nbins=20,
+        width=700, height=350
+    )
+    fig_h.update_layout(xaxis_title="Δ Eg (eV)", yaxis_title="Count",
+                        template="simple_white", margin=dict(l=50, r=20, t=20, b=40))
+    st.plotly_chart(fig_h, use_container_width=True)
