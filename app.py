@@ -2,65 +2,48 @@ import io
 import os
 import datetime
 from pathlib import Path
-from dotenv import load_dotenv
 
 import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 from docx import Document
-from mp_api.client import MPRester
 
+# ─── Load API Key ─────────────────────────────────────────────────────────────
+API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
+if not API_KEY or len(API_KEY) != 32:
+    st.error("🛑 Please set a valid 32-character MP_API_KEY in Streamlit Secrets.")
+    st.stop()
+
+# ─── Backend Imports ──────────────────────────────────────────────────────────
 from backend.perovskite_utils import (
     mix_abx3 as screen,
     screen_ternary,
     END_MEMBERS,
-    fetch_mp_data as _summary
+    fetch_mp_data as _summary,
 )
 
-# ───────────────────────────────────── App Config ─────────────────────────────
+# ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-# ─────────────────────────────────── Session History ──────────────────────────
+# ─── Session State Init ───────────────────────────────────────────────────────
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# … (Sidebar + run/back logic, and the cached run_screen & run_ternary functions) …
+# ─── Sidebar Configuration ────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("Mode")
+    mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
-# ─────────────────────────────────── Tabs ─────────────────────────────────────
-tab_tbl, tab_plot, tab_dl, tab_bench, tab_results = st.tabs([
-    "📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"
-])
-
-# ─────────────────────────────── Table Tab ──────────────────────────────────
-with tab_tbl:
-    # … your existing code to show run parameters and df …
-
-# ─────────────────────────────── Plot Tab ───────────────────────────────────
-with tab_plot:
-    if mode == "Binary A–B":
-        st.caption("ℹ️ Hover for details; zoom/drag to explore")
-        top_cut = df.score.quantile(0.80)
-        df["is_top"] = df.score >= top_cut
-
-        fig = px.scatter(
-            df,
-            x="stability",
-            y="band_gap",
-            color="score",
-            color_continuous_scale="plasma",
-            hover_data=["formula","x","band_gap","stability","score"],
-            height=450
-        )
-        fig.update_traces(marker=dict(size=16, line_width=1), opacity=0.9)
-        fig.add_trace(go.Scatter(
-            x=df.loc[df.is_top, "stability"],
-            y=df.loc[df.is_top, "band_gap"],
-            mode="markers",
-            marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2,color="black")),
-            hoverinfo="skip", showlegend=False
-        ))
-        fig.update_xaxes(title="<b>Stability</b>", range=[0.75,1.0], dtick=0.05)
-        fig.update_yaxes(title_
+    st.header("End-members")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+    custom_A = st.text_input("Custom A (optional)", "").strip()
+    custom_B = st.text_input("Custom B (optional)", "").strip()
+    A = custom_A or preset_A
+    B = custom_B or preset_B
+    if mode == "Ternary A–B–C":
+        preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
+        custom_C = st.text_input("Custom C (optional)", "").strip()
