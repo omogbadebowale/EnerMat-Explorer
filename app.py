@@ -141,33 +141,7 @@ else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────────────────────────────── Tabs ─────────────────────────────────────
-tab_tbl, tab_plot, tab_dl, tab_bench, tab_results = st.tabs([
-    "📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"
-])
-
-# Table Tab
-with tab_tbl:
-    params = pd.DataFrame({
-        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"] + (["y-step"] if mode == "Ternary A–B–C" else []),
-        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx] + ([dy] if mode == "Ternary A–B–C" else [])
-    })
-    st.markdown("**Run parameters**")
-    st.table(params)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**A-endmember: {A}**")
-        st.write(f"MP band gap: {docA['band_gap']:.2f} eV")
-        st.write(f"MP E_above_hull: {docA['energy_above_hull']:.3f} eV/atom")
-    with c2:
-        st.markdown(f"**B-endmember: {B}**")
-        st.write(f"MP band gap: {docB['band_gap']:.2f} eV")
-        st.write(f"MP E_above_hull: {docB['energy_above_hull']:.3f} eV/atom")
-
-    st.dataframe(df, height=400, use_container_width=True)
-
-# Plot Tab
+# ─────────────────────────────────── Tabs ────────────────────────────────────
 with tab_plot:
     if mode == "Binary A–B":
         st.caption("ℹ️ Hover circles; scroll to zoom; drag to pan")
@@ -176,7 +150,8 @@ with tab_plot:
         fig = px.scatter(
             df, x='stability', y='band_gap',
             color='score', color_continuous_scale='plasma',
-            hover_data=['formula','x','band_gap','stability','score'], height=450
+            hover_data=['formula','x','band_gap','stability','score'],
+            height=450
         )
         fig.update_traces(marker=dict(size=18, line_width=1), opacity=0.9)
         fig.add_trace(
@@ -191,15 +166,19 @@ with tab_plot:
         fig.update_xaxes(title='<b>Stability</b>', range=[0.75,1.0], dtick=0.05)
         fig.update_yaxes(title='<b>Band-gap (eV)</b>', range=[0,3.5], dtick=0.5)
         fig.update_coloraxes(colorbar_title="<b>Score</b>")
-        fig.update_layout(template='simple_white', margin=dict(l=70,r=40,t=25,b=65))
+        fig.update_layout(template='simple_white', margin=dict(l=70, r=40, t=25, b=65))
         st.plotly_chart(fig, use_container_width=True)
 
     else:
         st.caption("ℹ️ Hover points; scroll to zoom; drag to rotate")
+        # Make sure df has 'band_gap' (we renamed 'Eg' → 'band_gap') and no 'stability' or 'formula'
         fig3d = px.scatter_3d(
-            df, x="x", y="y", z="score",
+            df,
+            x="x",
+            y="y",
+            z="score",
             color="score",
-            hover_data=["formula","band_gap","stability"],
+            hover_data=["x", "y", "band_gap", "score"],
             height=600
         )
         fig3d.update_layout(
@@ -208,11 +187,7 @@ with tab_plot:
                 xaxis_title="B fraction (x)",
                 yaxis_title="C fraction (y)",
                 zaxis_title="Score"
-            ),
-            coloraxis_colorbar=dict(title="<b>Score</b>")
+            )
         )
+        fig3d.update_coloraxes(colorbar_title="<b>Score</b>")
         st.plotly_chart(fig3d, use_container_width=True)
-
-# ... the rest of your tabs (Download, Benchmark, Results Summary) remain unchanged,
-# since they already reference `band_gap` and no longer `Eg`.
-
