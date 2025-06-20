@@ -21,4 +21,4 @@ Interactive, climate-aware screening of halide (and analogue) perovskites.
 
 Bubble area ≈ lifetime, colour ≈ composite score.
 
-**Author:** Gbadebo Taofeek Yusuf · taofeek.yusuf@example.com
+**Author:** Gbadebo Taofeek Yusuf
