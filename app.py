@@ -28,7 +28,7 @@ from backend.perovskite_utils import (
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
 col1, col2 = st.columns([1, 12])
 with col1:
-    st.image("assets/logo.png", width=50)
+    st.empty()  # logo removed for now
 with col2:
     st.markdown("## **EnerMat Perovskite Explorer v9.6**")
 
