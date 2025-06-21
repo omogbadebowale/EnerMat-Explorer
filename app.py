@@ -189,6 +189,7 @@ with tab_plot:
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
+
     # Determine top candidate representation
     top = df.iloc[0]
     if mode == "Binary A–B":
@@ -196,19 +197,17 @@ with tab_dl:
     else:
         # build formula string for ternary
         top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
-    txt = (
-        f"EnerMat report ({datetime.date.today()})
-"
-        f"Top candidate : {top_label}
-"
-        f"Band-gap     : {top.Eg}
-"
-        f"Stability    : {getattr(top, 'stability', 'N/A')}
-"
-        f"Score        : {top.score}
-"
-    )
+
+    # Compose report text
+    txt = f"""
+EnerMat report ({datetime.date.today()})
+Top candidate : {top_label}
+Band-gap     : {top.Eg}
+Stability    : {getattr(top, 'stability', 'N/A')}
+Score        : {top.score}
+"""
     st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+
     # DOCX report
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
