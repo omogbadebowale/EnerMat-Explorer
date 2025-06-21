@@ -26,7 +26,11 @@ from backend.perovskite_utils import (
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+col1, col2 = st.columns([1, 12])
+with col1:
+    st.empty()  # logo removed for now
+with col2:
+    st.markdown("## **EnerMat Perovskite Explorer v9.6**")
 
 # ─── Session State Init ───────────────────────────────────────────────────────
 if "history" not in st.session_state:
@@ -146,23 +150,23 @@ with tab_tbl:
 
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
-    # Ensure necessary columns are numeric and non-null
     if mode == "Binary A–B":
-        required = ["stability", "Eg", "score"]
+        required = [col for col in ["stability", "Eg", "score"] if col in df.columns]
+        if not required:
+            st.warning("❗ Required binary plot columns missing from results. Skipping plot.")
+            st.stop()
         plot_df = df.dropna(subset=required).copy()
         for col in required:
             plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
-        # Filter out any remaining invalid rows
         plot_df = plot_df.dropna(subset=required)
 
-        # Compute top candidates for highlight
         top_cut = plot_df["score"].quantile(0.80)
         plot_df["is_top"] = plot_df["score"] >= top_cut
 
         try:
             fig = px.scatter(
                 plot_df,
-                x="stability",
+                x="x",
                 y="Eg",
                 color="score",
                 color_continuous_scale="plasma",
@@ -210,18 +214,25 @@ with tab_plot:
         except Exception as e:
             st.error(f"3D plot error: {e}")
 
-# ─── Download Tab ──────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────── ────────────────────────────────────────────────────────────
+# ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
-    # Determine top candidate representation
+    # Safely get top candidate
     top = df.iloc[0]
+
     if mode == "Binary A–B":
-        top_label = top.formula
+        top_label = getattr(top, "formula", f"{A}-{B}")
     else:
-        # build formula string for ternary
-        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+        # Safe retrieval of x and y, even if columns are missing
+        if isinstance(top, pd.Series):
+            x_val = top["x"] if "x" in top else 0.0
+            y_val = top["y"] if "y" in top else 0.0
+        else:
+            x_val = getattr(top, "x", 0.0)
+            y_val = getattr(top, "y", 0.0)
+        top_label = f"{A}-{B}-{C} x={x_val:.2f} y={y_val:.2f}"
 
     # Compose report text
     txt = f"""
@@ -239,7 +250,6 @@ Score        : {top.score}
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top_label}")
     tbl = doc.add_table(rows=1, cols=2)
-    # Add rows: Band-gap, Stability (if exists), and Score
     rows = [("Band-gap", top.Eg), ("Score", top.score)]
     if hasattr(top, 'stability'):
         rows.insert(1, ("Stability", top.stability))
@@ -248,6 +258,19 @@ Score        : {top.score}
         row.cells[0].text = k
         row.cells[1].text = str(v)
     buf = io.BytesIO()
-    doc.save(buf); buf.seek(0)
-    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
-                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    doc.save(buf)
+    buf.seek(0)
+    st.download_button(
+        "📝 Download DOCX", buf, "EnerMat_report.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+# ─── Footer ─────────────────────────────────────────────────────────────────
+st.markdown(
+    "<hr style='margin-top:2em;margin-bottom:0.5em;'>"
+    "<div style='text-align:center; font-size:0.85em;'>"
+    "EnerMat Explorer © 2025 Dr. Gbadebo Taofeek Yusuf · "
+    "Built with ❤️ using Streamlit + Materials Project API"
+    "</div>",
+    unsafe_allow_html=True
+)
