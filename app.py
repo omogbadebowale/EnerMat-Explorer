@@ -169,7 +169,7 @@ with tab_plot:
         try:
             fig = px.scatter(
                 plot_df,
-                x="stability",
+                x="x",
                 y="Eg",
                 color="score",
                 color_continuous_scale="plasma",
@@ -225,7 +225,7 @@ with tab_dl:
     # Determine top candidate representation
     top = df.iloc[0]
     if mode == "Binary A–B":
-        top_label = top.formula
+        top_label = getattr(top, "formula", f"{A}-{B}")
     else:
         # build formula string for ternary
             x_val = getattr(top, "x", 0.0)
