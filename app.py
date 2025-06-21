@@ -152,7 +152,10 @@ with tab_tbl:
 with tab_plot:
     # Ensure necessary columns are numeric and non-null
     if mode == "Binary A–B":
-        required = ["stability", "Eg", "score"]
+        required = [col for col in ["stability", "Eg", "score"] if col in df.columns]
+        if not required:
+            st.warning("❗ Required binary plot columns missing from results. Skipping plot.")
+            st.stop()
         plot_df = df.dropna(subset=required).copy()
         for col in required:
             plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
