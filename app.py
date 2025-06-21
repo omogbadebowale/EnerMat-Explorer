@@ -225,9 +225,9 @@ with tab_dl:
         top_label = top.formula
     else:
         # build formula string for ternary
-        x_val = getattr(top, "x", 0.0)
-y_val = getattr(top, "y", 0.0)
-top_label = f"{A}-{B}-{C} x={x_val:.2f} y={y_val:.2f}"
+            x_val = getattr(top, "x", 0.0)
+    y_val = getattr(top, "y", 0.0)
+    top_label = f"{A}-{B}-{C} x={x_val:.2f} y={y_val:.2f}"
 
     # Compose report text
     txt = f"""
