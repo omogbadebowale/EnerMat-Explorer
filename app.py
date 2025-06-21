@@ -100,7 +100,7 @@ elif do_run:
         st.stop()
 
     if mode == "Binary A–B":
-        df = run_screen(A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx)
+        df = run_screen(formula_A=A, formula_B=B, rh=rh, temp=temp, bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx)
     else:
         try:
             df = screen_ternary(
