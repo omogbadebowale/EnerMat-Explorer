@@ -190,14 +190,15 @@ with tab_plot:
             st.error(f"Plot error: {e}")
 
     else:  # Ternary A–B–C
-        required = [col for col in ["x", "y", "score"] if col in df.columns]
-        if not required:
-            st.warning("❗ No required ternary plot columns found. Cannot generate 3D plot.")
+        missing = [col for col in ["x", "y", "score"] if col not in df.columns]
+        if missing:
+            st.warning(f"❗ Missing required columns for ternary plot: {', '.join(missing)}. Cannot generate 3D plot.")
             st.stop()
-        plot_df = df.dropna(subset=required).copy()
-        for col in required:
+
+        plot_df = df.dropna(subset=["x", "y", "score"]).copy()
+        for col in ["x", "y", "score"]:
             plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
-        plot_df = plot_df.dropna(subset=required)
+        plot_df = plot_df.dropna(subset=["x", "y", "score"])
 
         try:
             fig3d = px.scatter_3d(
@@ -225,7 +226,6 @@ with tab_dl:
     if mode == "Binary A–B":
         top_label = getattr(top, "formula", f"{A}-{B}")
     else:
-        # Safe retrieval of x and y, even if columns are missing
         if isinstance(top, pd.Series):
             x_val = top["x"] if "x" in top else 0.0
             y_val = top["y"] if "y" in top else 0.0
@@ -234,7 +234,6 @@ with tab_dl:
             y_val = getattr(top, "y", 0.0)
         top_label = f"{A}-{B}-{C} x={x_val:.2f} y={y_val:.2f}"
 
-    # Compose report text
     txt = f"""
 EnerMat report ({datetime.date.today()})
 Top candidate : {top_label}
@@ -244,7 +243,6 @@ Score        : {top.score}
 """
     st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
 
-    # DOCX report
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
