@@ -155,76 +155,44 @@ tab_tbl, tab_plot, tab_dl, tab_bench, tab_results = st.tabs([
     "📊 Table", "📈 Plot", "📥 Download", "⚖ Benchmark", "📑 Results Summary"
 ])
 
-# ─────────────────────────────── Table Tab ──────────────────────────────────
-with tab_tbl:
-    params = pd.DataFrame({
-        "Parameter": [
-            "Humidity [%]", "Temperature [°C]",
-            "Gap window [eV]", "Bowing [eV]", "x-step"
-        ] + (["y-step"] if mode=="Ternary A–B–C" else []),
-        "Value": [
-            rh, temp,
-            f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx
-        ] + ([dy] if mode=="Ternary A–B–C" else [])
-    })
-    st.markdown("**Run parameters**")
-    st.table(params)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**A-endmember: {A}**")
-        st.write(f"Band-gap: {docA['band_gap']:.2f} eV")
-        st.write(f"E_above_hull: {docA['energy_above_hull']:.3f} eV/atom")
-    with c2:
-        st.markdown(f"**B-endmember: {B}**")
-        st.write(f"Band-gap: {docB['band_gap']:.2f} eV")
-        st.write(f"E_above_hull: {docB['energy_above_hull']:.3f} eV/atom")
-
-    st.dataframe(df, use_container_width=True, height=400)
-
-# ─────────────────────────────── Plot Tab ───────────────────────────────────
+# ─────────────────────────────── Table Tab ─────────────────────────────────
 with tab_plot:
     if mode == "Binary A–B":
-        st.caption("ℹ️ Hover for details; zoom & pan")
-        top_cut = df.score.quantile(0.8)
-        df["is_top"] = df.score >= top_cut
+        top_cut = df["score"].quantile(0.80)
+        df["is_top"] = df["score"] >= top_cut
+
         fig = px.scatter(
-            df, x="stability", y="band_gap",
-            color="score", color_continuous_scale="plasma",
-            hover_data=["formula","x","band_gap","stability","score"],
-            height=450
+            df,
+            x="stability",
+            y="Eg",                    # ← was "band_gap"
+            color="score",
+            color_continuous_scale="plasma",
+            hover_data=["formula", "x", "Eg", "stability", "score"]
         )
-        fig.add_trace(go.Scatter(
-            x=df.loc[df.is_top,"stability"],
-            y=df.loc[df.is_top,"band_gap"],
-            mode="markers",
-            marker=dict(size=22,color="rgba(0,0,0,0)",line=dict(width=2,color="black")),
-            hoverinfo="skip", showlegend=False
-        ))
-        fig.update_layout(template="simple_white")
+        fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
+        fig.add_trace(
+            go.Scatter(
+                x=df[df["is_top"]]["stability"],
+                y=df[df["is_top"]]["Eg"],  # ← was "band_gap"
+                mode="markers",
+                marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+                hoverinfo="skip", showlegend=False
+            )
+        )
+        fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
+        fig.update_xaxes(title="Stability")
+        fig.update_yaxes(title="Band Gap (eV)")
         st.plotly_chart(fig, use_container_width=True)
 
-    else:
-        st.caption("ℹ️ Hover for details; rotate & zoom")
+    else:  # Ternary
         fig3d = px.scatter_3d(
-            df, x="x", y="y", z="score",
+            df,
+            x="x",
+            y="y",
+            z="score",
             color="score",
-            hover_data=["x","y","band_gap","score"],
+            hover_data=["Eg", "score"],  # only existing columns
             height=600
         )
         fig3d.update_layout(template="simple_white")
         st.plotly_chart(fig3d, use_container_width=True)
-
-# ────────────────────────────── Download Tab ─────────────────────────────────
-with tab_dl:
-    csv = df.to_csv(index=False).encode()
-    st.download_button("CSV", csv, "EnerMat_results.csv", "text/csv")
-    # … your existing TXT & DOCX buttons …
-
-# ─────────────────────────── Benchmark Tab ─────────────────────────────────
-with tab_bench:
-    # … your existing benchmark code …
-
-# ─────────────────────── Results Summary Tab ───────────────────────────────
-with tab_results:
-    # … your existing results-summary code …
