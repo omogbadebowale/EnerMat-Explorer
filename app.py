@@ -186,7 +186,10 @@ with tab_plot:
             st.error(f"Plot error: {e}")
 
     else:  # Ternary A–B–C
-        required = ["x", "y", "score"]
+        required = [col for col in ["x", "y", "score"] if col in df.columns]
+        if not required:
+            st.warning("❗ No required ternary plot columns found. Cannot generate 3D plot.")
+            st.stop()
         plot_df = df.dropna(subset=required).copy()
         for col in required:
             plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
