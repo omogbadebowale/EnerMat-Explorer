@@ -189,25 +189,41 @@ with tab_plot:
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
+    # Determine top candidate representation
     top = df.iloc[0]
+    if mode == "Binary A–B":
+        top_label = top.formula
+    else:
+        # build formula string for ternary
+        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
     txt = (
-        f"EnerMat report ({datetime.date.today()})\n"
-        f"Top candidate : {top.formula}\n"
-        f"Band-gap     : {top.Eg}\n"
-        f"Stability    : {top.stability}\n"
-        f"Score        : {top.score}\n"
+        f"EnerMat report ({datetime.date.today()})
+"
+        f"Top candidate : {top_label}
+"
+        f"Band-gap     : {top.Eg}
+"
+        f"Stability    : {getattr(top, 'stability', 'N/A')}
+"
+        f"Score        : {top.score}
+"
     )
     st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+    # DOCX report
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {top.formula}")
+    doc.add_paragraph(f"Top candidate: {top_label}")
     tbl = doc.add_table(rows=1, cols=2)
-    for k, v in [("Band-gap", top.Eg), ("Stability", top.stability), ("Score", top.score)]:
+    # Add rows: Band-gap, Stability (if exists), and Score
+    rows = [("Band-gap", top.Eg), ("Score", top.score)]
+    if hasattr(top, 'stability'):
+        rows.insert(1, ("Stability", top.stability))
+    for k, v in rows:
         row = tbl.add_row()
         row.cells[0].text = k
         row.cells[1].text = str(v)
     buf = io.BytesIO()
     doc.save(buf); buf.seek(0)
-    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx", 
+    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
