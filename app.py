@@ -146,51 +146,68 @@ with tab_tbl:
 
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
+    # Ensure necessary columns are numeric and non-null
     if mode == "Binary A–B":
-        # Determine top candidates
-        top_cut = df["score"].quantile(0.80)
-        df["is_top"] = df["score"] >= top_cut
+        required = ["stability", "Eg", "score"]
+        plot_df = df.dropna(subset=required).copy()
+        for col in required:
+            plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
+        # Filter out any remaining invalid rows
+        plot_df = plot_df.dropna(subset=required)
 
-        # Determine which hover columns actually exist
-        hover_cols = [c for c in ["formula", "x", "Eg", "stability", "score"] if c in df.columns]
+        # Compute top candidates for highlight
+        top_cut = plot_df["score"].quantile(0.80)
+        plot_df["is_top"] = plot_df["score"] >= top_cut
 
-        fig = px.scatter(
-            df,
-            x="stability",
-            y="Eg",
-            color="score",
-            color_continuous_scale="plasma",
-            hover_data=hover_cols
-        )
-        fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
-        fig.add_trace(
-            go.Scatter(
-                x=df[df["is_top"]]["stability"],
-                y=df[df["is_top"]]["Eg"],
-                mode="markers",
-                marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
-                hoverinfo="skip", showlegend=False
+        try:
+            fig = px.scatter(
+                plot_df,
+                x="stability",
+                y="Eg",
+                color="score",
+                color_continuous_scale="plasma",
+                hover_data=["formula", "x", "Eg", "stability", "score"]
             )
-        )
-        fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
-        fig.update_xaxes(title="Stability")
-        fig.update_yaxes(title="Band Gap (eV)")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        # 3D Ternary plot
-        fig3d = px.scatter_3d(
-            df,
-            x="x",
-            y="y",
-            z="score",
-            color="score",
-            hover_data=[col for col in ["Eg", "score"] if col in df.columns],
-            height=600
-        )
-        fig3d.update_layout(template="simple_white")
-        st.plotly_chart(fig3d, use_container_width=True)
+            fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_df.loc[plot_df["is_top"], "stability"],
+                    y=plot_df.loc[plot_df["is_top"], "Eg"],
+                    mode="markers",
+                    marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2, color="black")),
+                    hoverinfo="skip", showlegend=False
+                )
+            )
+            fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
+            fig.update_xaxes(title="Stability")
+            fig.update_yaxes(title="Band Gap (eV)")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Plot error: {e}")
 
-# ─── Download Tab ──────────────────────────────────────────────────────────── ────────────────────────────────────────────────────────────
+    else:  # Ternary A–B–C
+        required = ["x", "y", "score"]
+        plot_df = df.dropna(subset=required).copy()
+        for col in required:
+            plot_df[col] = pd.to_numeric(plot_df[col], errors="coerce")
+        plot_df = plot_df.dropna(subset=required)
+
+        try:
+            fig3d = px.scatter_3d(
+                plot_df,
+                x="x",
+                y="y",
+                z="score",
+                color="score",
+                hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
+                height=600
+            )
+            fig3d.update_layout(template="simple_white")
+            st.plotly_chart(fig3d, use_container_width=True)
+        except Exception as e:
+            st.error(f"3D plot error: {e}")
+
+# ─── Download Tab ──────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────── ────────────────────────────────────────────────────────────
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
