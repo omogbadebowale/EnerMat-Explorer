@@ -26,7 +26,11 @@ from backend.perovskite_utils import (
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+col1, col2 = st.columns([1, 12])
+with col1:
+    st.image("assets/logo.png", width=50)
+with col2:
+    st.markdown("## **EnerMat Perovskite Explorer v9.6**")
 
 # ─── Session State Init ───────────────────────────────────────────────────────
 if "history" not in st.session_state:
@@ -210,7 +214,7 @@ with tab_plot:
         except Exception as e:
             st.error(f"3D plot error: {e}")
 
-# ─── Download Tab ──────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────── ────────────────────────────────────────────────────────────
+# ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
@@ -221,7 +225,9 @@ with tab_dl:
         top_label = top.formula
     else:
         # build formula string for ternary
-        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+        x_val = getattr(top, "x", 0.0)
+y_val = getattr(top, "y", 0.0)
+top_label = f"{A}-{B}-{C} x={x_val:.2f} y={y_val:.2f}"
 
     # Compose report text
     txt = f"""
@@ -251,3 +257,13 @@ Score        : {top.score}
     doc.save(buf); buf.seek(0)
     st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+# ─── Footer ─────────────────────────────────────────────────────────────────
+st.markdown(
+    "<hr style='margin-top:2em;margin-bottom:0.5em;'>"
+    "<div style='text-align:center; font-size:0.85em;'>"
+    "EnerMat Explorer © 2025 Dr. Gbadebo Taofeek Yusuf · "
+    "Built with ❤️ using Streamlit + Materials Project API"
+    "</div>",
+    unsafe_allow_html=True
+)
