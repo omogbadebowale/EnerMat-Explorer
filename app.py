@@ -147,8 +147,12 @@ with tab_tbl:
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
     if mode == "Binary A–B":
+        # Determine top candidates
         top_cut = df["score"].quantile(0.80)
         df["is_top"] = df["score"] >= top_cut
+
+        # Determine which hover columns actually exist
+        hover_cols = [c for c in ["formula", "x", "Eg", "stability", "score"] if c in df.columns]
 
         fig = px.scatter(
             df,
@@ -156,7 +160,7 @@ with tab_plot:
             y="Eg",
             color="score",
             color_continuous_scale="plasma",
-            hover_data=["formula", "x", "Eg", "stability", "score"]
+            hover_data=hover_cols
         )
         fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
         fig.add_trace(
@@ -173,19 +177,20 @@ with tab_plot:
         fig.update_yaxes(title="Band Gap (eV)")
         st.plotly_chart(fig, use_container_width=True)
     else:
+        # 3D Ternary plot
         fig3d = px.scatter_3d(
             df,
             x="x",
             y="y",
             z="score",
             color="score",
-            hover_data=["Eg", "score"],
+            hover_data=[col for col in ["Eg", "score"] if col in df.columns],
             height=600
         )
         fig3d.update_layout(template="simple_white")
         st.plotly_chart(fig3d, use_container_width=True)
 
-# ─── Download Tab ────────────────────────────────────────────────────────────
+# ─── Download Tab ──────────────────────────────────────────────────────────── ────────────────────────────────────────────────────────────
 with tab_dl:
     csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
