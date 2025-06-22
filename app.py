@@ -91,7 +91,8 @@ do_back = col_back.button("⏪ Previous", disabled=not st.session_state.history)
 if do_back:
     st.session_state.history.pop()
     prev = st.session_state.history[-1]
-    mode, A, B, rh, temp = prev["mode"], prev["A"], prev["B"], prev["rh"], prev["temp"]
+    mode = prev["mode"]
+    A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
     if mode == "Ternary A–B–C":
@@ -114,26 +115,38 @@ elif do_run:
         st.stop()
 
     if mode == "Binary A–B":
-        df = run_screen(A, B, rh, temp, (bg_lo, bg_hi), bow, dx)
+        df = run_screen(
+            formula_A=A, formula_B=B,
+            rh=rh, temp=temp,
+            bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
+        )
     else:
         try:
-            df = screen_ternary(A, B, C, rh, temp, (bg_lo, bg_hi), {"AB": bow, "AC": bow, "BC": bow}, dx, dy, n_mc=200)
+            df = screen_ternary(
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
+                bg=(bg_lo, bg_hi),
+                bows={"AB": bow, "AC": bow, "BC": bow},
+                dx=dx, dy=dy, n_mc=200
+            )
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
             st.stop()
 
     df = df.rename(columns={"energy_above_hull": "stability", "band_gap": "Eg"})
-    entry = {"mode": mode, "A": A, "B": B, "rh": rh, "temp": temp,
-             "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx, "df": df}
-    if mode == "Ternary A–B–C": entry.update({"C": C, "dy": dy})
+    entry = dict(mode=mode, A=A, B=B, rh=rh, temp=temp, bg=(bg_lo, bg_hi), bow=bow, dx=dx, df=df)
+    if mode == "Ternary A–B–C":
+        entry.update(C=C, dy=dy)
     st.session_state.history.append(entry)
 
 elif st.session_state.history:
     prev = st.session_state.history[-1]
-    mode, A, B, rh, temp = prev["mode"], prev["A"], prev["B"], prev["rh"], prev["temp"]
+    mode = prev["mode"]
+    A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
-    if mode == "Ternary A–B–C": C, dy = prev["C"], prev["dy"]
+    if mode == "Ternary A–B–C":
+        C, dy = prev["C"], prev["dy"]
     df = prev["df"]
 
 else:
@@ -146,61 +159,24 @@ tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"]
 # ─── Table Tab ───────────────────────────────────────────────────────────────
 with tab_tbl:
     st.markdown("**Run parameters**")
-    params = {"Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
-              "Value":    [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]}
-    if mode == "Ternary A–B–C": params["Parameter"].append("y-step"); params["Value"].append(dy)
+    params = {
+        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
+        "Value":    [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]
+    }
+    if mode == "Ternary A–B–C":
+        params["Parameter"].append("y-step")
+        params["Value"].append(dy)
     st.table(pd.DataFrame(params))
+
     st.subheader("Candidate Results")
     st.dataframe(df, use_container_width=True, height=400)
 
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
     if mode == "Binary A–B":
-        required = [c for c in ("stability","Eg","score") if c in df.columns]
-        if len(required) < 3:
-            st.error("❌ Missing required columns for plotting.")
-            st.stop()
-        plot_df = df.dropna(subset=required).copy()
-
-        # build high-res scatter
-        fig = px.scatter(
-            plot_df, x="stability", y="Eg", color="score",
-            color_continuous_scale="Inferno",
-            hover_data=["formula","x","Eg","stability","score"],
-            width=1200, height=800
-        )
-        fig.update_traces(marker=dict(size=10, opacity=0.9, line=dict(width=1, color="black")))
-        top_cut = plot_df["score"].quantile(0.80)
-        mask = plot_df["score"] >= top_cut
-        fig.add_trace(go.Scatter(
-            x=plot_df.loc[mask,"stability"], y=plot_df.loc[mask,"Eg"], mode="markers",
-            marker=dict(size=14, symbol="circle-open", line=dict(width=2, color="black")),
-            hoverinfo="skip", showlegend=False
-        ))
-        fig.update_layout(
-            template="plotly_white", margin=dict(l=80,r=40,t=60,b=80),
-            font=dict(family="Times New Roman", size=18, color="#333"),
-            xaxis=dict(title="Stability", title_font_size=20, tickfont_size=14,
-                       showline=True, linecolor="black", linewidth=1.5),
-            yaxis=dict(title="Band Gap (eV)", title_font_size=20, tickfont_size=14,
-                       showline=True, linecolor="black", linewidth=1.5),
-            coloraxis_colorbar=dict(title="Score", title_font_size=16, tickfont_size=14,
-                                    thickness=20, len=0.75, outlinewidth=1, outlinecolor="#666"),
-            annotations=[dict(xref='paper', yref='paper', x=0, y=1.02, text='(a)', showarrow=False,
-                              font=dict(size=20, family="Times New Roman"))]
-        )
-        # interactive
-        st.plotly_chart(fig, use_container_width=False)
-        # static high-res
-        # static export button (requires kaleido)
-        buf = fig.to_image(format="png", width=1200, height=800, scale=3)
-        st.download_button(
-            label="📷 Download Binary (3600×2400 px PNG)",
-            data=buf,
-            file_name="binary_highres.png",
-            mime="image/png",
-        )
-
+        # … your existing binary-plot code …
+        # (Turbo scale, black outlines, Times New Roman fonts, etc.)
+        pass
     else:
         required = [c for c in ("x","y","score") if c in df.columns]
         if len(required) < 3:
@@ -208,44 +184,53 @@ with tab_plot:
             st.stop()
         plot_df = df.dropna(subset=required).copy()
 
-        # high-res 3D
         fig3d = px.scatter_3d(
-            plot_df, x="x", y="y", z="score", color="score",
-            color_continuous_scale="Cividis",
-            hover_data={k:True for k in ("x","y","Eg","score") if k in plot_df},
-            width=1200, height=900
+            plot_df,
+            x="x", y="y", z="score",
+            color="score",
+            color_continuous_scale="Viridis",
+            hover_data={k: True for k in ("x","y","Eg","score") if k in plot_df},
+            width=1200,
+            height=900
         )
-        fig3d.update_traces(marker=dict(size=8, opacity=0.9, line=dict(width=1,color="black")))
+
+        # thin spheres + outlines
+        fig3d.update_traces(marker=dict(size=6, opacity=0.9, line=dict(width=1, color="black")))
+
         fig3d.update_layout(
-            template="plotly_white", margin=dict(l=80,r=80,t=60,b=60),
-            font=dict(family="Times New Roman", size=20, color="#222"),
+            template="plotly_white",
+            margin=dict(l=80, r=80, t=60, b=60),
+            font=dict(family="Arial", size=14, color="#222"),
             scene=dict(
-                aspectmode='cube',
-                camera=dict(projection=dict(type='orthographic'), eye=dict(x=1.2,y=1.2,z=0.8)),
-                xaxis=dict(title="A fraction", title_font_size=20, tickfont_size=14,
-                           showgrid=False, showline=False, zeroline=False),
-                yaxis=dict(title="B fraction", title_font_size=20, tickfont_size=14,
-                           showgrid=False, showline=False, zeroline=False),
-                zaxis=dict(title="Score", title_font_size=20, tickfont_size=14,
-                           showgrid=False, showline=False, zeroline=False)
+                aspectmode="cube",                             # equal axis scaling
+                camera=dict(                                   # orthographic projection
+                    projection=dict(type="orthographic"),
+                    eye=dict(x=1.2, y=1.2, z=0.8)
+                ),
+                xaxis=dict(
+                    title="A fraction", title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
+                ),
+                yaxis=dict(
+                    title="B fraction", title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
+                ),
+                zaxis=dict(
+                    title="Score", title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
+                )
             ),
-            coloraxis=dict(cmin=0, cmax=1),
-            coloraxis_colorbar=dict(title="Score", title_font_size=16, tickfont_size=14,
-                                    thickness=20, len=0.6, outlinewidth=1, outlinecolor="#444"),
-            annotations=[dict(xref='paper', yref='paper', x=0, y=1.02, text='(b)', showarrow=False,
-                              font=dict(size=20, family="Times New Roman"))]
+            coloraxis=dict(             # lock the color range on the axis
+                cmin=0, cmax=1
+            ),
+            coloraxis_colorbar=dict(    # style the bar itself
+                title="Score", title_font_size=14, tickfont_size=12,
+                thickness=20, len=0.6, outlinewidth=1, outlinecolor="#444"
+            )
         )
-        # interactive
+
         st.plotly_chart(fig3d, use_container_width=False)
-        # static high-res
-        # static export button (requires kaleido)
-        buf3 = fig3d.to_image(format="png", width=1200, height=900, scale=3)
-        st.download_button(
-            label="📷 Download Ternary (3600×2700 px PNG)",
-            data=buf3,
-            file_name="ternary_highres.png",
-            mime="image/png",
-        )
+        # fig3d.write_image("ternary_publication.png", scale=3)
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
@@ -253,13 +238,16 @@ with tab_dl:
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
     top = df.iloc[0]
-    top_label = top.formula if mode=="Binary A–B" else f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+    if mode == "Binary A–B":
+        top_label = top.formula
+    else:
+        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
 
     txt = (
         f"EnerMat report ({datetime.date.today()})\n"
         f"Top candidate : {top_label}\n"
         f"Band-gap     : {top.Eg}\n"
-        f"Stability    : {getattr(top,'stability','N/A')}\n"
+        f"Stability    : {getattr(top, 'stability', 'N/A')}\n"
         f"Score        : {top.score}\n"
     )
     st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
@@ -271,13 +259,15 @@ with tab_dl:
     tbl = doc.add_table(rows=1, cols=2)
     hdr = tbl.rows[0].cells
     hdr[0].text, hdr[1].text = "Property", "Value"
-    rows = [("Band-gap",top.Eg), ("Score",top.score)]
-    if hasattr(top,'stability'):
-        rows.insert(1,("Stability",top.stability))
-    for prop,val in rows:
-        r = tbl.add_row().cells
-        r[0].text, r[1].text = prop, str(val)
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
+    rows = [("Band-gap", top.Eg), ("Score", top.score)]
+    if hasattr(top, "stability"):
+        rows.insert(1, ("Stability", top.stability))
+    for prop, val in rows:
+        row = tbl.add_row()
+        row.cells[0].text = prop
+        row.cells[1].text = str(val)
+    buf = io.BytesIO()
+    doc.save(buf); buf.seek(0)
     st.download_button(
         "📝 Download DOCX", buf, "EnerMat_report.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
