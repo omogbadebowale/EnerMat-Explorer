@@ -5,6 +5,7 @@ load_dotenv()
 # for secrets fallback on Streamlit Cloud
 import streamlit as st
 
+import re
 import numpy as np
 import pandas as pd
 from mp_api.client import MPRester
@@ -26,6 +27,26 @@ IONIC_RADII = {
     "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
+
+# ── Subscript and organic formula normalization ─────────────────────────
+SUBSCRIPT_MAP = {
+    "₀":"0","₁":"1","₂":"2","₃":"3","₄":"4",
+    "₅":"5","₆":"6","₇":"7","₈":"8","₉":"9"
+}
+ORGANIC_MAP = {"MA": "CH3NH3", "FA": "CH(NH2)2"}
+
+def normalize_formula(formula: str) -> str:
+    """
+    Convert Unicode subscripts to ASCII and expand MA/FA shorthand to full chemical.
+    """
+    f = formula.strip()
+    # replace Unicode subscripts
+    for uni, digit in SUBSCRIPT_MAP.items():
+        f = f.replace(uni, digit)
+    # expand organic A-sites by word boundary
+    for short, full in ORGANIC_MAP.items():
+        f = re.sub(rf"\b{short}\b", full, f)
+    return f
 
 
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
@@ -62,12 +83,17 @@ def mix_abx3(
     beta: float = 1.0,
 ) -> pd.DataFrame:
     """Binary screening A–B across x from 0→1."""
-    lo, hi = bg_window
+    # Normalize and expand formulas
+    formula_A = normalize_formula(formula_A)
+    formula_B = normalize_formula(formula_B)
+
+    # Fetch data
     dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
     if not (dA and dB):
-        return pd.DataFrame()
+        raise ValueError(f"No Materials Project data for '{formula_A}' or '{formula_B}'")
 
+    lo, hi = bg_window
     comp = Composition(formula_A)
     A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
     B_site = next(e.symbol for e in comp.elements if e.symbol in {"Pb", "Sn"})
@@ -108,17 +134,22 @@ def screen_ternary(
     n_mc: int = 200,
 ) -> pd.DataFrame:
     """Ternary screening A–B–C over x,y fractions."""
+    # Normalize formulas
+    A = normalize_formula(A)
+    B = normalize_formula(B)
+    C = normalize_formula(C)
+
+    # Fetch data
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
     dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
     if not (dA and dB and dC):
-        return pd.DataFrame()
+        raise ValueError(f"No Materials Project data for one of {A}, {B}, or {C}")
 
     lo, hi = bg
     rows = []
     for x in np.arange(0, 1 + 1e-6, dx):
         for y in np.arange(0, 1 - x + 1e-6, dy):
-            z = 1 - x - y
             Eg = (
                 (1 - x - y) * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
                 - bows["AB"] * x * (1 - x - y)
@@ -138,4 +169,5 @@ def screen_ternary(
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
 # alias for backwards compatibility
-_summary = fetch_mp_data
+def _summary(*args, **kwargs):
+    return fetch_mp_data(*args, **kwargs)
