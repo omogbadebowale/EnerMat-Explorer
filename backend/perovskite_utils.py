@@ -1,4 +1,3 @@
-# backend/perovskite_utils.py
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -143,3 +142,6 @@ if __name__=="__main__":
         print("Lead-free:", df_sn[df_sn.x.isin([0.0,0.36,1.0])])
     except Exception as e:
         print("Lead-free failed:", e)
+
+# app.py (unchanged) ...
+
