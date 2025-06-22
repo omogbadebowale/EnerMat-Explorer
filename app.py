@@ -334,5 +334,8 @@ with tab_dl:
     buf = io.BytesIO()
     doc.save(buf); buf.seek(0)
     st.download_button(
-        "📝 Download DOCX", buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officed��
+    "📝 Download DOCX",
+    buf,
+    "EnerMat_report.docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
