@@ -52,6 +52,22 @@ with st.sidebar:
     rh = st.slider("Humidity [%]", 0, 100, 50)
     temp = st.slider("Temperature [°C]", -20, 100, 25)
 
+    st.header("Penalty Coefficients")
+    alpha = st.slider(
+        "Humidity penalty (α)",
+        min_value=-0.05,
+        max_value=0.0,
+        value=-0.012395,
+        step=0.0005,
+    )
+    beta = st.slider(
+        "Temperature penalty (β)",
+        min_value=0.0,
+        max_value=0.05,
+        value=0.027888,
+        step=0.0005,
+    )
+
     st.header("Target Band Gap [eV]")
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
@@ -71,8 +87,8 @@ with st.sidebar:
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
 
 # ─── Cached Screen Runner ─────────────────────────────────────────────────────
-@st.cache_data(show_spinner="⏳ Running screening…", max_entries=20)
-def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
+@st.cache_data(show_spinner="⏳ Running screening…", max_entries=50)
+def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx, alpha, beta):
     return screen(
         formula_A=formula_A,
         formula_B=formula_B,
@@ -80,7 +96,9 @@ def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
         temp=temp,
         bg_window=bg_window,
         bowing=bowing,
-        dx=dx
+        dx=dx,
+        alpha=alpha,
+        beta=beta,
     )
 
 # ─── Execution Control ────────────────────────────────────────────────────────
@@ -89,16 +107,17 @@ do_run = col_run.button("▶ Run screening", type="primary")
 do_back = col_back.button("⏪ Previous", disabled=not st.session_state.history)
 
 if do_back:
-    st.session_state.history.pop()
-    prev = st.session_state.history[-1]
+    prev = st.session_state.history.pop()
     mode = prev["mode"]
     A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
+    alpha, beta = prev["alpha"], prev["beta"]
     if mode == "Ternary A–B–C":
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
     st.success("Showing previous result")
+
 elif do_run:
     try:
         docA = _summary(A, ["band_gap", "energy_above_hull"])
@@ -115,46 +134,40 @@ elif do_run:
 
     if mode == "Binary A–B":
         df = run_screen(
-            formula_A=A, formula_B=B,
-            rh=rh, temp=temp,
-            bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
+            formula_A=A,
+            formula_B=B,
+            rh=rh,
+            temp=temp,
+            bg_window=(bg_lo, bg_hi),
+            bowing=bow,
+            dx=dx,
+            alpha=alpha,
+            beta=beta,
         )
     else:
-        try:
-            df = screen_ternary(
-                A=A, B=B, C=C,
-                rh=rh, temp=temp,
-                bg=(bg_lo, bg_hi),
-                bows={"AB": bow, "AC": bow, "BC": bow},
-                dx=dx, dy=dy, n_mc=200
-            )
-        except Exception as e:
-            st.error(f"❌ Ternary error: {e}")
-            st.stop()
+        df = screen_ternary(
+            A=A, B=B, C=C,
+            rh=rh, temp=temp,
+            bg=(bg_lo, bg_hi),
+            bows={"AB": bow, "AC": bow, "BC": bow},
+            dx=dx, dy=dy, n_mc=200
+        )
 
-    # Normalize for plotting
-    df = df.rename(columns={
-        "energy_above_hull": "stability",
-        "band_gap": "Eg"
-    })
-
-    # Store state
-    entry = {
-        "mode": mode,
-        "A": A, "B": B, "rh": rh, "temp": temp,
-        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
-        "df": df
-    }
+    df = df.rename(columns={"energy_above_hull": "stability", "band_gap": "Eg"})
+    entry = dict(mode=mode, A=A, B=B, rh=rh, temp=temp,
+                 bg=(bg_lo, bg_hi), bow=bow, dx=dx,
+                 alpha=alpha, beta=beta, df=df)
     if mode == "Ternary A–B–C":
-        entry["C"] = C
-        entry["dy"] = dy
+        entry.update(C=C, dy=dy)
     st.session_state.history.append(entry)
+
 elif st.session_state.history:
     prev = st.session_state.history[-1]
     mode = prev["mode"]
     A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
+    alpha, beta = prev["alpha"], prev["beta"]
     if mode == "Ternary A–B–C":
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
