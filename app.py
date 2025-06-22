@@ -162,9 +162,10 @@ with tab_plot:
             st.stop()
         plot_df = df.dropna(subset=required).copy()
 
+        # build high-res scatter
         fig = px.scatter(
             plot_df, x="stability", y="Eg", color="score",
-            color_continuous_scale="Turbo",
+            color_continuous_scale="Inferno",
             hover_data=["formula","x","Eg","stability","score"],
             width=1200, height=800
         )
@@ -188,8 +189,11 @@ with tab_plot:
             annotations=[dict(xref='paper', yref='paper', x=0, y=1.02, text='(a)', showarrow=False,
                               font=dict(size=20, family="Times New Roman"))]
         )
+        # interactive
         st.plotly_chart(fig, use_container_width=False)
-        # fig.write_image("binary_publication.svg", format="svg", width=1200, height=800, scale=1)
+        # static high-res
+        img_bin = fig.to_image(format="png", width=1200, height=800, scale=3)
+        st.image(img_bin, caption="Binary screening (high-res)", use_column_width=False)
 
     else:
         required = [c for c in ("x","y","score") if c in df.columns]
@@ -198,9 +202,10 @@ with tab_plot:
             st.stop()
         plot_df = df.dropna(subset=required).copy()
 
+        # high-res 3D
         fig3d = px.scatter_3d(
             plot_df, x="x", y="y", z="score", color="score",
-            color_continuous_scale="Viridis",
+            color_continuous_scale="Cividis",
             hover_data={k:True for k in ("x","y","Eg","score") if k in plot_df},
             width=1200, height=900
         )
@@ -224,8 +229,11 @@ with tab_plot:
             annotations=[dict(xref='paper', yref='paper', x=0, y=1.02, text='(b)', showarrow=False,
                               font=dict(size=20, family="Times New Roman"))]
         )
+        # interactive
         st.plotly_chart(fig3d, use_container_width=False)
-        # fig3d.write_image("ternary_publication.svg", format="svg", width=1200, height=900, scale=1)
+        # static high-res
+        img_ter = fig3d.to_image(format="png", width=1200, height=900, scale=3)
+        st.image(img_ter, caption="Ternary 3D screening (high-res)", use_column_width=False)
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
