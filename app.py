@@ -5,7 +5,7 @@ import datetime
 from pathlib import Path
 
 # Ensure project root is on path for backend import
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.getcwd())
 
 import streamlit as st
 import pandas as pd
