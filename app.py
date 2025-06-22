@@ -20,12 +20,20 @@ if not API_KEY or len(API_KEY) != 32:
     st.stop()
 
 # ─── Backend Imports ──────────────────────────────────────────────────────────
-from backend.perovskite_utils import (
-    mix_abx3 as screen,
-    screen_ternary,
-    END_MEMBERS,
-    fetch_mp_data as _summary,
+import importlib.util
+
+spec = importlib.util.spec_from_file_location(
+    "backend.perovskite_utils",
+    os.path.join(os.getcwd(), "backend", "perovskite_utils.py")
 )
+backend_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(backend_utils)
+
+# Assign functions and data
+screen = backend_utils.mix_abx3
+screen_ternary = backend_utils.screen_ternary
+END_MEMBERS = backend_utils.END_MEMBERS
+_summary = backend_utils.fetch_mp_data
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
