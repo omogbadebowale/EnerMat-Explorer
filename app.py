@@ -203,7 +203,6 @@ with tab_plot:
         )
         fig.update_traces(marker=dict(size=12, opacity=0.9, line=dict(width=1, color="black")))
 
-        # highlight top 20%
         top_cut = plot_df["score"].quantile(0.80)
         mask = plot_df["score"] >= top_cut
         fig.add_trace(
@@ -242,8 +241,8 @@ with tab_plot:
 
         fig3d = px.scatter_3d(
             plot_df,
-            x="x",            # A fraction
-            y="y",            # B fraction
+            x="x",
+            y="y",
             z="score",
             color="score",
             color_continuous_scale="Viridis",
@@ -260,24 +259,33 @@ with tab_plot:
             template="plotly_white",
             margin=dict(l=80, r=80, t=60, b=60),
             font=dict(family="Arial", size=14, color="#222"),
+
+            # equal axis scaling and orthographic projection
+            scene_aspectmode='cube',
+            scene_camera=dict(
+                projection_type='orthographic',
+                eye=dict(x=1.2, y=1.2, z=0.8)
+            ),
+
             scene=dict(
                 xaxis=dict(
                     title="A fraction", title_font_size=16, tickfont_size=12,
-                    gridcolor="lightgrey", showbackground=False
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
                 ),
                 yaxis=dict(
                     title="B fraction", title_font_size=16, tickfont_size=12,
-                    gridcolor="lightgrey", showbackground=False
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
                 ),
                 zaxis=dict(
                     title="Score", title_font_size=16, tickfont_size=12,
-                    gridcolor="lightgrey", showbackground=False
-                ),
-                camera=dict(eye=dict(x=1.3, y=1.3, z=0.8))
+                    gridcolor="lightgrey", zerolinecolor="lightgrey", showbackground=False
+                )
             ),
+
             coloraxis_colorbar=dict(
                 title="Score", title_font_size=14, tickfont_size=12,
-                thickness=20, len=0.6, outlinewidth=1, outlinecolor="#444"
+                thickness=20, len=0.6, outlinewidth=1, outlinecolor="#444",
+                cmin=0, cmax=1
             )
         )
 
