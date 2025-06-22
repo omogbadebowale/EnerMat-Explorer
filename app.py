@@ -1,7 +1,11 @@
 import io
 import os
+import sys
 import datetime
 from pathlib import Path
+
+# Ensure project root is on path for backend import
+sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 import pandas as pd
@@ -95,7 +99,7 @@ def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx, alpha, bet
         rh=rh,
         temp=temp,
         bg_window=bg_window,
-        bowing=bowing,
+        bowing=bow,
         dx=dx,
         alpha=alpha,
         beta=beta,
@@ -175,121 +179,49 @@ else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
-
-# ─── Table Tab ───────────────────────────────────────────────────────────────
-with tab_tbl:
+# ─── Tabs & Remaining App Logic ───────────────────────────────────────────────
+with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[0]:
     st.markdown("**Run parameters**")
-    param_data = {
-        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
-        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]
-    }
-    if mode == "Ternary A–B–C":
-        param_data["Parameter"].append("y-step")
-        param_data["Value"].append(dy)
-
-    st.table(pd.DataFrame(param_data))
-
+    params = {"Parameter": ["Humidity [%]","Temperature [°C]","Gap window [eV]","Bowing [eV]","x-step","Humidity penalty (α)","Temperature penalty (β)"],
+              "Value": [rh,temp,f"{bg_lo:.2f}–{bg_hi:.2f}",bow,dx,alpha,beta]}
+    if mode == "Ternary A–B–C": params["Parameter"].append("y-step"); params["Value"].append(dy)
+    st.table(pd.DataFrame(params))
     st.subheader("Candidate Results")
     st.dataframe(df, use_container_width=True, height=400)
-
-# ─── Plot Tab ────────────────────────────────────────────────────────────────
-with tab_plot:
-    if mode == "Binary A–B":
-        required = [c for c in ["stability", "Eg", "score"] if c in df.columns]
-        if len(required) < 3:
-            missing = set(["stability", "Eg", "score"]) - set(df.columns)
-            st.error(f"❌ Missing required columns for plotting: {', '.join(missing)}")
-            st.stop()
-        plot_df = df.dropna(subset=required).copy()
-
-        # Highlight top
-        top_cut = plot_df["score"].quantile(0.80)
-        plot_df["is_top"] = plot_df["score"] >= top_cut
-
-        try:
-            fig = px.scatter(
-                plot_df,
-                x="stability", y="Eg",
-                color="score", color_continuous_scale="plasma",
-                hover_data=["formula", "x", "Eg", "stability", "score"]
-            )
-            fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_df.loc[plot_df["is_top"], "stability"],
-                    y=plot_df.loc[plot_df["is_top"], "Eg"],
-                    mode="markers",
-                    marker=dict(size=22, color="rgba(0,0,0,0)",
-                                line=dict(width=2, color="black")),
-                    hoverinfo="skip", showlegend=False
-                )
-            )
-            fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
-            fig.update_xaxes(title="Stability")
-            fig.update_yaxes(title="Band Gap (eV)")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Plot error: {e}")
+with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[1]:
+    plot_df = df.dropna(subset=["stability","Eg","score"]) if mode=="Binary A–B" else df.dropna(subset=["x","y","score"])
+    if mode=="Binary A–B":
+        fig = px.scatter(plot_df, x="stability", y="Eg", color="score", color_continuous_scale="plasma",
+                          hover_data=["formula","x","Eg","stability","score"])
+        top_cut = plot_df["score"].quantile(0.8)
+        fig.add_trace(go.Scatter(x=plot_df.loc[plot_df.score>=top_cut,"stability"],
+                                 y=plot_df.loc[plot_df.score>=top_cut,"Eg"], mode="markers",
+                                 marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2,color="black")),
+                                 hoverinfo="skip"))
+        fig.update_layout(template="simple_white", margin=dict(l=60,r=30,t=30,b=60),
+                          xaxis_title="Stability", yaxis_title="Band Gap (eV)")
+        st.plotly_chart(fig,use_container_width=True)
     else:
-        required = [c for c in ["x", "y", "score"] if c in df.columns]
-        if len(required) < 3:
-            st.warning("❗ Not enough columns for ternary 3D plot.")
-            st.stop()
-        plot_df = df.dropna(subset=required).copy()
-        try:
-            fig3d = px.scatter_3d(
-                plot_df,
-                x="x", y="y", z="score",
-                color="score",
-                hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
-                height=600
-            )
-            fig3d.update_layout(template="simple_white")
-            st.plotly_chart(fig3d, use_container_width=True)
-        except Exception as e:
-            st.error(f"3D plot error: {e}")
-
-# ─── Download Tab ────────────────────────────────────────────────────────────
-with tab_dl:
+        fig3d = px.scatter_3d(plot_df, x="x",y="y",z="score",color="score", hover_data={k:True for k in ["x","y","Eg","score"]})
+        fig3d.update_layout(template="simple_white")
+        st.plotly_chart(fig3d,use_container_width=True)
+with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[2]:
     csv = df.to_csv(index=False).encode()
-    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
-
+    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv","text/csv")
     top = df.iloc[0]
-    if mode == "Binary A–B":
-        top_label = top.formula
-    else:
-        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
-
+    top_label = top.formula if mode=="Binary A–B" else f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
     txt = f"""EnerMat report ({datetime.date.today()})
 Top candidate : {top_label}
 Band-gap     : {top.Eg}
-Stability    : {getattr(top, 'stability', 'N/A')}
+Stability    : {getattr(top,'stability','N/A')}
 Score        : {top.score}
 """
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
-
-    # DOCX report
+    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt","text/plain")
     doc = Document()
-    doc.add_heading("EnerMat Report", 0)
+    doc.add_heading("EnerMat Report",0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top_label}")
-    tbl = doc.add_table(rows=1, cols=2)
-    hdr_cells = tbl.rows[0].cells
-    hdr_cells[0].text = "Property"
-    hdr_cells[1].text = "Value"
-    rows = [("Band-gap", top.Eg), ("Score", top.score)]
-    if hasattr(top, 'stability'):
-        rows.insert(1, ("Stability", top.stability))
-    for k, v in rows:
-        row = tbl.add_row()
-        row.cells[0].text = k
-        row.cells[1].text = str(v)
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    st.download_button(
-        "📝 Download DOCX", buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    tbl = doc.add_table(rows=1,cols=2); hdr=tbl.rows[0].cells; hdr[0].text="Property"; hdr[1].text="Value"
+    for k,v in [("Band-gap",top.Eg), ("Stability",getattr(top,'stability','N/A')), ("Score",top.score)]: row=tbl.add_row(); row.cells[0].text=k; row.cells[1].text=str(v)
+    buf=io.BytesIO(); doc.save(buf); buf.seek(0)
+    st.download_button("📝 Download DOCX",buf,"EnerMat_report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document")
