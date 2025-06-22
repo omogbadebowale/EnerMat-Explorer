@@ -192,8 +192,14 @@ with tab_plot:
         # interactive
         st.plotly_chart(fig, use_container_width=False)
         # static high-res
-        img_bin = fig.to_image(format="png", width=1200, height=800, scale=3)
-        st.image(img_bin, caption="Binary screening (high-res)", use_column_width=False)
+        # static export button (requires kaleido)
+        buf = fig.to_image(format="png", width=1200, height=800, scale=3)
+        st.download_button(
+            label="📷 Download Binary (3600×2400 px PNG)",
+            data=buf,
+            file_name="binary_highres.png",
+            mime="image/png",
+        )
 
     else:
         required = [c for c in ("x","y","score") if c in df.columns]
@@ -232,8 +238,14 @@ with tab_plot:
         # interactive
         st.plotly_chart(fig3d, use_container_width=False)
         # static high-res
-        img_ter = fig3d.to_image(format="png", width=1200, height=900, scale=3)
-        st.image(img_ter, caption="Ternary 3D screening (high-res)", use_column_width=False)
+        # static export button (requires kaleido)
+        buf3 = fig3d.to_image(format="png", width=1200, height=900, scale=3)
+        st.download_button(
+            label="📷 Download Ternary (3600×2700 px PNG)",
+            data=buf3,
+            file_name="ternary_highres.png",
+            mime="image/png",
+        )
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
