@@ -43,9 +43,10 @@ def normalize_formula(formula: str) -> str:
     # replace Unicode subscripts
     for uni, digit in SUBSCRIPT_MAP.items():
         f = f.replace(uni, digit)
-    # expand organic A-sites by word boundary
+    # expand organic cations when at start of formula
     for short, full in ORGANIC_MAP.items():
-        f = re.sub(rf"\b{short}\b", full, f)
+        if f.startswith(short):
+            f = f.replace(short, full, 1)
     return f
 
 
