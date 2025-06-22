@@ -201,15 +201,9 @@ with tab_plot:
             width=1200,
             height=800
         )
+        fig.update_traces(marker=dict(size=12, opacity=0.9, line=dict(width=1, color="black")))
 
-        fig.update_traces(
-            marker=dict(
-                size=12,
-                opacity=0.9,
-                line=dict(width=1, color="black")
-            )
-        )
-
+        # highlight top 20%
         top_cut = plot_df["score"].quantile(0.80)
         mask = plot_df["score"] >= top_cut
         fig.add_trace(
@@ -217,11 +211,7 @@ with tab_plot:
                 x=plot_df.loc[mask, "stability"],
                 y=plot_df.loc[mask, "Eg"],
                 mode="markers",
-                marker=dict(
-                    size=20,
-                    symbol="circle-open",
-                    line=dict(width=2, color="black")
-                ),
+                marker=dict(size=20, symbol="circle-open", line=dict(width=2, color="black")),
                 hoverinfo="skip",
                 showlegend=False
             )
@@ -234,9 +224,7 @@ with tab_plot:
             xaxis=dict(title="Stability", title_font_size=18, tickfont_size=14),
             yaxis=dict(title="Band Gap (eV)", title_font_size=18, tickfont_size=14),
             coloraxis_colorbar=dict(
-                title="Score",
-                title_font_size=16,
-                tickfont_size=14,
+                title="Score", title_font_size=16, tickfont_size=14,
                 thicknessmode="pixels", thickness=20, len=0.75,
                 outlinewidth=1, outlinecolor="#666"
             )
@@ -254,7 +242,9 @@ with tab_plot:
 
         fig3d = px.scatter_3d(
             plot_df,
-            x="x", y="y", z="score",
+            x="x",            # A fraction
+            y="y",            # B fraction
+            z="score",
             color="score",
             color_continuous_scale="Viridis",
             hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
@@ -263,11 +253,7 @@ with tab_plot:
         )
 
         fig3d.update_traces(
-            marker=dict(
-                size=6,
-                opacity=0.9,
-                line=dict(width=1, color="black")
-            )
+            marker=dict(size=6, opacity=0.9, line=dict(width=1, color="black"))
         )
 
         fig3d.update_layout(
@@ -276,27 +262,22 @@ with tab_plot:
             font=dict(family="Arial", size=14, color="#222"),
             scene=dict(
                 xaxis=dict(
-                    title="A fraction",
-                    title_font_size=16, tickfont_size=12,
+                    title="A fraction", title_font_size=16, tickfont_size=12,
                     gridcolor="lightgrey", showbackground=False
                 ),
                 yaxis=dict(
-                    title="B fraction",
-                    title_font_size=16, tickfont_size=12,
+                    title="B fraction", title_font_size=16, tickfont_size=12,
                     gridcolor="lightgrey", showbackground=False
                 ),
                 zaxis=dict(
-                    title="Score",
-                    title_font_size=16, tickfont_size=12,
+                    title="Score", title_font_size=16, tickfont_size=12,
                     gridcolor="lightgrey", showbackground=False
                 ),
                 camera=dict(eye=dict(x=1.3, y=1.3, z=0.8))
             ),
             coloraxis_colorbar=dict(
-                title="Score",
-                title_font_size=14, tickfont_size=12,
-                thickness=20, len=0.6,
-                outlinewidth=1, outlinecolor="#444"
+                title="Score", title_font_size=14, tickfont_size=12,
+                thickness=20, len=0.6, outlinewidth=1, outlinecolor="#444"
             )
         )
 
@@ -331,7 +312,7 @@ Score        : {top.score}
     hdr_cells[0].text = "Property"
     hdr_cells[1].text = "Value"
     rows = [("Band-gap", top.Eg), ("Score", top.score)]
-    if hasattr(top, 'stability'):
+    if hasattr(top, "stability"):
         rows.insert(1, ("Stability", top.stability))
     for k, v in rows:
         row = tbl.add_row()
