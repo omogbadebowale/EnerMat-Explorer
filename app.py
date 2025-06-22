@@ -178,7 +178,6 @@ with tab_tbl:
         param_data["Value"].append(dy)
 
     st.table(pd.DataFrame(param_data))
-
     st.subheader("Candidate Results")
     st.dataframe(df, use_container_width=True, height=400)
 
@@ -192,7 +191,6 @@ with tab_plot:
             st.stop()
         plot_df = df.dropna(subset=required).copy()
 
-        # Build a high-quality scatter
         fig = px.scatter(
             plot_df,
             x="stability",
@@ -212,13 +210,12 @@ with tab_plot:
             )
         )
 
-        # Highlight top 20%
         top_cut = plot_df["score"].quantile(0.80)
-        top_mask = plot_df["score"] >= top_cut
+        mask = plot_df["score"] >= top_cut
         fig.add_trace(
             go.Scatter(
-                x=plot_df.loc[top_mask, "stability"],
-                y=plot_df.loc[top_mask, "Eg"],
+                x=plot_df.loc[mask, "stability"],
+                y=plot_df.loc[mask, "Eg"],
                 mode="markers",
                 marker=dict(
                     size=20,
@@ -246,9 +243,7 @@ with tab_plot:
         )
 
         st.plotly_chart(fig, use_container_width=True)
-
-        # Uncomment to export a sharp PNG/SVG (requires `pip install kaleido`):
-        # fig.write_image("binary_screening.png", scale=3)
+        # fig.write_image("binary_publication.png", scale=3)
 
     else:
         required = [c for c in ["x", "y", "score"] if c in df.columns]
@@ -261,7 +256,7 @@ with tab_plot:
             plot_df,
             x="x", y="y", z="score",
             color="score",
-            color_continuous_scale="Turbo",
+            color_continuous_scale="Viridis",
             hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
             width=1200,
             height=900
@@ -269,7 +264,7 @@ with tab_plot:
 
         fig3d.update_traces(
             marker=dict(
-                size=5,
+                size=6,
                 opacity=0.9,
                 line=dict(width=1, color="black")
             )
@@ -277,26 +272,36 @@ with tab_plot:
 
         fig3d.update_layout(
             template="plotly_white",
-            margin=dict(l=60, r=60, t=60, b=60),
-            font=dict(family="Calibri", size=14, color="#222"),
+            margin=dict(l=80, r=80, t=60, b=60),
+            font=dict(family="Arial", size=14, color="#222"),
             scene=dict(
-                xaxis=dict(title="A fraction", title_font_size=16, tickfont_size=12),
-                yaxis=dict(title="B fraction", title_font_size=16, tickfont_size=12),
-                zaxis=dict(title="Score",      title_font_size=16, tickfont_size=12)
+                xaxis=dict(
+                    title="A fraction",
+                    title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", showbackground=False
+                ),
+                yaxis=dict(
+                    title="B fraction",
+                    title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", showbackground=False
+                ),
+                zaxis=dict(
+                    title="Score",
+                    title_font_size=16, tickfont_size=12,
+                    gridcolor="lightgrey", showbackground=False
+                ),
+                camera=dict(eye=dict(x=1.3, y=1.3, z=0.8))
             ),
             coloraxis_colorbar=dict(
                 title="Score",
-                title_font_size=14,
-                tickfont_size=12,
-                thickness=18, len=0.6,
+                title_font_size=14, tickfont_size=12,
+                thickness=20, len=0.6,
                 outlinewidth=1, outlinecolor="#444"
             )
         )
 
-        st.plotly_chart(fig3d, use_container_width=True)
-
-        # Uncomment to export a sharp 3D PNG/SVG:
-        # fig3d.write_image("ternary_screening.png", scale=3)
+        st.plotly_chart(fig3d, use_container_width=False)
+        # fig3d.write_image("ternary_publication.png", scale=3)
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
