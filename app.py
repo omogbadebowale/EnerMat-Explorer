@@ -1,11 +1,8 @@
+
 import io
 import os
-import sys
 import datetime
 from pathlib import Path
-
-# Ensure project root is on path for backend import
-sys.path.insert(0, os.getcwd())
 
 import streamlit as st
 import pandas as pd
@@ -20,20 +17,12 @@ if not API_KEY or len(API_KEY) != 32:
     st.stop()
 
 # ─── Backend Imports ──────────────────────────────────────────────────────────
-import importlib.util
-
-spec = importlib.util.spec_from_file_location(
-    "backend.perovskite_utils",
-    os.path.join(os.getcwd(), "backend", "perovskite_utils.py")
+from backend.perovskite_utils import (
+    mix_abx3 as screen,
+    screen_ternary,
+    END_MEMBERS,
+    fetch_mp_data as _summary,
 )
-backend_utils = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(backend_utils)
-
-# Assign functions and data
-screen = backend_utils.mix_abx3
-screen_ternary = backend_utils.screen_ternary
-END_MEMBERS = backend_utils.END_MEMBERS
-_summary = backend_utils.fetch_mp_data
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
@@ -64,22 +53,6 @@ with st.sidebar:
     rh = st.slider("Humidity [%]", 0, 100, 50)
     temp = st.slider("Temperature [°C]", -20, 100, 25)
 
-    st.header("Penalty Coefficients")
-    alpha = st.slider(
-        "Humidity penalty (α)",
-        min_value=-0.05,
-        max_value=0.0,
-        value=-0.012395,
-        step=0.0005,
-    )
-    beta = st.slider(
-        "Temperature penalty (β)",
-        min_value=0.0,
-        max_value=0.05,
-        value=0.027888,
-        step=0.0005,
-    )
-
     st.header("Target Band Gap [eV]")
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
@@ -99,18 +72,16 @@ with st.sidebar:
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
 
 # ─── Cached Screen Runner ─────────────────────────────────────────────────────
-@st.cache_data(show_spinner="⏳ Running screening…", max_entries=50)
-def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx, alpha, beta):
+@st.cache_data(show_spinner="⏳ Running screening…", max_entries=20)
+def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
     return screen(
         formula_A=formula_A,
         formula_B=formula_B,
         rh=rh,
         temp=temp,
         bg_window=bg_window,
-        bowing=bow,
-        dx=dx,
-        alpha=alpha,
-        beta=beta,
+        bowing=bowing,
+        dx=dx
     )
 
 # ─── Execution Control ────────────────────────────────────────────────────────
@@ -119,17 +90,16 @@ do_run = col_run.button("▶ Run screening", type="primary")
 do_back = col_back.button("⏪ Previous", disabled=not st.session_state.history)
 
 if do_back:
-    prev = st.session_state.history.pop()
+    st.session_state.history.pop()
+    prev = st.session_state.history[-1]
     mode = prev["mode"]
     A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
-    alpha, beta = prev["alpha"], prev["beta"]
     if mode == "Ternary A–B–C":
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
     st.success("Showing previous result")
-
 elif do_run:
     try:
         docA = _summary(A, ["band_gap", "energy_above_hull"])
@@ -146,40 +116,46 @@ elif do_run:
 
     if mode == "Binary A–B":
         df = run_screen(
-            formula_A=A,
-            formula_B=B,
-            rh=rh,
-            temp=temp,
-            bg_window=(bg_lo, bg_hi),
-            bowing=bow,
-            dx=dx,
-            alpha=alpha,
-            beta=beta,
+            formula_A=A, formula_B=B,
+            rh=rh, temp=temp,
+            bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
         )
     else:
-        df = screen_ternary(
-            A=A, B=B, C=C,
-            rh=rh, temp=temp,
-            bg=(bg_lo, bg_hi),
-            bows={"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy, n_mc=200
-        )
+        try:
+            df = screen_ternary(
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
+                bg=(bg_lo, bg_hi),
+                bows={"AB": bow, "AC": bow, "BC": bow},
+                dx=dx, dy=dy, n_mc=200
+            )
+        except Exception as e:
+            st.error(f"❌ Ternary error: {e}")
+            st.stop()
 
-    df = df.rename(columns={"energy_above_hull": "stability", "band_gap": "Eg"})
-    entry = dict(mode=mode, A=A, B=B, rh=rh, temp=temp,
-                 bg=(bg_lo, bg_hi), bow=bow, dx=dx,
-                 alpha=alpha, beta=beta, df=df)
+    # Normalize for plotting
+    df = df.rename(columns={
+        "energy_above_hull": "stability",
+        "band_gap": "Eg"
+    })
+
+    # Store state
+    entry = {
+        "mode": mode,
+        "A": A, "B": B, "rh": rh, "temp": temp,
+        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
+        "df": df
+    }
     if mode == "Ternary A–B–C":
-        entry.update(C=C, dy=dy)
+        entry["C"] = C
+        entry["dy"] = dy
     st.session_state.history.append(entry)
-
 elif st.session_state.history:
     prev = st.session_state.history[-1]
     mode = prev["mode"]
     A, B, rh, temp = prev["A"], prev["B"], prev["rh"], prev["temp"]
     bg_lo, bg_hi = prev["bg"]
     bow, dx = prev["bow"], prev["dx"]
-    alpha, beta = prev["alpha"], prev["beta"]
     if mode == "Ternary A–B–C":
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
@@ -187,49 +163,121 @@ else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─── Tabs & Remaining App Logic ───────────────────────────────────────────────
-with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[0]:
+# ─── Tabs ─────────────────────────────────────────────────────────────────────
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
+
+# ─── Table Tab ───────────────────────────────────────────────────────────────
+with tab_tbl:
     st.markdown("**Run parameters**")
-    params = {"Parameter": ["Humidity [%]","Temperature [°C]","Gap window [eV]","Bowing [eV]","x-step","Humidity penalty (α)","Temperature penalty (β)"],
-              "Value": [rh,temp,f"{bg_lo:.2f}–{bg_hi:.2f}",bow,dx,alpha,beta]}
-    if mode == "Ternary A–B–C": params["Parameter"].append("y-step"); params["Value"].append(dy)
-    st.table(pd.DataFrame(params))
+    param_data = {
+        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
+        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]
+    }
+    if mode == "Ternary A–B–C":
+        param_data["Parameter"].append("y-step")
+        param_data["Value"].append(dy)
+
+    st.table(pd.DataFrame(param_data))
+
     st.subheader("Candidate Results")
     st.dataframe(df, use_container_width=True, height=400)
-with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[1]:
-    plot_df = df.dropna(subset=["stability","Eg","score"]) if mode=="Binary A–B" else df.dropna(subset=["x","y","score"])
-    if mode=="Binary A–B":
-        fig = px.scatter(plot_df, x="stability", y="Eg", color="score", color_continuous_scale="plasma",
-                          hover_data=["formula","x","Eg","stability","score"])
-        top_cut = plot_df["score"].quantile(0.8)
-        fig.add_trace(go.Scatter(x=plot_df.loc[plot_df.score>=top_cut,"stability"],
-                                 y=plot_df.loc[plot_df.score>=top_cut,"Eg"], mode="markers",
-                                 marker=dict(size=22, color="rgba(0,0,0,0)", line=dict(width=2,color="black")),
-                                 hoverinfo="skip"))
-        fig.update_layout(template="simple_white", margin=dict(l=60,r=30,t=30,b=60),
-                          xaxis_title="Stability", yaxis_title="Band Gap (eV)")
-        st.plotly_chart(fig,use_container_width=True)
+
+# ─── Plot Tab ────────────────────────────────────────────────────────────────
+with tab_plot:
+    if mode == "Binary A–B":
+        required = [c for c in ["stability", "Eg", "score"] if c in df.columns]
+        if len(required) < 3:
+            missing = set(["stability", "Eg", "score"]) - set(df.columns)
+            st.error(f"❌ Missing required columns for plotting: {', '.join(missing)}")
+            st.stop()
+        plot_df = df.dropna(subset=required).copy()
+
+        # Highlight top
+        top_cut = plot_df["score"].quantile(0.80)
+        plot_df["is_top"] = plot_df["score"] >= top_cut
+
+        try:
+            fig = px.scatter(
+                plot_df,
+                x="stability", y="Eg",
+                color="score", color_continuous_scale="plasma",
+                hover_data=["formula", "x", "Eg", "stability", "score"]
+            )
+            fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_df.loc[plot_df["is_top"], "stability"],
+                    y=plot_df.loc[plot_df["is_top"], "Eg"],
+                    mode="markers",
+                    marker=dict(size=22, color="rgba(0,0,0,0)",
+                                line=dict(width=2, color="black")),
+                    hoverinfo="skip", showlegend=False
+                )
+            )
+            fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
+            fig.update_xaxes(title="Stability")
+            fig.update_yaxes(title="Band Gap (eV)")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Plot error: {e}")
     else:
-        fig3d = px.scatter_3d(plot_df, x="x",y="y",z="score",color="score", hover_data={k:True for k in ["x","y","Eg","score"]})
-        fig3d.update_layout(template="simple_white")
-        st.plotly_chart(fig3d,use_container_width=True)
-with st.tabs(["📊 Table", "📈 Plot", "📥 Download"])[2]:
+        required = [c for c in ["x", "y", "score"] if c in df.columns]
+        if len(required) < 3:
+            st.warning("❗ Not enough columns for ternary 3D plot.")
+            st.stop()
+        plot_df = df.dropna(subset=required).copy()
+        try:
+            fig3d = px.scatter_3d(
+                plot_df,
+                x="x", y="y", z="score",
+                color="score",
+                hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
+                height=600
+            )
+            fig3d.update_layout(template="simple_white")
+            st.plotly_chart(fig3d, use_container_width=True)
+        except Exception as e:
+            st.error(f"3D plot error: {e}")
+
+# ─── Download Tab ────────────────────────────────────────────────────────────
+with tab_dl:
     csv = df.to_csv(index=False).encode()
-    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv","text/csv")
+    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
+
     top = df.iloc[0]
-    top_label = top.formula if mode=="Binary A–B" else f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+    if mode == "Binary A–B":
+        top_label = top.formula
+    else:
+        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+
     txt = f"""EnerMat report ({datetime.date.today()})
 Top candidate : {top_label}
 Band-gap     : {top.Eg}
-Stability    : {getattr(top,'stability','N/A')}
+Stability    : {getattr(top, 'stability', 'N/A')}
 Score        : {top.score}
 """
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt","text/plain")
+    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+
+    # DOCX report
     doc = Document()
-    doc.add_heading("EnerMat Report",0)
+    doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
     doc.add_paragraph(f"Top candidate: {top_label}")
-    tbl = doc.add_table(rows=1,cols=2); hdr=tbl.rows[0].cells; hdr[0].text="Property"; hdr[1].text="Value"
-    for k,v in [("Band-gap",top.Eg), ("Stability",getattr(top,'stability','N/A')), ("Score",top.score)]: row=tbl.add_row(); row.cells[0].text=k; row.cells[1].text=str(v)
-    buf=io.BytesIO(); doc.save(buf); buf.seek(0)
-    st.download_button("📝 Download DOCX",buf,"EnerMat_report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    tbl = doc.add_table(rows=1, cols=2)
+    hdr_cells = tbl.rows[0].cells
+    hdr_cells[0].text = "Property"
+    hdr_cells[1].text = "Value"
+    rows = [("Band-gap", top.Eg), ("Score", top.score)]
+    if hasattr(top, 'stability'):
+        rows.insert(1, ("Stability", top.stability))
+    for k, v in rows:
+        row = tbl.add_row()
+        row.cells[0].text = k
+        row.cells[1].text = str(v)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    st.download_button(
+        "📝 Download DOCX", buf, "EnerMat_report.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
