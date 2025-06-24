@@ -138,6 +138,7 @@ def screen_ternary(
                 "x": round(x, 3),
                 "y": round(y, 3),
                 "Eg": round(Eg, 3),
+                "stability": round(stability, 3), 
                 "score": round(score, 3)
 })
 
