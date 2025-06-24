@@ -70,6 +70,22 @@ with st.sidebar:
     st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
     st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
 
+# ── Quick helper to build S-vs-RH curve for a fixed x ─────────────
+def humidity_curve(binary_A, binary_B, x_fixed, temp=25, bow=0.30):
+    rh_vals = list(range(0, 101, 10))
+    rows = []
+    for rh in rh_vals:
+        df = mix_abx3(
+            formula_A=binary_A, formula_B=binary_B,
+            rh=rh, temp=temp,
+            bg_window=(1.0, 1.4),
+            bowing=bow,
+            dx=0.002,
+        )
+        row = df.iloc[(df["x"] - x_fixed).abs().argsort().iloc[0]]
+        rows.append({"RH": rh, "S": row.score})
+    return pd.DataFrame(rows)
+
 # ─── Cached Screen Runner ─────────────────────────────────────────────────────
 @st.cache_data(show_spinner="⏳ Running screening…", max_entries=20)
 def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
