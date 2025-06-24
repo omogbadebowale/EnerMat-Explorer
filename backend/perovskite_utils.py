@@ -134,13 +134,7 @@ def screen_ternary(
             stability = np.exp(-max(Eh_val, 0) / 0.1)
             gap_score = score_band_gap(Eg, lo, hi)
             score = stability * gap_score
-            rows.append({
-            "x": round(x, 3),
-            "Eg": round(Eg, 3),
-            "stability": round(stability, 3),
-            "score": round(score, 3),
-            "formula": f"{formula_A}-{formula_B} x={x:.2f}",
-        })
+            rows.append({"x": round(x,3), "y": round(y,3), "Eg": round(Eg,3), "score": round(score,3)})
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
 # alias for backwards compatibility
