@@ -1,9 +1,14 @@
 """
-EnerMat backend — physics-faithful version
-✦ Fixes the ‘hse_gap’ API crash
-✦ Applies halide-weighted scissor to PBE gaps when HSE data are absent
-✦ Uses Boltzmann stability weight  exp(−E_hull / kT_eff)
-✦ Supports pair-specific bowing values via optional bowing.yaml
+EnerMat Perovskite Explorer — backend (stable 2025-06-25)
+
+Fixes & features
+────────────────
+✓ No hse_gap API crash: only guaranteed MP fields are requested.
+✓ Ground-state picker: selects entry with lowest energy_above_hull.
+✓ Gap correction: uses hse_gap when present, else halide-weighted scissor.
+✓ Physical stability: Boltzmann weight  exp(−E_hull/kT_eff).
+✓ Optional pair-specific bowing via backend/bowing.yaml.
+✓ Function signatures unchanged → Streamlit UI and cache stay valid.
 """
 
 from __future__ import annotations
@@ -19,17 +24,17 @@ from dotenv import load_dotenv
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ─── Streamlit secrets fallback (no Streamlit import elsewhere) ───────────────
+# Streamlit only for secrets fall-back (no UI import here)
 import streamlit as st
 
-# ─── API key ──────────────────────────────────────────────────────────────────
+# ─────────────────────────  API key  ─────────────────────────
 load_dotenv()
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
-if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑  Please set a valid 32-character Materials Project key")
-mpr = MPRester(API_KEY)
+_API = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
+if not _API or len(_API) != 32:
+    raise RuntimeError("🛑  Please set a valid 32-character Materials Project key.")
+mpr = MPRester(_API)
 
-# ─── End-member presets & ionic radii ─────────────────────────────────────────
+# ───────────────  presets & ionic radii  ─────────────────────
 END_MEMBERS: List[str] = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
 IONIC_RADII: Dict[str, float] = {
@@ -44,59 +49,57 @@ IONIC_RADII: Dict[str, float] = {
     "Cl": 1.81,
 }
 
-# ─── Constants ────────────────────────────────────────────────────────────────
+# ───────────────  constants & defaults  ─────────────────────
 SCISSOR = {"I": 0.60, "Br": 0.90, "Cl": 1.30}  # eV added to PBE gaps
-K_T_EFF = 0.06  # eV – effective synthesis temperature for Boltzmann weight
+K_T_EFF = 0.06  # eV   (≈700 K) for Boltzmann metastability
+DEFAULT_BOW = 0.30  # eV global fallback
 
-# ─── Bowing-parameter lookup via YAML (optional) ──────────────────────────────
+# ─────────────  optional bowing-table loader  ───────────────
 def _load_bowing(path: Path | str = Path(__file__).with_name("bowing.yaml")) -> Dict[str, float]:
     if Path(path).is_file():
         with open(path, "r", encoding="utf-8") as fh:
             return yaml.safe_load(fh) or {}
-    return {}  # no file → fall back on slider/default
+    return {}
 
 BOW_TABLE: Dict[str, float] = _load_bowing()
 
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-def _scissor_correction(formula: str) -> float:
-    """Return halide-weighted scissor value (eV) for a given formula."""
+# ────────────────────  helper functions  ────────────────────
+def _scissor(formula: str) -> float:
+    """Halide-weighted scissor correction (eV)."""
     comp = Composition(formula).get_el_amt_dict()
     return sum(comp.get(X, 0) * SCISSOR[X] for X in SCISSOR) / 3.0
 
 
-def _get_bow(key: str, default: float = 0.30) -> float:
-    """Lookup pair-specific bowing parameter; fall back to default."""
-    return float(BOW_TABLE.get(key, default))
+def _bow(pair_key: str, fallback: float = DEFAULT_BOW) -> float:
+    """Pair-specific bowing coefficient with graceful fallback."""
+    return float(BOW_TABLE.get(pair_key, fallback))
 
 
-# ─── Materials-Project fetch with gap correction ─────────────────────────────
+# ────────────────  Materials Project fetch  ─────────────────
 def fetch_mp_data(formula: str, fields: List[str]) -> Dict | None:
     """
-    Return requested fields for the lowest-E_hull entry.
-    Adds key 'Eg' (HSE gap if present, else scissor-corrected PBE gap).
+    Return requested fields for the *ground-state* polymorph plus
+    'Eg' (HSE gap if attribute exists, else scissor-corrected PBE).
     """
-    # only request fields that definitely exist
-    base_fields = set(fields) | {"band_gap", "energy_above_hull"}
-    docs = mpr.summary.search(formula=formula, fields=list(base_fields))
+    std_fields = set(fields) | {"band_gap", "energy_above_hull"}
+    docs = mpr.summary.search(formula=formula, fields=list(std_fields))
     if not docs:
         return None
 
-    entry = min(docs, key=lambda d: entry.energy_above_hull)  # ground state
+    entry = min(docs, key=lambda d: d.energy_above_hull)  # ✅ fixed
 
-    # Gap: prefer HSE if the snapshot provides it, else scissor-correct PBE
-    raw_gap = getattr(entry, "hse_gap", None)
-    if raw_gap is None:
-        raw_gap = entry.band_gap + _scissor_correction(formula)
+    # gap: use HSE if available in this snapshot, else PBE + scissor
+    Eg = getattr(entry, "hse_gap", None)
+    if Eg is None:
+        Eg = entry.band_gap + _scissor(formula)
 
-    out: Dict = {f: getattr(entry, f, None) for f in fields if hasattr(entry, f)}
-    out["Eg"] = raw_gap
+    out = {f: getattr(entry, f, None) for f in fields if hasattr(entry, f)}
+    out["Eg"] = Eg
     return out
 
 
-# ─── Optical-window scoring ──────────────────────────────────────────────────
 def score_band_gap(Eg: float, lo: float, hi: float) -> float:
-    """1.0 inside [lo,hi]; linear fall-off to 0 at 0.6 and 1.8 eV."""
+    """Score = 1.0 inside [lo,hi]; linear to zero at 0.6 and 1.8 eV."""
     if Eg < lo:
         return max(0.0, 1 - (lo - Eg) / (hi - lo))
     if Eg > hi:
@@ -104,14 +107,14 @@ def score_band_gap(Eg: float, lo: float, hi: float) -> float:
     return 1.0
 
 
-# ─── Binary screening ────────────────────────────────────────────────────────
+# ─────────────────────  binary screen  ──────────────────────
 def mix_abx3(
     formula_A: str,
     formula_B: str,
     rh: float,
     temp: float,
     bg_window: Tuple[float, float],
-    bowing: float = 0.30,
+    bowing: float = DEFAULT_BOW,
     dx: float = 0.05,
     alpha: float = 1.0,
     beta: float = 1.0,
@@ -129,8 +132,8 @@ def mix_abx3(
     rX = IONIC_RADII[X_site]
 
     rows: List[Dict] = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        b_eff = _get_bow("AB", bowing)
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        b_eff = _bow("AB", bowing)
 
         Eg = (1 - x) * dA["Eg"] + x * dB["Eg"] - b_eff * x * (1 - x)
         hull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
@@ -148,13 +151,13 @@ def mix_abx3(
         score = form_score * stability * gap_score / env_pen
 
         rows.append(
-            {
-                "x": round(x, 3),
-                "Eg": round(Eg, 3),
-                "stability": round(stability, 3),
-                "score": round(score, 3),
-                "formula": f"{formula_A}-{formula_B} x={x:.2f}",
-            }
+            dict(
+                x=round(x, 3),
+                Eg=round(Eg, 3),
+                stability=round(stability, 3),
+                score=round(score, 3),
+                formula=f"{formula_A}-{formula_B} x={x:.2f}",
+            )
         )
 
     return (
@@ -164,7 +167,7 @@ def mix_abx3(
     )
 
 
-# ─── Ternary screening ───────────────────────────────────────────────────────
+# ────────────────────  ternary screen  ──────────────────────
 def screen_ternary(
     A: str,
     B: str,
@@ -185,12 +188,12 @@ def screen_ternary(
 
     lo, hi = bg
     rows = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        for y in np.arange(0, 1 - x + 1e-6, dy):
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-6, dy):
             z = 1 - x - y
-            bAB = _get_bow("AB", bows.get("AB", 0.30))
-            bAC = _get_bow("AC", bows.get("AC", 0.30))
-            bBC = _get_bow("BC", bows.get("BC", 0.30))
+            bAB = _bow("AB", bows.get("AB", DEFAULT_BOW))
+            bAC = _bow("AC", bows.get("AC", DEFAULT_BOW))
+            bBC = _bow("BC", bows.get("BC", DEFAULT_BOW))
 
             Eg = (
                 z * dA["Eg"]
@@ -205,20 +208,13 @@ def screen_ternary(
                 + x * dB["energy_above_hull"]
                 + y * dC["energy_above_hull"]
             )
+
             stability = np.exp(-hull / K_T_EFF)
             gap_score = score_band_gap(Eg, lo, hi)
-
-            env_pen = 1 + (rh / 100) + (temp / 100)  # apply Γ uniformly
+            env_pen = 1 + (rh / 100) + (temp / 100)
             score = stability * gap_score / env_pen
 
-            rows.append(
-                {
-                    "x": round(x, 3),
-                    "y": round(y, 3),
-                    "Eg": round(Eg, 3),
-                    "score": round(score, 3),
-                }
-            )
+            rows.append(dict(x=round(x, 3), y=round(y, 3), Eg=round(Eg, 3), score=round(score, 3)))
 
     return (
         pd.DataFrame(rows)
@@ -227,5 +223,5 @@ def screen_ternary(
     )
 
 
-# Backwards-compatibility alias
+# ─────────────  alias for old import style  ────────────────
 _summary = fetch_mp_data
