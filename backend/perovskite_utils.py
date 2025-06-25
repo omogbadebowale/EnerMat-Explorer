@@ -1,14 +1,11 @@
 """
-EnerMat Perovskite Explorer — backend (stable 2025-06-25)
+EnerMat Perovskite Explorer · backend  (stable 2025-06-25)
 
-Fixes & features
-────────────────
-✓ No hse_gap API crash: only guaranteed MP fields are requested.
-✓ Ground-state picker: selects entry with lowest energy_above_hull.
-✓ Gap correction: uses hse_gap when present, else halide-weighted scissor.
-✓ Physical stability: Boltzmann weight  exp(−E_hull/kT_eff).
-✓ Optional pair-specific bowing via backend/bowing.yaml.
-✓ Function signatures unchanged → Streamlit UI and cache stay valid.
+• Ground-state selector (lowest energy_above_hull)
+• Gap = hse_gap if present, else PBE + halide-weighted scissor
+• Boltzmann metastability: exp(−E_hull / kT_eff)
+• Optional pair-specific bowing via backend/bowing.yaml
+• Ternary rows now include stability + formula (no blank cells)
 """
 
 from __future__ import annotations
@@ -23,18 +20,16 @@ import yaml
 from dotenv import load_dotenv
 from mp_api.client import MPRester
 from pymatgen.core import Composition
+import streamlit as st  # only to fetch the key from st.secrets on Cloud
 
-# Streamlit only for secrets fall-back (no UI import here)
-import streamlit as st
-
-# ─────────────────────────  API key  ─────────────────────────
+# ────────────────────────────── API key ──────────────────────────────────────
 load_dotenv()
 _API = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not _API or len(_API) != 32:
-    raise RuntimeError("🛑  Please set a valid 32-character Materials Project key.")
+    raise RuntimeError("🛑  Please set a valid 32-character Materials-Project key.")
 mpr = MPRester(_API)
 
-# ───────────────  presets & ionic radii  ─────────────────────
+# ─────────────────── presets & ionic radii ───────────────────────────────────
 END_MEMBERS: List[str] = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
 IONIC_RADII: Dict[str, float] = {
@@ -49,12 +44,11 @@ IONIC_RADII: Dict[str, float] = {
     "Cl": 1.81,
 }
 
-# ───────────────  constants & defaults  ─────────────────────
-SCISSOR = {"I": 0.60, "Br": 0.90, "Cl": 1.30}  # eV added to PBE gaps
-K_T_EFF = 0.06  # eV   (≈700 K) for Boltzmann metastability
-DEFAULT_BOW = 0.30  # eV global fallback
+SCISSOR = {"I": 0.60, "Br": 0.90, "Cl": 1.30}    # eV added to PBE gaps
+K_T_EFF = 0.06                                    # eV  (≈700 K)
+DEFAULT_BOW = 0.30                                # eV
 
-# ─────────────  optional bowing-table loader  ───────────────
+# ─────────────────── optional bowing-table loader ────────────────────────────
 def _load_bowing(path: Path | str = Path(__file__).with_name("bowing.yaml")) -> Dict[str, float]:
     if Path(path).is_file():
         with open(path, "r", encoding="utf-8") as fh:
@@ -63,32 +57,22 @@ def _load_bowing(path: Path | str = Path(__file__).with_name("bowing.yaml")) -> 
 
 BOW_TABLE: Dict[str, float] = _load_bowing()
 
-# ────────────────────  helper functions  ────────────────────
+# ───────────────────────── helper functions ──────────────────────────────────
 def _scissor(formula: str) -> float:
-    """Halide-weighted scissor correction (eV)."""
     comp = Composition(formula).get_el_amt_dict()
     return sum(comp.get(X, 0) * SCISSOR[X] for X in SCISSOR) / 3.0
 
-
 def _bow(pair_key: str, fallback: float = DEFAULT_BOW) -> float:
-    """Pair-specific bowing coefficient with graceful fallback."""
     return float(BOW_TABLE.get(pair_key, fallback))
 
-
-# ────────────────  Materials Project fetch  ─────────────────
+# ────────────────── Materials-Project pull with corrections ──────────────────
 def fetch_mp_data(formula: str, fields: List[str]) -> Dict | None:
-    """
-    Return requested fields for the *ground-state* polymorph plus
-    'Eg' (HSE gap if attribute exists, else scissor-corrected PBE).
-    """
-    std_fields = set(fields) | {"band_gap", "energy_above_hull"}
-    docs = mpr.summary.search(formula=formula, fields=list(std_fields))
+    extra = {"band_gap", "energy_above_hull"}        # guaranteed fields
+    docs = mpr.summary.search(formula=formula, fields=list(set(fields) | extra))
     if not docs:
         return None
+    entry = min(docs, key=lambda d: d.energy_above_hull)            # ✅ lowest-hull
 
-    entry = min(docs, key=lambda d: d.energy_above_hull)  # ✅ fixed
-
-    # gap: use HSE if available in this snapshot, else PBE + scissor
     Eg = getattr(entry, "hse_gap", None)
     if Eg is None:
         Eg = entry.band_gap + _scissor(formula)
@@ -97,17 +81,14 @@ def fetch_mp_data(formula: str, fields: List[str]) -> Dict | None:
     out["Eg"] = Eg
     return out
 
-
 def score_band_gap(Eg: float, lo: float, hi: float) -> float:
-    """Score = 1.0 inside [lo,hi]; linear to zero at 0.6 and 1.8 eV."""
     if Eg < lo:
         return max(0.0, 1 - (lo - Eg) / (hi - lo))
     if Eg > hi:
         return max(0.0, 1 - (Eg - hi) / (hi - lo))
     return 1.0
 
-
-# ─────────────────────  binary screen  ──────────────────────
+# ───────────────────────────── binary screen ─────────────────────────────────
 def mix_abx3(
     formula_A: str,
     formula_B: str,
@@ -131,10 +112,9 @@ def mix_abx3(
     rB = IONIC_RADII[next(e.symbol for e in compA.elements if e.symbol in {"Pb", "Sn"})]
     rX = IONIC_RADII[X_site]
 
-    rows: List[Dict] = []
+    rows = []
     for x in np.arange(0.0, 1.0 + 1e-6, dx):
         b_eff = _bow("AB", bowing)
-
         Eg = (1 - x) * dA["Eg"] + x * dB["Eg"] - b_eff * x * (1 - x)
         hull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
 
@@ -166,8 +146,7 @@ def mix_abx3(
         .reset_index(drop=True)
     )
 
-
-# ────────────────────  ternary screen  ──────────────────────
+# ───────────────────────────── ternary screen ────────────────────────────────
 def screen_ternary(
     A: str,
     B: str,
@@ -214,7 +193,16 @@ def screen_ternary(
             env_pen = 1 + (rh / 100) + (temp / 100)
             score = stability * gap_score / env_pen
 
-            rows.append(dict(x=round(x, 3), y=round(y, 3), Eg=round(Eg, 3), score=round(score, 3)))
+            rows.append(
+                dict(
+                    x=round(x, 3),
+                    y=round(y, 3),
+                    Eg=round(Eg, 3),
+                    stability=round(stability, 3),      # ← ensures no blank
+                    score=round(score, 3),
+                    formula=f"{A}-{B}-{C} x={x:.2f} y={y:.2f}",
+                )
+            )
 
     return (
         pd.DataFrame(rows)
@@ -222,6 +210,5 @@ def screen_ternary(
         .reset_index(drop=True)
     )
 
-
-# ─────────────  alias for old import style  ────────────────
+# legacy alias
 _summary = fetch_mp_data
