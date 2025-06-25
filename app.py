@@ -117,7 +117,7 @@ with tab_plot:
     if mode=="Binary A–B":
         fig = px.scatter(df,x="stability",y="Eg",color="score",
                          color_continuous_scale="Turbo",
-                         hover_data=["formula","x","Eg","stability","gap_score","score"],
+                         required = ["stability", "Eg", "score"]  # gap_score is NOT plotted
                          height=750)
         fig.update_traces(marker=dict(size=12,line=dict(width=1,color="black")))
         st.plotly_chart(fig,use_container_width=True)
