@@ -1,6 +1,13 @@
-# ──────────────────────────────────────────────────────────────────────────────
-#  backend/perovskite_utils.py   (patched 2025-06-25)
-# ──────────────────────────────────────────────────────────────────────────────
+"""
+EnerMat backend — physics-faithful version
+✦ Fixes the ‘hse_gap’ API crash
+✦ Applies halide-weighted scissor to PBE gaps when HSE data are absent
+✦ Uses Boltzmann stability weight  exp(−E_hull / kT_eff)
+✦ Supports pair-specific bowing values via optional bowing.yaml
+"""
+
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -12,15 +19,14 @@ from dotenv import load_dotenv
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ─── API key ──────────────────────────────────────────────────────────────────
-load_dotenv()
+# ─── Streamlit secrets fallback (no Streamlit import elsewhere) ───────────────
 import streamlit as st
 
+# ─── API key ──────────────────────────────────────────────────────────────────
+load_dotenv()
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError(
-        "🛑 Please set MP_API_KEY to your 32-character Materials Project key."
-    )
+    raise RuntimeError("🛑  Please set a valid 32-character Materials Project key")
 mpr = MPRester(API_KEY)
 
 # ─── End-member presets & ionic radii ─────────────────────────────────────────
@@ -38,58 +44,59 @@ IONIC_RADII: Dict[str, float] = {
     "Cl": 1.81,
 }
 
-# ─── Constants for quick “scissor” correction of PBE gaps (eV) ────────────────
-SCISSOR = {"I": 0.60, "Br": 0.90, "Cl": 1.30}  # add to PBE gap
+# ─── Constants ────────────────────────────────────────────────────────────────
+SCISSOR = {"I": 0.60, "Br": 0.90, "Cl": 1.30}  # eV added to PBE gaps
+K_T_EFF = 0.06  # eV – effective synthesis temperature for Boltzmann weight
 
-# ─── Boltzmann metastability parameter (effective synthesis temperature) ─────
-K_T_EFF = 0.06  # eV  (≈ 700 K)
-
-# ─── Optional pair-specific bowing table  (backend/bowing.yaml)  --------------
+# ─── Bowing-parameter lookup via YAML (optional) ──────────────────────────────
 def _load_bowing(path: Path | str = Path(__file__).with_name("bowing.yaml")) -> Dict[str, float]:
-    if not Path(path).is_file():
-        return {}  # fall back on default 0.30 eV everywhere
-    with open(path, "r", encoding="utf-8") as fh:
-        return yaml.safe_load(fh) or {}
+    if Path(path).is_file():
+        with open(path, "r", encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+    return {}  # no file → fall back on slider/default
 
 BOW_TABLE: Dict[str, float] = _load_bowing()
 
 
-# ─── Helper: fetch lowest-energy MP entry & corrected gap ─────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+def _scissor_correction(formula: str) -> float:
+    """Return halide-weighted scissor value (eV) for a given formula."""
+    comp = Composition(formula).get_el_amt_dict()
+    return sum(comp.get(X, 0) * SCISSOR[X] for X in SCISSOR) / 3.0
+
+
+def _get_bow(key: str, default: float = 0.30) -> float:
+    """Lookup pair-specific bowing parameter; fall back to default."""
+    return float(BOW_TABLE.get(key, default))
+
+
+# ─── Materials-Project fetch with gap correction ─────────────────────────────
 def fetch_mp_data(formula: str, fields: List[str]) -> Dict | None:
     """
-    Return a dict of requested fields **for the lowest E_hull entry**.
-    Adds 'Eg' (gap with HSE or scissor-corrected PBE) automatically.
+    Return requested fields for the lowest-E_hull entry.
+    Adds key 'Eg' (HSE gap if present, else scissor-corrected PBE gap).
     """
-    docs = mpr.summary.search(
-        formula=formula,
-        fields=list(set(fields) | {"band_gap", "hse_gap", "energy_above_hull"}),
-    )
+    # only request fields that definitely exist
+    base_fields = set(fields) | {"band_gap", "energy_above_hull"}
+    docs = mpr.summary.search(formula=formula, fields=list(base_fields))
     if not docs:
         return None
 
-    entry = min(docs, key=lambda d: d.energy_above_hull)  # ground state
-    raw_gap = getattr(entry, "hse_gap", None)  # may be None
-    if raw_gap is None:
-        raw_gap = entry.band_gap
-        # apply halide-weighted scissor
-        comp = Composition(formula).get_el_amt_dict()
-        delta = sum(comp.get(X, 0) * SCISSOR[X] for X in SCISSOR) / 3.0
-        raw_gap += delta
+    entry = min(docs, key=lambda d: entry.energy_above_hull)  # ground state
 
-    out = {f: getattr(entry, f) for f in fields if hasattr(entry, f)}
+    # Gap: prefer HSE if the snapshot provides it, else scissor-correct PBE
+    raw_gap = getattr(entry, "hse_gap", None)
+    if raw_gap is None:
+        raw_gap = entry.band_gap + _scissor_correction(formula)
+
+    out: Dict = {f: getattr(entry, f, None) for f in fields if hasattr(entry, f)}
     out["Eg"] = raw_gap
     return out
 
 
-# ─── Helper: pair-specific bowing lookup ──────────────────────────────────────
-def _get_bow(key: str, default: float = 0.30) -> float:
-    """Return bowing parameter for a given pair key ('AB', 'AC', 'BC')."""
-    return float(BOW_TABLE.get(key, default))
-
-
-# ─── Gap-window scoring function ──────────────────────────────────────────────
+# ─── Optical-window scoring ──────────────────────────────────────────────────
 def score_band_gap(Eg: float, lo: float, hi: float) -> float:
-    """Return 1.0 inside [lo, hi], tapering linearly to 0 at 0.6 or 1.8 eV."""
+    """1.0 inside [lo,hi]; linear fall-off to 0 at 0.6 and 1.8 eV."""
     if Eg < lo:
         return max(0.0, 1 - (lo - Eg) / (hi - lo))
     if Eg > hi:
@@ -115,21 +122,20 @@ def mix_abx3(
     if not dA or not dB:
         return pd.DataFrame()
 
-    compA, compB = Composition(formula_A), Composition(formula_B)
+    compA = Composition(formula_A)
     X_site = next(e.symbol for e in compA.elements if e.symbol in SCISSOR)
     rA = IONIC_RADII[next(e.symbol for e in compA.elements if e.symbol in IONIC_RADII)]
     rB = IONIC_RADII[next(e.symbol for e in compA.elements if e.symbol in {"Pb", "Sn"})]
     rX = IONIC_RADII[X_site]
 
-    rows = []
+    rows: List[Dict] = []
     for x in np.arange(0, 1 + 1e-6, dx):
-        # bowing for this specific pair overrides slider if present in YAML
         b_eff = _get_bow("AB", bowing)
 
         Eg = (1 - x) * dA["Eg"] + x * dB["Eg"] - b_eff * x * (1 - x)
         hull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
 
-        stability = np.exp(-hull / K_T_EFF)  # 0–1 Boltzmann weight
+        stability = np.exp(-hull / K_T_EFF)
         gap_score = score_band_gap(Eg, lo, hi)
 
         t = (rA + rX) / (np.sqrt(2) * (rB + rX))
@@ -150,8 +156,11 @@ def mix_abx3(
                 "formula": f"{formula_A}-{formula_B} x={x:.2f}",
             }
         )
+
     return (
-        pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
     )
 
 
@@ -199,7 +208,7 @@ def screen_ternary(
             stability = np.exp(-hull / K_T_EFF)
             gap_score = score_band_gap(Eg, lo, hi)
 
-            env_pen = 1 + (rh / 100) + (temp / 100)  # same Γ for ternary
+            env_pen = 1 + (rh / 100) + (temp / 100)  # apply Γ uniformly
             score = stability * gap_score / env_pen
 
             rows.append(
@@ -212,9 +221,11 @@ def screen_ternary(
             )
 
     return (
-        pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
     )
 
 
-# alias for backwards compatibility
+# Backwards-compatibility alias
 _summary = fetch_mp_data
