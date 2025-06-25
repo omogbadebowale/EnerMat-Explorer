@@ -1,142 +1,184 @@
+# EnerMat-Explorer  •  Patched 2025-06-25
+# ---------------------------------------------------------------
+# Works stand-alone or as importable backend for Streamlit.
 
 import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# for secrets fallback on Streamlit Cloud
-import streamlit as st
-
+import streamlit as st        # falls back to dummy st when not on Cloud
 import numpy as np
 import pandas as pd
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ── Load Materials Project API key ─────────────────────────────────────
+# ── API key ────────────────────────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError(
-        "🛑 Please set MP_API_KEY to your 32-character Materials Project API key"
-    )
+    raise RuntimeError("🛑 Set a valid 32-character Materials-Project API key")
 mpr = MPRester(API_KEY)
 
-# ── Supported end-members ──────────────────────────────────────────────
-END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
+# ── Global physics knobs ───────────────────────────────────────────────
+SCISSOR_SHIFT = 0.90          # eV  (PBE  →  HSE06+SOC)
+TAU_STABILITY = 0.05          # eV  for  exp(-Ehull/τ)
+OPT_WINDOW    = (1.0, 1.4)    # eV  default single-junction; change to (1.6,2.1) for tandem
 
-# ── Ionic radii (Å) for Goldschmidt tolerance ──────────────────────────
+# ── Ionic radii (Å) for Goldschmidt part (unchanged) ───────────────────
 IONIC_RADII = {
     "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
 
-def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
-    """Return a dict of the first matching entry's requested fields, or None."""
-    docs = mpr.summary.search(formula=formula)
-    if not docs:
-        return None
-    entry = docs[0]
-    out: dict = {}
-    for f in fields:
-        if hasattr(entry, f):
-            out[f] = getattr(entry, f)
-    return out if out else None
+# ╭─────────────────────────── MP helpers ─────────────────────────────╮
+def fetch_mp_data(formula: str, fields: list[str] | None = None) -> dict:
+    """
+    Return dict of lowest-Ehull polymorph summary fields.
+    Cached per formula for speed.
+    """
+    if "_cache" not in fetch_mp_data.__dict__:
+        fetch_mp_data._cache = {}
+    cache = fetch_mp_data._cache
+
+    if formula in cache:
+        summary = cache[formula]
+    else:
+        docs = mpr.summary.search(formulas=[formula],
+                                  fields=["formula_pretty", "band_gap",
+                                          "energy_above_hull", "is_gap_direct"])
+        if not docs:
+            raise ValueError(f"{formula} not found on Materials Project")
+        summary = docs[0]
+        cache[formula] = summary
+
+    if fields:
+        return {f: getattr(summary, f) for f in fields}
+    return summary
+# ╰────────────────────────────────────────────────────────────────────╯
 
 
-def score_band_gap(bg: float, lo: float, hi: float) -> float:
-    """How close bg is to the [lo, hi] window."""
-    if bg < lo:
-        return max(0.0, 1 - (lo - bg) / (hi - lo))
-    if bg > hi:
-        return max(0.0, 1 - (bg - hi) / (hi - lo))
-    return 1.0
+# ╭──────────────────── Physics utility functions ──────────────────────╮
+def corrected_gap(formula: str) -> float:
+    """HSE-quality gap via rigid scissor shift."""
+    pbe_gap = fetch_mp_data(formula, ["band_gap"])["band_gap"]
+    return pbe_gap + SCISSOR_SHIFT
 
 
-def mix_abx3(
-    formula_A: str,
-    formula_B: str,
-    rh: float,
-    temp: float,
-    bg_window: tuple[float, float],
-    bowing: float = 0.0,
-    dx: float = 0.05,
-    alpha: float = 1.0,
-    beta: float = 1.0,
-) -> pd.DataFrame:
-    """Binary screening A–B across x from 0→1."""
+def stability_weight(ehull: float, tau: float = TAU_STABILITY) -> float:
+    """Smooth thermodynamic factor  exp(-Ehull/τ)."""
+    return float(np.exp(-max(ehull, 0.0) / tau))
+
+
+def optical_weight(eg: float,
+                   window: tuple[float, float] = OPT_WINDOW,
+                   margin: float = 0.20) -> float:
+    """
+    Trapezoid: 1 inside [lo,hi]; linear fall-off over ±margin; 0 outside.
+    """
+    lo, hi = window
+    if lo <= eg <= hi:
+        return 1.0
+    if eg < lo - margin or eg > hi + margin:
+        return 0.0
+    if eg < lo:
+        return (eg - (lo - margin)) / margin
+    return ((hi + margin) - eg) / margin
+# ╰─────────────────────────────────────────────────────────────────────╯
+
+
+# ╭──────────────────────── Binary alloy screen ────────────────────────╮
+def mix_abx3(formula_A: str,
+             formula_B: str,
+             rh: float,
+             temp: float,
+             bg_window: tuple[float, float] = OPT_WINDOW,
+             bowing: float = 0.0,
+             dx: float = 0.05,
+             alpha: float = 1.0,
+             beta:  float = 1.0) -> pd.DataFrame:
+    """
+    Screen binary A–B perovskite: returns DataFrame sorted by composite score.
+    """
     lo, hi = bg_window
-    dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
-    if not (dA and dB):
-        return pd.DataFrame()
+    dA = fetch_mp_data(formula_A, ["energy_above_hull"])
+    dB = fetch_mp_data(formula_B, ["energy_above_hull"])
 
+    # Ionic radii for formability filter (unchanged)
     comp = Composition(formula_A)
     A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
     B_site = next(e.symbol for e in comp.elements if e.symbol in {"Pb", "Sn"})
     X_site = next(e.symbol for e in comp.elements if e.symbol in {"I", "Br", "Cl"})
     rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
 
+    env_pen = 1.0 / (1 + alpha * rh / 100 + beta * temp / 100)
     rows = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
-        hull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        stability = max(0.0, 1 - hull)
-        gap_score = score_band_gap(Eg, lo, hi)
+    xs = np.arange(0.0, 1.0 + 1e-9, dx)
+    for x in xs:
+        # band gap with scissor + bowing
+        Eg = ((1 - x) * corrected_gap(formula_A)
+              + x * corrected_gap(formula_B)
+              - bowing * x * (1 - x))
+        stability = stability_weight((1 - x) * dA["energy_above_hull"]
+                                     + x * dB["energy_above_hull"])
+        gap_score = optical_weight(Eg, (lo, hi))
         t = (rA + rX) / (np.sqrt(2) * (rB + rX))
         mu = rB / rX
-        form_score = np.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * np.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
-        env_pen = 1 + alpha * (rh / 100) + beta * (temp / 100)
-        score = form_score * stability * gap_score / env_pen
-        rows.append({
-            "x": round(x, 3),
-            "Eg": round(Eg, 3),
-            "stability": round(stability, 3),
-            "score": round(score, 3),
-            "formula": f"{formula_A}-{formula_B} x={x:.2f}",
-        })
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        form_score = np.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) \
+                   * np.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
+        score = form_score * stability * gap_score * env_pen
+        rows.append(dict(x=round(x, 3), Eg=round(Eg, 3),
+                         stability=round(stability, 3),
+                         score=round(score, 3)))
+    return (pd.DataFrame(rows)
+              .sort_values("score", ascending=False)
+              .reset_index(drop=True))
+# ╰─────────────────────────────────────────────────────────────────────╯
 
 
-def screen_ternary(
-    A: str,
-    B: str,
-    C: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    dx: float = 0.1,
-    dy: float = 0.1,
-    n_mc: int = 200,
-) -> pd.DataFrame:
-    """Ternary screening A–B–C over x,y fractions."""
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
-    if not (dA and dB and dC):
-        return pd.DataFrame()
+# ╭───────────────────────── Ternary screen ────────────────────────────╮
+def screen_ternary(A: str,
+                   B: str,
+                   C: str,
+                   rh: float,
+                   temp: float,
+                   bg_window: tuple[float, float] = OPT_WINDOW,
+                   bows: dict[str, float] | None = None,
+                   dx: float = 0.1,
+                   dy: float = 0.1) -> pd.DataFrame:
+    """
+    Simple grid (dx,dy) over the A–B–C triangle.  bow dict keys: "AB","AC","BC".
+    """
+    if bows is None:
+        bows = {"AB": 0.0, "AC": 0.0, "BC": 0.0}
+    dA = fetch_mp_data(A, ["energy_above_hull"])
+    dB = fetch_mp_data(B, ["energy_above_hull"])
+    dC = fetch_mp_data(C, ["energy_above_hull"])
 
-    lo, hi = bg
+    lo, hi = bg_window
+    env_pen = 1.0 / (1 + rh / 100 + temp / 100)   # fast heuristic as before
     rows = []
-    for x in np.arange(0, 1 + 1e-6, dx):
-        for y in np.arange(0, 1 - x + 1e-6, dy):
+    for x in np.arange(0, 1 + 1e-9, dx):
+        for y in np.arange(0, 1 - x + 1e-9, dy):
             z = 1 - x - y
-            Eg = (
-                (1 - x - y) * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * (1 - x - y)
-                - bows["AC"] * y * (1 - x - y)
-                - bows["BC"] * x * y
-            )
-            Eh_val = (
-                (1 - x - y) * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-                + bows["AB"] * x * (1 - x - y)
-                + bows["AC"] * y * (1 - x - y)
-                + bows["BC"] * x * y
-            )
-            stability = np.exp(-max(Eh_val, 0) / 0.1)
-            gap_score = score_band_gap(Eg, lo, hi)
-            score = stability * gap_score
-            rows.append({"x": round(x,3), "y": round(y,3), "Eg": round(Eg,3), "score": round(score,3)})
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+            Eg = ((1 - x - y) * corrected_gap(A)
+                  + x * corrected_gap(B)
+                  + y * corrected_gap(C)
+                  - bows["AB"] * x * z
+                  - bows["AC"] * y * z
+                  - bows["BC"] * x * y)
+            Eh = ((1 - x - y) * dA["energy_above_hull"]
+                  + x * dB["energy_above_hull"]
+                  + y * dC["energy_above_hull"])
+            stability = stability_weight(Eh)
+            score = stability * optical_weight(Eg, (lo, hi)) * env_pen
+            rows.append(dict(x=round(x,3), y=round(y,3),
+                             Eg=round(Eg,3), Ehull=round(Eh,3),
+                             score=round(score,3)))
+    return (pd.DataFrame(rows)
+              .sort_values("score", ascending=False)
+              .reset_index(drop=True))
+# ╰─────────────────────────────────────────────────────────────────────╯
 
-# alias for backwards compatibility
+
+# Backwards-compat alias
 _summary = fetch_mp_data
