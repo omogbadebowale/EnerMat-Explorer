@@ -140,3 +140,36 @@ def screen_ternary(
 
 # alias for backwards compatibility
 _summary = fetch_mp_data
+def enhanced_stability_score(row, rh, temp, formula):
+    # Basic stability from energy above hull
+    ehull_score = 1 - row.get("stability", 0.1)
+
+    # Material-specific degradation index (example values)
+    formula = formula.lower()
+    msi_lookup = {
+        "masni3": 0.6,
+        "cssnbr3": 0.9,
+        "fasncl3": 0.8,
+    }
+    msi = msi_lookup.get(formula, 0.75)
+
+    # Environmental penalty from RH and T
+    rh_frac = rh / 100
+    env_penalty = pow(2.718, 0.05 * rh_frac + 0.01 * temp)  # Adjustable model
+    env_score = 1 / env_penalty
+
+    # Chemical degradation factors (simplified)
+    halide_penalty = 0.95 if "cl" in formula else 0.85 if "br" in formula else 0.75
+    cation_penalty = 0.65 if "ma" in formula else 0.8 if "fa" in formula else 0.95
+
+    chem_score = halide_penalty * cation_penalty
+
+    # Photo-stability estimate (Sn²⁺ is less stable)
+    photo_penalty = 0.85 if "sn" in formula else 0.95
+
+    # Composite score
+    stability = (
+        ehull_score * msi * env_score * chem_score * photo_penalty
+    )
+
+    return round(stability, 3)
