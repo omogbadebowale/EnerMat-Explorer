@@ -16,12 +16,7 @@ if not API_KEY or len(API_KEY) != 32:
     st.stop()
 
 # ─── Backend Imports ──────────────────────────────────────────────────────────
-from backend.perovskite_utils import (
-    mix_abx3 as screen,
-    screen_ternary,
-    END_MEMBERS,
-    fetch_mp_data as _summary,
-)
+from backend.perovskite_utils import mix_abx3, screen_ternary, END_MEMBERS, fetch_mp_data as _summary
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
@@ -73,7 +68,7 @@ with st.sidebar:
 # ─── Cached Screen Runner ─────────────────────────────────────────────────────
 @st.cache_data(show_spinner="⏳ Running screening…", max_entries=20)
 def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
-    return screen(
+    return mix_abx3(
         formula_A=formula_A,
         formula_B=formula_B,
         rh=rh,
