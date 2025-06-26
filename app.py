@@ -141,7 +141,6 @@ csv = df.to_csv(index=False, columns=[
     c for c in ["x", "y", "Eg", "stability", "gap_score", "score"]
     if c in df.columns
 ]).encode()
-)
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
             st.stop()
