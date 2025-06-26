@@ -2,6 +2,7 @@ import io
 import os
 import datetime
 from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,7 +12,7 @@ from docx import Document
 # ─── Load API Key ─────────────────────────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    st.error("🚩 Please set a valid 32-character MP_API_KEY in Streamlit Secrets.")
+    st.error("🛑 Please set a valid 32-character MP_API_KEY in Streamlit Secrets.")
     st.stop()
 
 # ─── Backend Imports ──────────────────────────────────────────────────────────
@@ -126,19 +127,8 @@ elif do_run:
                 rh=rh, temp=temp,
                 bg=(bg_lo, bg_hi),
                 bows={"AB": bow, "AC": bow, "BC": bow},
-                dx=dx, dy=dy
+                dx=dx, dy=dy, n_mc=200
             )
-
-            df = df.rename(columns={
-                "energy_above_hull": "stability",
-                "band_gap": "Eg"
-            })
-
-            csv = df.to_csv(index=False, columns=[
-                c for c in ["x", "y", "Eg", "stability", "gap_score", "score"]
-                if c in df.columns
-            ]).encode()
-
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
             st.stop()
@@ -172,7 +162,6 @@ elif st.session_state.history:
 else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
-
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
 tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
@@ -311,7 +300,7 @@ with tab_plot:
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
-    csv = df.to_csv(index=False, columns=[c for c in ["x", "y", "Eg", "stability", "gap_score", "score"] if c in df.columns]).encode()
+    csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
     top = df.iloc[0]
