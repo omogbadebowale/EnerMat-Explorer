@@ -12,7 +12,7 @@ from docx import Document
 # ─── Load API Key ─────────────────────────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    st.error("🛑 Please set a valid 32-character MP_API_KEY in Streamlit Secrets.")
+    st.error("🚩 Please set a valid 32-character MP_API_KEY in Streamlit Secrets.")
     st.stop()
 
 # ─── Backend Imports ──────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ elif do_run:
             rh=rh, temp=temp,
             bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
         )
-       else:
+    else:
         try:
             df = screen_ternary(
                 A=A, B=B, C=C,
@@ -130,13 +130,11 @@ elif do_run:
                 dx=dx, dy=dy
             )
 
-            # ✅ Ensure stability column is computed and retained
             df = df.rename(columns={
                 "energy_above_hull": "stability",
                 "band_gap": "Eg"
             })
 
-            # ✅ Save ternary CSV with expected fields (handles both binary and ternary)
             csv = df.to_csv(index=False, columns=[
                 c for c in ["x", "y", "Eg", "stability", "gap_score", "score"]
                 if c in df.columns
@@ -175,6 +173,7 @@ elif st.session_state.history:
 else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
+
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
 tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
