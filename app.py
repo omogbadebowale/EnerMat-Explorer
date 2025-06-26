@@ -120,27 +120,28 @@ elif do_run:
             rh=rh, temp=temp,
             bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
         )
-    else:
-        try
+       else:
+        try:
             df = screen_ternary(
-    A=A, B=B, C=C,
-    rh=rh, temp=temp,
-    bg=(bg_lo, bg_hi),
-    bows={"AB": bow, "AC": bow, "BC": bow},
-    dx=dx, dy=dy
-)
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
+                bg=(bg_lo, bg_hi),
+                bows={"AB": bow, "AC": bow, "BC": bow},
+                dx=dx, dy=dy
+            )
 
-# ✅ Ensure stability column is computed and retained
-df = df.rename(columns={
-    "energy_above_hull": "stability",
-    "band_gap": "Eg"
-})
+            # ✅ Ensure stability column is computed and retained
+            df = df.rename(columns={
+                "energy_above_hull": "stability",
+                "band_gap": "Eg"
+            })
 
-# ✅ Save ternary CSV with expected fields (handles both binary and ternary)
-csv = df.to_csv(index=False, columns=[
-    c for c in ["x", "y", "Eg", "stability", "gap_score", "score"]
-    if c in df.columns
-]).encode()
+            # ✅ Save ternary CSV with expected fields (handles both binary and ternary)
+            csv = df.to_csv(index=False, columns=[
+                c for c in ["x", "y", "Eg", "stability", "gap_score", "score"]
+                if c in df.columns
+            ]).encode()
+
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
             st.stop()
