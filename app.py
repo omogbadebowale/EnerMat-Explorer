@@ -300,7 +300,7 @@ with tab_plot:
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
-    csv = df.to_csv(index=False).encode()
+    csv = df.to_csv(index=False, columns=[c for c in ["x", "y", "Eg", "stability", "gap_score", "score"] if c in df.columns]).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
     top = df.iloc[0]
