@@ -1,4 +1,3 @@
-
 import io
 import os
 import datetime
@@ -100,6 +99,7 @@ if do_back:
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
     st.success("Showing previous result")
+
 elif do_run:
     try:
         docA = _summary(A, ["band_gap", "energy_above_hull"])
@@ -133,13 +133,11 @@ elif do_run:
             st.error(f"❌ Ternary error: {e}")
             st.stop()
 
-    # Normalize for plotting
     df = df.rename(columns={
         "energy_above_hull": "stability",
         "band_gap": "Eg"
     })
 
-    # Store state
     entry = {
         "mode": mode,
         "A": A, "B": B, "rh": rh, "temp": temp,
@@ -150,6 +148,7 @@ elif do_run:
         entry["C"] = C
         entry["dy"] = dy
     st.session_state.history.append(entry)
+
 elif st.session_state.history:
     prev = st.session_state.history[-1]
     mode = prev["mode"]
@@ -159,6 +158,7 @@ elif st.session_state.history:
     if mode == "Ternary A–B–C":
         C, dy = prev["C"], prev["dy"]
     df = prev["df"]
+
 else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
@@ -192,52 +192,111 @@ with tab_plot:
             st.stop()
         plot_df = df.dropna(subset=required).copy()
 
-        # Highlight top
-        top_cut = plot_df["score"].quantile(0.80)
-        plot_df["is_top"] = plot_df["score"] >= top_cut
+        # Build a high-quality scatter
+        fig = px.scatter(
+            plot_df,
+            x="stability",
+            y="Eg",
+            color="score",
+            color_continuous_scale="Turbo",
+            hover_data=["formula", "x", "Eg", "stability", "score"],
+            width=1200,
+            height=800
+        )
 
-        try:
-            fig = px.scatter(
-                plot_df,
-                x="stability", y="Eg",
-                color="score", color_continuous_scale="plasma",
-                hover_data=["formula", "x", "Eg", "stability", "score"]
+        fig.update_traces(
+            marker=dict(
+                size=12,
+                opacity=0.9,
+                line=dict(width=1, color="black")
             )
-            fig.update_traces(marker=dict(size=14, line_width=1), opacity=0.85)
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_df.loc[plot_df["is_top"], "stability"],
-                    y=plot_df.loc[plot_df["is_top"], "Eg"],
-                    mode="markers",
-                    marker=dict(size=22, color="rgba(0,0,0,0)",
-                                line=dict(width=2, color="black")),
-                    hoverinfo="skip", showlegend=False
-                )
+        )
+
+        # Highlight top 20%
+        top_cut = plot_df["score"].quantile(0.80)
+        top_mask = plot_df["score"] >= top_cut
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df.loc[top_mask, "stability"],
+                y=plot_df.loc[top_mask, "Eg"],
+                mode="markers",
+                marker=dict(
+                    size=20,
+                    symbol="circle-open",
+                    line=dict(width=2, color="black")
+                ),
+                hoverinfo="skip",
+                showlegend=False
             )
-            fig.update_layout(template="simple_white", margin=dict(l=60, r=30, t=30, b=60))
-            fig.update_xaxes(title="Stability")
-            fig.update_yaxes(title="Band Gap (eV)")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Plot error: {e}")
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            margin=dict(l=80, r=40, t=60, b=80),
+            font=dict(family="Times New Roman", size=16, color="#333"),
+            xaxis=dict(title="Stability", title_font_size=18, tickfont_size=14),
+            yaxis=dict(title="Band Gap (eV)", title_font_size=18, tickfont_size=14),
+            coloraxis_colorbar=dict(
+                title="Score",
+                title_font_size=16,
+                tickfont_size=14,
+                thicknessmode="pixels", thickness=20, len=0.75,
+                outlinewidth=1, outlinecolor="#666"
+            )
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Uncomment to export a sharp PNG/SVG (requires `pip install kaleido`):
+        # fig.write_image("binary_screening.png", scale=3)
+
     else:
         required = [c for c in ["x", "y", "score"] if c in df.columns]
         if len(required) < 3:
             st.warning("❗ Not enough columns for ternary 3D plot.")
             st.stop()
         plot_df = df.dropna(subset=required).copy()
-        try:
-            fig3d = px.scatter_3d(
-                plot_df,
-                x="x", y="y", z="score",
-                color="score",
-                hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
-                height=600
+
+        fig3d = px.scatter_3d(
+            plot_df,
+            x="x", y="y", z="score",
+            color="score",
+            color_continuous_scale="Turbo",
+            hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
+            width=1200,
+            height=900
+        )
+
+        fig3d.update_traces(
+            marker=dict(
+                size=5,
+                opacity=0.9,
+                line=dict(width=1, color="black")
             )
-            fig3d.update_layout(template="simple_white")
-            st.plotly_chart(fig3d, use_container_width=True)
-        except Exception as e:
-            st.error(f"3D plot error: {e}")
+        )
+
+        fig3d.update_layout(
+            template="plotly_white",
+            margin=dict(l=60, r=60, t=60, b=60),
+            font=dict(family="Calibri", size=14, color="#222"),
+            scene=dict(
+                xaxis=dict(title="A fraction", title_font_size=16, tickfont_size=12),
+                yaxis=dict(title="B fraction", title_font_size=16, tickfont_size=12),
+                zaxis=dict(title="Score",      title_font_size=16, tickfont_size=12)
+            ),
+            coloraxis_colorbar=dict(
+                title="Score",
+                title_font_size=14,
+                tickfont_size=12,
+                thickness=18, len=0.6,
+                outlinewidth=1, outlinecolor="#444"
+            )
+        )
+
+        st.plotly_chart(fig3d, use_container_width=True)
+
+        # Uncomment to export a sharp 3D PNG/SVG:
+        # fig3d.write_image("ternary_screening.png", scale=3)
 
 # ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
@@ -258,7 +317,6 @@ Score        : {top.score}
 """
     st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
 
-    # DOCX report
     doc = Document()
     doc.add_heading("EnerMat Report", 0)
     doc.add_paragraph(f"Date: {datetime.date.today()}")
