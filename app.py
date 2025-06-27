@@ -1,4 +1,4 @@
-EnerMat Perovskite Explorer – Streamlit app (v9.6)
+"""EnerMat Perovskite Explorer – Streamlit app (v9.6)
 Updated plotting aesthetics for journal‑quality figures
 """
 
