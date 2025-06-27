@@ -1,7 +1,3 @@
-"""EnerMat Perovskite Explorer – Streamlit app (v9.6)
-Updated plotting aesthetics for journal‑quality figures
-"""
-
 import io
 import os
 import datetime
@@ -84,7 +80,7 @@ def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
         temp=temp,
         bg_window=bg_window,
         bowing=bowing,
-        dx=dx,
+        dx=dx
     )
 
 # ─── Execution Control ────────────────────────────────────────────────────────
@@ -120,27 +116,18 @@ elif do_run:
 
     if mode == "Binary A–B":
         df = run_screen(
-            formula_A=A,
-            formula_B=B,
-            rh=rh,
-            temp=temp,
-            bg_window=(bg_lo, bg_hi),
-            bowing=bow,
-            dx=dx,
+            formula_A=A, formula_B=B,
+            rh=rh, temp=temp,
+            bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
         )
     else:
         try:
             df = screen_ternary(
-                A=A,
-                B=B,
-                C=C,
-                rh=rh,
-                temp=temp,
+                A=A, B=B, C=C,
+                rh=rh, temp=temp,
                 bg=(bg_lo, bg_hi),
                 bows={"AB": bow, "AC": bow, "BC": bow},
-                dx=dx,
-                dy=dy,
-                n_mc=200,
+                dx=dx, dy=dy, n_mc=200
             )
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
@@ -148,19 +135,14 @@ elif do_run:
 
     df = df.rename(columns={
         "energy_above_hull": "stability",
-        "band_gap": "Eg",
+        "band_gap": "Eg"
     })
 
     entry = {
         "mode": mode,
-        "A": A,
-        "B": B,
-        "rh": rh,
-        "temp": temp,
-        "bg": (bg_lo, bg_hi),
-        "bow": bow,
-        "dx": dx,
-        "df": df,
+        "A": A, "B": B, "rh": rh, "temp": temp,
+        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
+        "df": df
     }
     if mode == "Ternary A–B–C":
         entry["C"] = C
@@ -189,7 +171,7 @@ with tab_tbl:
     st.markdown("**Run parameters**")
     param_data = {
         "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
-        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx],
+        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]
     }
     if mode == "Ternary A–B–C":
         param_data["Parameter"].append("y-step")
@@ -202,102 +184,158 @@ with tab_tbl:
 
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
-    # Figure-wide styling constants for journal‑ready plots
-    FIG_KW = dict(width=1200, height=800, template="simple_white")
-    FONT_KW = dict(family="Times New Roman", size=18, color="#000")
-    MARKER_LINE = dict(width=1.2, color="#000")  # crisp, high‑contrast edge
-    C_SCALE = "Viridis"  # perceptually uniform & colour‑blind friendly
-
     if mode == "Binary A–B":
-        required = {"stability", "Eg", "score"}
-        if not required.issubset(df.columns):
-            st.error("❌ Missing required columns: " + ", ".join(required - set(df.columns)))
+        required = [c for c in ["stability", "Eg", "score"] if c in df.columns]
+        if len(required) < 3:
+            missing = set(["stability", "Eg", "score"]) - set(df.columns)
+            st.error(f"❌ Missing required columns for plotting: {', '.join(missing)}")
             st.stop()
+        plot_df = df.dropna(subset=required).copy()
 
-        plot_df = df.dropna(subset=required)
-
+        # Build a high-quality scatter
         fig = px.scatter(
             plot_df,
             x="stability",
             y="Eg",
             color="score",
-            color_continuous_scale=C_SCALE,
+            color_continuous_scale="Turbo",
             hover_data=["formula", "x", "Eg", "stability", "score"],
-            **FIG_KW,
+            width=1200,
+            height=800
         )
-        fig.update_traces(marker=dict(size=11, opacity=0.9, line=MARKER_LINE))
 
-        # Highlight the top 20 % of candidates
-        q80 = plot_df["score"].quantile(0.80)
-        top = plot_df.query("score >= @q80")
-        fig.add_scatter(
-            x=top["stability"],
-            y=top["Eg"],
-            mode="markers",
-            marker=dict(size=18, symbol="circle-open", line=dict(width=2), color="black"),
-            hoverinfo="skip",
-            showlegend=False,
+        fig.update_traces(
+            marker=dict(
+                size=12,
+                opacity=0.9,
+                line=dict(width=1, color="black")
+            )
+        )
+
+        # Highlight top 20%
+        top_cut = plot_df["score"].quantile(0.80)
+        top_mask = plot_df["score"] >= top_cut
+        fig.add_trace(
+            go.Scatter(
+                x=plot_df.loc[top_mask, "stability"],
+                y=plot_df.loc[top_mask, "Eg"],
+                mode="markers",
+                marker=dict(
+                    size=20,
+                    symbol="circle-open",
+                    line=dict(width=2, color="black")
+                ),
+                hoverinfo="skip",
+                showlegend=False
+            )
         )
 
         fig.update_layout(
-            font=FONT_KW,
-            xaxis_title="Stability (eV atom⁻¹)",
-            yaxis_title="Band gap / eV",
+            template="plotly_white",
+            margin=dict(l=80, r=40, t=60, b=80),
+            font=dict(family="Times New Roman", size=16, color="#333"),
+            xaxis=dict(title="Stability", title_font_size=18, tickfont_size=14),
+            yaxis=dict(title="Band Gap (eV)", title_font_size=18, tickfont_size=14),
             coloraxis_colorbar=dict(
-                title="Screening score",
-                title_side="right",
-                titlefont_size=18,
-                tickfont_size=16,
-                len=0.70,
-                thickness=22,
-                outlinewidth=1,
-            ),
-            margin=dict(l=90, r=40, t=30, b=80)
+                title="Score",
+                title_font_size=16,
+                tickfont_size=14,
+                thicknessmode="pixels", thickness=20, len=0.75,
+                outlinewidth=1, outlinecolor="#666"
+            )
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-    else:  # ── Ternary ───────────────────────────────────────────────────────
-        required = {"x", "y", "score"}
-        if not required.issubset(df.columns):
-            st.warning("❗ Not enough columns for ternary 3‑D plot.")
-            st.stop()
+        # Uncomment to export a sharp PNG/SVG (requires `pip install kaleido`):
+        # fig.write_image("binary_screening.png", scale=3)
 
-        plot_df = df.dropna(subset=required)
+    else:
+        required = [c for c in ["x", "y", "score"] if c in df.columns]
+        if len(required) < 3:
+            st.warning("❗ Not enough columns for ternary 3D plot.")
+            st.stop()
+        plot_df = df.dropna(subset=required).copy()
 
         fig3d = px.scatter_3d(
             plot_df,
             x="x", y="y", z="score",
             color="score",
-            color_continuous_scale=C_SCALE,
-            hover_data=["x", "y", "Eg", "score"],
+            color_continuous_scale="Turbo",
+            hover_data={k: True for k in ["x", "y", "Eg", "score"] if k in plot_df.columns},
             width=1200,
-            height=900,
-            template="simple_white",
+            height=900
         )
-        fig3d.update_traces(marker=dict(size=5, opacity=0.9, line=MARKER_LINE))
+
+        fig3d.update_traces(
+            marker=dict(
+                size=5,
+                opacity=0.9,
+                line=dict(width=1, color="black")
+            )
+        )
 
         fig3d.update_layout(
-            font=FONT_KW,
+            template="plotly_white",
+            margin=dict(l=60, r=60, t=60, b=60),
+            font=dict(family="Calibri", size=14, color="#222"),
             scene=dict(
-                xaxis_title="A fraction",
-                yaxis_title="B fraction",
-                zaxis_title="Screening score",
-                xaxis=dict(showspikes=False),
-                yaxis=dict(showspikes=False),
-                zaxis=dict(showspikes=False),
+                xaxis=dict(title="A fraction", title_font_size=16, tickfont_size=12),
+                yaxis=dict(title="B fraction", title_font_size=16, tickfont_size=12),
+                zaxis=dict(title="Score",      title_font_size=16, tickfont_size=12)
             ),
             coloraxis_colorbar=dict(
                 title="Score",
-                title_side="right",
-                titlefont_size=16,
-                tickfont_size=14,
-                len=0.60,
-                thickness=20,
-                outlinewidth=1,
-            ),
-            margin=dict(l=60, r=60, t=30, b=60),
+                title_font_size=14,
+                tickfont_size=12,
+                thickness=18, len=0.6,
+                outlinewidth=1, outlinecolor="#444"
+            )
         )
 
         st.plotly_chart(fig3d, use_container_width=True)
 
+        # Uncomment to export a sharp 3D PNG/SVG:
+        # fig3d.write_image("ternary_screening.png", scale=3)
+
+# ─── Download Tab ────────────────────────────────────────────────────────────
+with tab_dl:
+    csv = df.to_csv(index=False).encode()
+    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
+
+    top = df.iloc[0]
+    if mode == "Binary A–B":
+        top_label = top.formula
+    else:
+        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+
+    txt = f"""EnerMat report ({datetime.date.today()})
+Top candidate : {top_label}
+Band-gap     : {top.Eg}
+Stability    : {getattr(top, 'stability', 'N/A')}
+Score        : {top.score}
+"""
+    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+
+    doc = Document()
+    doc.add_heading("EnerMat Report", 0)
+    doc.add_paragraph(f"Date: {datetime.date.today()}")
+    doc.add_paragraph(f"Top candidate: {top_label}")
+    tbl = doc.add_table(rows=1, cols=2)
+    hdr_cells = tbl.rows[0].cells
+    hdr_cells[0].text = "Property"
+    hdr_cells[1].text = "Value"
+    rows = [("Band-gap", top.Eg), ("Score", top.score)]
+    if hasattr(top, 'stability'):
+        rows.insert(1, ("Stability", top.stability))
+    for k, v in rows:
+        row = tbl.add_row()
+        row.cells[0].text = k
+        row.cells[1].text = str(v)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    st.download_button(
+        "📝 Download DOCX", buf, "EnerMat_report.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
