@@ -1,6 +1,7 @@
-# ──────────────────────────────────────────────────────────────────────────────
-# EnerMat Perovskite Explorer  ·  v9.6-journal
-# ──────────────────────────────────────────────────────────────────────────────
+EnerMat Perovskite Explorer – Streamlit app (v9.6)
+Updated plotting aesthetics for journal‑quality figures
+"""
+
 import io
 import os
 import datetime
@@ -10,42 +11,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-# 🔧 Journal-style additions ──────────────────────────────────────────────────
-MM_TO_PX = 3.7795275591          # 1 mm → px @ 96 dpi (Plotly base)
-
-def apply_journal_style(fig: go.Figure,
-                        *,                         # keyword-only
-                        width_mm: int = 85,
-                        height_mm: int = 85,
-                        font_family: str = "Arial",
-                        font_size_pt: int = 8,
-                        colorbar_title: str | None = None
-                        ) -> go.Figure:
-    """Tweaks a Plotly figure to pass most top-tier journal artwork checks."""
-    w_px = int(width_mm * MM_TO_PX)
-    h_px = int(height_mm * MM_TO_PX)
-
-    fig.update_layout(
-        width=w_px, height=h_px,
-        template="simple_white",
-        font=dict(family=font_family, size=font_size_pt, color="#000"),
-        title_font=dict(size=font_size_pt + 1),
-        margin=dict(l=2, r=2, t=20, b=2),
-        legend=dict(font_size=font_size_pt, borderwidth=0)
-    )
-    fig.update_xaxes(
-        ticks="outside", ticklen=3, tickwidth=0.5,
-        linewidth=0.5, mirror=True, showgrid=False
-    )
-    fig.update_yaxes(
-        ticks="outside", ticklen=3, tickwidth=0.5,
-        linewidth=0.5, mirror=True, showgrid=False
-    )
-    if colorbar_title:
-        fig.update_coloraxes(colorbar_title=colorbar_title, title_side="right")
-    return fig
-# ──────────────────────────────────────────────────────────────────────────────
-
 from docx import Document
 
 # ─── Load API Key ─────────────────────────────────────────────────────────────
@@ -64,7 +29,7 @@ from backend.perovskite_utils import (
 
 # ─── Streamlit Config ─────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6-journal")
+st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
 # ─── Session State Init ───────────────────────────────────────────────────────
 if "history" not in st.session_state:
@@ -119,12 +84,12 @@ def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
         temp=temp,
         bg_window=bg_window,
         bowing=bowing,
-        dx=dx
+        dx=dx,
     )
 
 # ─── Execution Control ────────────────────────────────────────────────────────
 col_run, col_back = st.columns([3, 1])
-do_run  = col_run.button("▶ Run screening", type="primary")
+do_run = col_run.button("▶ Run screening", type="primary")
 do_back = col_back.button("⏪ Previous", disabled=not st.session_state.history)
 
 if do_back:
@@ -155,18 +120,27 @@ elif do_run:
 
     if mode == "Binary A–B":
         df = run_screen(
-            formula_A=A, formula_B=B,
-            rh=rh, temp=temp,
-            bg_window=(bg_lo, bg_hi), bowing=bow, dx=dx
+            formula_A=A,
+            formula_B=B,
+            rh=rh,
+            temp=temp,
+            bg_window=(bg_lo, bg_hi),
+            bowing=bow,
+            dx=dx,
         )
     else:
         try:
             df = screen_ternary(
-                A=A, B=B, C=C,
-                rh=rh, temp=temp,
+                A=A,
+                B=B,
+                C=C,
+                rh=rh,
+                temp=temp,
                 bg=(bg_lo, bg_hi),
                 bows={"AB": bow, "AC": bow, "BC": bow},
-                dx=dx, dy=dy, n_mc=200
+                dx=dx,
+                dy=dy,
+                n_mc=200,
             )
         except Exception as e:
             st.error(f"❌ Ternary error: {e}")
@@ -174,14 +148,19 @@ elif do_run:
 
     df = df.rename(columns={
         "energy_above_hull": "stability",
-        "band_gap": "Eg"
+        "band_gap": "Eg",
     })
 
     entry = {
         "mode": mode,
-        "A": A, "B": B, "rh": rh, "temp": temp,
-        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
-        "df": df
+        "A": A,
+        "B": B,
+        "rh": rh,
+        "temp": temp,
+        "bg": (bg_lo, bg_hi),
+        "bow": bow,
+        "dx": dx,
+        "df": df,
     }
     if mode == "Ternary A–B–C":
         entry["C"] = C
@@ -209,9 +188,8 @@ tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"]
 with tab_tbl:
     st.markdown("**Run parameters**")
     param_data = {
-        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]",
-                      "Bowing [eV]", "x-step"],
-        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx]
+        "Parameter": ["Humidity [%]", "Temperature [°C]", "Gap window [eV]", "Bowing [eV]", "x-step"],
+        "Value": [rh, temp, f"{bg_lo:.2f}–{bg_hi:.2f}", bow, dx],
     }
     if mode == "Ternary A–B–C":
         param_data["Parameter"].append("y-step")
@@ -224,126 +202,102 @@ with tab_tbl:
 
 # ─── Plot Tab ────────────────────────────────────────────────────────────────
 with tab_plot:
+    # Figure-wide styling constants for journal‑ready plots
+    FIG_KW = dict(width=1200, height=800, template="simple_white")
+    FONT_KW = dict(family="Times New Roman", size=18, color="#000")
+    MARKER_LINE = dict(width=1.2, color="#000")  # crisp, high‑contrast edge
+    C_SCALE = "Viridis"  # perceptually uniform & colour‑blind friendly
+
     if mode == "Binary A–B":
-        required = [c for c in ["stability", "Eg", "score"] if c in df.columns]
-        if len(required) < 3:
-            missing = set(["stability", "Eg", "score"]) - set(df.columns)
-            st.error(f"❌ Missing required columns for plotting: {', '.join(missing)}")
+        required = {"stability", "Eg", "score"}
+        if not required.issubset(df.columns):
+            st.error("❌ Missing required columns: " + ", ".join(required - set(df.columns)))
             st.stop()
-        plot_df = df.dropna(subset=required).copy()
+
+        plot_df = df.dropna(subset=required)
 
         fig = px.scatter(
             plot_df,
             x="stability",
             y="Eg",
             color="score",
-            color_continuous_scale="Turbo",
+            color_continuous_scale=C_SCALE,
             hover_data=["formula", "x", "Eg", "stability", "score"],
+            **FIG_KW,
+        )
+        fig.update_traces(marker=dict(size=11, opacity=0.9, line=MARKER_LINE))
+
+        # Highlight the top 20 % of candidates
+        q80 = plot_df["score"].quantile(0.80)
+        top = plot_df.query("score >= @q80")
+        fig.add_scatter(
+            x=top["stability"],
+            y=top["Eg"],
+            mode="markers",
+            marker=dict(size=18, symbol="circle-open", line=dict(width=2), color="black"),
+            hoverinfo="skip",
+            showlegend=False,
         )
 
-        fig.update_traces(
-            marker=dict(
-                size=12,
-                opacity=0.9,
-                line=dict(width=1, color="black")
-            )
+        fig.update_layout(
+            font=FONT_KW,
+            xaxis_title="Stability (eV atom⁻¹)",
+            yaxis_title="Band gap / eV",
+            coloraxis_colorbar=dict(
+                title="Screening score",
+                title_side="right",
+                titlefont_size=18,
+                tickfont_size=16,
+                len=0.70,
+                thickness=22,
+                outlinewidth=1,
+            ),
+            margin=dict(l=90, r=40, t=30, b=80)
         )
-
-        # Highlight top 20 %
-        top_cut = plot_df["score"].quantile(0.80)
-        top_mask = plot_df["score"] >= top_cut
-        fig.add_trace(
-            go.Scatter(
-                x=plot_df.loc[top_mask, "stability"],
-                y=plot_df.loc[top_mask, "Eg"],
-                mode="markers",
-                marker=dict(
-                    size=20,
-                    symbol="circle-open",
-                    line=dict(width=2, color="black")
-                ),
-                hoverinfo="skip",
-                showlegend=False
-            )
-        )
-
-        # 🔧 Journal-style application
-        fig = apply_journal_style(fig, colorbar_title="Score")
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Optional sharp export
-        # fig.write_image("binary_screening.svg")  # vector
-
-    else:
-        required = [c for c in ["x", "y", "score"] if c in df.columns]
-        if len(required) < 3:
-            st.warning("❗ Not enough columns for ternary 3-D plot.")
+    else:  # ── Ternary ───────────────────────────────────────────────────────
+        required = {"x", "y", "score"}
+        if not required.issubset(df.columns):
+            st.warning("❗ Not enough columns for ternary 3‑D plot.")
             st.stop()
-        plot_df = df.dropna(subset=required).copy()
+
+        plot_df = df.dropna(subset=required)
 
         fig3d = px.scatter_3d(
             plot_df,
             x="x", y="y", z="score",
             color="score",
-            color_continuous_scale="Turbo",
-            hover_data={k: True for k in ["x", "y", "Eg", "score"]
-                        if k in plot_df.columns},
+            color_continuous_scale=C_SCALE,
+            hover_data=["x", "y", "Eg", "score"],
+            width=1200,
+            height=900,
+            template="simple_white",
         )
+        fig3d.update_traces(marker=dict(size=5, opacity=0.9, line=MARKER_LINE))
 
-        fig3d.update_traces(
-            marker=dict(
-                size=5,
-                opacity=0.9,
-                line=dict(width=1, color="black")
-            )
+        fig3d.update_layout(
+            font=FONT_KW,
+            scene=dict(
+                xaxis_title="A fraction",
+                yaxis_title="B fraction",
+                zaxis_title="Screening score",
+                xaxis=dict(showspikes=False),
+                yaxis=dict(showspikes=False),
+                zaxis=dict(showspikes=False),
+            ),
+            coloraxis_colorbar=dict(
+                title="Score",
+                title_side="right",
+                titlefont_size=16,
+                tickfont_size=14,
+                len=0.60,
+                thickness=20,
+                outlinewidth=1,
+            ),
+            margin=dict(l=60, r=60, t=30, b=60),
         )
-
-        # 🔧 Journal-style application (same size as binary for consistency)
-        fig3d = apply_journal_style(fig3d, colorbar_title="Score")
 
         st.plotly_chart(fig3d, use_container_width=True)
 
-        # fig3d.write_image("ternary_screening.svg")
-
-# ─── Download Tab ────────────────────────────────────────────────────────────
-with tab_dl:
-    csv = df.to_csv(index=False).encode()
-    st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
-
-    top = df.iloc[0]
-    if mode == "Binary A–B":
-        top_label = top.formula
-    else:
-        top_label = f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
-
-    txt = f"""EnerMat report ({datetime.date.today()})
-Top candidate : {top_label}
-Band-gap     : {top.Eg}
-Stability    : {getattr(top, 'stability', 'N/A')}
-Score        : {top.score}
-"""
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
-
-    doc = Document()
-    doc.add_heading("EnerMat Report", 0)
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {top_label}")
-    tbl = doc.add_table(rows=1, cols=2)
-    hdr_cells = tbl.rows[0].cells
-    hdr_cells[0].text = "Property"
-    hdr_cells[1].text = "Value"
-    rows = [("Band-gap", top.Eg), ("Score", top.score)]
-    if hasattr(top, 'stability'):
-        rows.insert(1, ("Stability", top.stability))
-    for k, v in rows:
-        row = tbl.add_row()
-        row.cells[0].text = k
-        row.cells[1].text = str(v)
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    st.download_button(
-        "📝 Download DOCX", buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
