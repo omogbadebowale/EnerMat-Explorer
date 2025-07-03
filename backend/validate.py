@@ -34,18 +34,25 @@ def mp_gap(formula: str) -> float:
 SN_GAP = mp_gap("CsSnI3")   # ≈1.30 eV
 PB_GAP = mp_gap("CsPbI3")   # ≈1.73 eV  (example)
 
+# ------------------------------------------------------------------
 def predict_gap(row: pd.Series, b: float = 0.30) -> float:
     """
-    Vegard + bowing model for CsSn₁₋ₓPbₓI₃ alloys.
-    Any row that is NOT an iodide Sn/Pb alloy returns NaN → dropped later.
+    1. If the composition is a CsSn1-xPbxI3 alloy → Vegard + bowing
+       (regex now tolerates trailing text like “… QDs (~4 nm)”).
+    2. Otherwise fallback to Materials-Project band-gap for the
+       cleaned formula (may be NaN if MP has no record).
     """
     comp = clean_formula(row["Composition"])
-    m = re.match(r"CsSn(?P<x>[0-9.]+)Pb(?P<y>[0-9.]+)I3$", comp)
-    if not m:
-        return np.nan
-    x = float(m["y"])                    # Pb fraction (Sn = 1-x)
-    return (1 - x) * SN_GAP + x * PB_GAP - b * x * (1 - x)
 
+    # 1️⃣  Vegard + bowing for iodide Sn/Pb alloys
+    m = re.match(r"CsSn(?P<x>[0-9.]+)Pb(?P<y>[0-9.]+)I3", comp)
+    if m:
+        x_pb = float(m["y"])                 # Pb fraction (Sn = 1-x)
+        return (1 - x_pb) * SN_GAP + x_pb * PB_GAP - b * x_pb * (1 - x_pb)
+
+    # 2️⃣  All other compositions – use Materials-Project gap
+    return mp_gap(comp)                      # may be NaN → row dropped
+# ------------------------------------------------------------------
 def validate(b: float = 0.30):
     df = EXP.copy()
     df["Eg_pred"] = df.apply(lambda r: predict_gap(r, b), axis=1)
