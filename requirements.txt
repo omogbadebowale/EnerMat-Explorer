@@ -8,4 +8,6 @@ pandas
 statsmodels
 python-docx
 kaleido>=0.2.1
+matminer
+scikit-learn      # (plotly is already in your app, so no change)
 
