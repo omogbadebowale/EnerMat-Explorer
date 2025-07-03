@@ -1,22 +1,22 @@
-# pages/03_Validation.py  – GUI for experimental band-gap benchmark
+# pages/03_Validation.py  ── GUI for experimental band-gap benchmark
 import streamlit as st
 import plotly.express as px
 import numpy as np
 import pandas as pd
 from backend.validate import validate as run_validation
 
-# ── Title & intro ─────────────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────────────────────────
 st.title("✔ Validation – Experimental Band-Gap Benchmark")
 
 st.markdown(
     """
 This page benchmarks the **Vegard + bowing model** against  
-27 experimentally reported narrow-band-gap perovskites (1.1 – 1.4 eV).  
-Move the slider to adjust the bowing parameter *b*.
+27 experimentally measured perovskites (1.1 – 1.4 eV).  
+Use the slider to adjust the bowing parameter *b*.
 """
 )
 
-# ── Bowing-parameter slider ───────────────────────────────────────────────
+# ── User control ──────────────────────────────────────────────────────────
 b = st.slider("Bowing parameter b (eV)", 0.00, 1.00, 0.30, 0.01)
 
 # ── Run validation ────────────────────────────────────────────────────────
@@ -39,38 +39,43 @@ fig = px.scatter(
     height=500, width=620
 )
 
-# 1 : 1 diagonal
-fig.add_shape(
-    type="line", x0=1.1, y0=1.1, x1=1.4, y1=1.4,
-    line=dict(dash="dash"), name="Ideal"
-)
+# 1 : 1 reference
+fig.add_shape(type="line", x0=1.1, y0=1.1, x1=1.4, y1=1.4,
+              line=dict(dash="dash"), name="Ideal")
 
-# ── Robust NumPy least-squares fit (no statsmodels) ───────────────────────
-clean = resid.copy()
-clean["Eg_eV"]   = pd.to_numeric(clean["Eg_eV"],   errors="coerce")
-clean["Eg_pred"] = pd.to_numeric(clean["Eg_pred"], errors="coerce")
-clean = clean.dropna(subset=["Eg_eV", "Eg_pred"])
+# ── Robust NumPy OLS (only if safe) ───────────────────────────────────────
+def add_numpy_fit(df):
+    df_num = df.copy()
+    df_num["Eg_eV"]   = pd.to_numeric(df_num["Eg_eV"],   errors="coerce")
+    df_num["Eg_pred"] = pd.to_numeric(df_num["Eg_pred"], errors="coerce")
+    df_num = df_num.dropna(subset=["Eg_eV", "Eg_pred"])
+    if len(df_num) < 2:
+        return                                          # not enough points
+    try:
+        x = df_num["Eg_eV"].astype(float).to_numpy()
+        y = df_num["Eg_pred"].astype(float).to_numpy()
+        if not np.isfinite(x).all() or not np.isfinite(y).all():
+            return                                      # guard against inf/nan
+        m, c = np.polyfit(x, y, 1)
+        x_fit = np.array([1.1, 1.4])
+        fig.add_scatter(
+            x=x_fit, y=m * x_fit + c,
+            mode="lines",
+            line=dict(dash="dot"),
+            name=f"Fit: y = {m:.2f}x + {c:.2f}"
+        )
+    except (TypeError, np.linalg.LinAlgError):
+        # even in pathological cases, do nothing instead of crashing
+        pass
 
-if len(clean) >= 2:
-    x = clean["Eg_eV"].astype(float).to_numpy()
-    y = clean["Eg_pred"].astype(float).to_numpy()
-    m, c = np.polyfit(x, y, 1)
-    x_fit = np.array([1.1, 1.4])
-    fig.add_scatter(
-        x=x_fit, y=m * x_fit + c,
-        mode="lines",
-        line=dict(dash="dot"),
-        name=f"Fit: y = {m:.2f}x + {c:.2f}"
-    )
+add_numpy_fit(resid)
 
 st.plotly_chart(fig, use_container_width=True)
 
-# ── Residual table & CSV download ─────────────────────────────────────────
+# ── Residual table & download ─────────────────────────────────────────────
 st.markdown("### Residuals")
 st.dataframe(resid, hide_index=True, height=350)
 
-csv_bytes = resid.to_csv(index=False).encode()
-st.download_button(
-    "📥 Download residuals CSV",
-    csv_bytes, "validation_residuals.csv", "text/csv"
-)
+dl = resid.to_csv(index=False).encode()
+st.download_button("📥 Download residuals CSV", dl,
+                   "validation_residuals.csv", "text/csv")
