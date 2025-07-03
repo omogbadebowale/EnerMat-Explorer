@@ -19,10 +19,11 @@ ID,Composition,Eg_eV,Measurement_Comment,Reference_URL
 18,(FASnI3)0.6(MAPbI3)0.4,1.25,"Record NBG PSC table",N/A
 19,MA0.3FA0.7Pb0.5Sn0.5I3,1.27,"Same data set",N/A
 20,GABr-modified Sn-Pb perovskite,1.35,"Adv Mater 2020",N/A
-21,"Mixed Sn-Pb (piperazine-treated)",1.265,"Surface passivation",N/A
+21,"Mixed Sn-Pb (piperazine-treated)",1.265,"Surface passivation study",N/A
 22,"Mixed Sn-Pb (CPGCl-balanced)",1.26,"Ox-barrier study",https://www.nature.com/articles/s41467-024-46679-w
 23,"“NBG” Sn-Pb survey",1.25,"ChemRev 2023 review",https://pubs.acs.org/doi/10.1021/acs.chemrev.3c00667
 24,"MASnI3 (solution film)",1.25,"Direct-gap edge",https://pmc.ncbi.nlm.nih.gov/articles/PMC10245210
 25,CsSnI2Cl,1.12,"H₂-gen study",https://www.researchgate.net/figure/281589495_fig2_FIG-2-A-40-atom-supercell-of-the-lowest-energy-configuration-of-a-CsSnI-2-Cl
 26,CsSnI2Br,1.37,"Stability review",https://www.mdpi.com/2079-4991/13/3/585
 27,(en)-FA0.5MA0.5Sn0.5Pb0.5I3,1.325,"En-spacer stabilised",https://d-nb.info/1226445624/34
+
