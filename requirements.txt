@@ -8,5 +8,3 @@ pandas
 statsmodels
 python-docx
 kaleido>=0.2.1
-matminer
-
