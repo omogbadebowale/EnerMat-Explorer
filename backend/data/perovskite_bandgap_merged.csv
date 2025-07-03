@@ -1,3 +1,10 @@
+# 1.  open your repo and make sure you’re on main
+cd "C:\Users\Dr.Gbadebo Yusuf\EnerMat-Explorer"
+git checkout main
+git pull
+
+# 2.  overwrite the file with the cleaned CSV text
+@'
 ID,Composition,Eg_eV,Measurement_Comment,Reference_URL
 1,CsPb0.6Sn0.4I3,1.38,"Tauc fit; γ-phase; PCE ≈ 13.4 %",https://www.nature.com/articles/s41467-019-13908-6
 2,(FAPbI3)0.7(CsSnI3)0.3,1.30,"MA-free film; ideal single-junction gap; PCE ≈ 15 %",https://www.sciencedirect.com/science/article/pii/S2590238521001685
@@ -26,3 +33,9 @@ ID,Composition,Eg_eV,Measurement_Comment,Reference_URL
 25,CsSnI2Cl,1.12,"H₂-gen study",https://www.researchgate.net/figure/281589495_fig2_FIG-2-A-40-atom-supercell-of-the-lowest-energy-configuration-of-a-CsSnI-2-Cl
 26,CsSnI2Br,1.37,"Stability review",https://www.mdpi.com/2079-4991/13/3/585
 27,(en)-FA0.5MA0.5Sn0.5Pb0.5I3,1.325,"En-spacer stabilised",https://d-nb.info/1226445624/34
+'@ | Set-Content -Encoding UTF8 backend\data\perovskite_bandgap_merged.csv
+
+# 3.  commit and push
+git add backend\data\perovskite_bandgap_merged.csv
+git commit -m "data: replace markdown table with proper CSV (27 rows numeric)"
+git push
