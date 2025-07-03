@@ -22,22 +22,35 @@ def clean_formula(raw: str) -> str:
 
 CSV = Path(__file__).parent / "data" / "perovskite_bandgap_merged.csv"
 EXP = pd.read_csv(CSV)
-
 # ------------------------------------------------------------------
+FALLBACK_GAPS = {
+    # values (eV) copied once from MP or literature
+    "CsSnI3": 1.30,  "CsPbI3": 1.73,
+    "CsSnBr3": 2.30, "CsPbBr3": 2.80,
+    "CsSnCl3": 3.40, "CsPbCl3": 3.90,
+    "MASnI3": 1.30,  "FASnI3": 1.41,
+    "CsSnI2Br": 1.90, "CsSnI2Cl": 2.15,
+    # add more end-members as needed
+}
+
 _cache: dict[str, float] = {}
 def mp_gap(formula: str) -> float:
     """
-    Cached Materials-Project band-gap look-up.
-    If the API call fails (rate-limit, network, etc.) fall back to
-    NaN so the row is kept but skipped in the error metrics.
+    1) Return cached value if we already looked it up.
+    2) If formula in the fallback table, use it (no API hit).
+    3) Else try Materials-Project; on error fall back to NaN.
     """
     if formula in _cache:
+        return _cache[formula]
+
+    if formula in FALLBACK_GAPS:
+        _cache[formula] = FALLBACK_GAPS[formula]
         return _cache[formula]
 
     try:
         doc = fetch_mp_data(formula, ["band_gap"])
         val = doc["band_gap"] if doc else np.nan
-    except Exception:                      # includes MPRestError
+    except Exception:
         val = np.nan
 
     _cache[formula] = val
