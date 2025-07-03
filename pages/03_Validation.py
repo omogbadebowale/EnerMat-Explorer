@@ -1,4 +1,4 @@
-# pages/03_Validation.py  ── GUI for experimental band-gap benchmark
+# pages/03_Validation.py  – GUI for experimental band-gap benchmark
 import streamlit as st
 import plotly.express as px
 import numpy as np
@@ -45,14 +45,16 @@ fig.add_shape(
     line=dict(dash="dash"), name="Ideal"
 )
 
-# ── NumPy least-squares fit (no statsmodels) ──────────────────────────────
+# ── Robust NumPy least-squares fit (no statsmodels) ───────────────────────
 clean = resid.copy()
 clean["Eg_eV"]   = pd.to_numeric(clean["Eg_eV"],   errors="coerce")
 clean["Eg_pred"] = pd.to_numeric(clean["Eg_pred"], errors="coerce")
 clean = clean.dropna(subset=["Eg_eV", "Eg_pred"])
 
-if len(clean) >= 2:       # need at least two numeric points
-    m, c = np.polyfit(clean["Eg_eV"], clean["Eg_pred"], 1)
+if len(clean) >= 2:
+    x = clean["Eg_eV"].astype(float).to_numpy()
+    y = clean["Eg_pred"].astype(float).to_numpy()
+    m, c = np.polyfit(x, y, 1)
     x_fit = np.array([1.1, 1.4])
     fig.add_scatter(
         x=x_fit, y=m * x_fit + c,
