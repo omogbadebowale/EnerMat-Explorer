@@ -1,99 +1,121 @@
 """
-backend.validate  – benchmark 27 experimental band-gaps
-Run   :  python -m backend.validate
-Import:  from backend.validate import validate
+backend.validate  – benchmark EXPERIMENTAL band-gaps
+
+▪ Run   :  python -m backend.validate
+▪ Import:  from backend.validate import validate
 """
+
 from __future__ import annotations
+
+# ── stdlib ───────────────────────────────────────────────────────────────
 from pathlib import Path
 import json, re, unicodedata
-import numpy as np, pandas as pd
+from functools import lru_cache
 
-from .perovskite_utils import fetch_mp_data   # already exists in repo
+# ── third-party ───────────────────────────────────────────────────────────
+import numpy as np
+import pandas as pd
 
-# ────────────────────────────────────────────────────────────────
-# Helper: strip brackets / spaces / greek γ so regex can match
-# ────────────────────────────────────────────────────────────────
+# ── project ───────────────────────────────────────────────────────────────
+from .perovskite_utils import fetch_mp_data  # already in your repo
+
+# ══════════════════════════════════════════════════════════════════════════
+# 1.  Helpers
+# ══════════════════════════════════════════════════════════════════════════
 def clean_formula(raw: str) -> str:
-    txt = unicodedata.normalize("NFKD", raw.strip()).replace("γ", "")
-    txt = re.sub(r"\(.*?\)", "", txt)                 # remove (…) parts
+    """
+    Normalise unicode, drop text in brackets, kill spaces/dashes so that
+        "CsSnI3 (γ-phase)"  →  "CsSnI3"
+        "(FAPbI3)0.7(CsSnI3)0.3" → "FAPbI30.7CsSnI30.3"
+    """
+    txt = unicodedata.normalize("NFKD", raw).replace("γ", "")
+    txt = re.sub(r"\(.*?\)", "", txt)          # delete (…) parts
     txt = txt.replace("–", "-").replace("—", "-").replace(" ", "")
-    return txt
-# ────────────────────────────────────────────────────────────────
+    return txt.strip()
+
+
+# keep only compositions the simple model understands
+PATS = [
+    re.compile(r"^CsSnI3$"),
+    re.compile(r"^CsSnBr3$"),
+    re.compile(r"^CsSnCl3$"),
+    re.compile(r"^CsSn(?P<x>[0-9.]+)Pb(?P<y>[0-9.]+)I3$"),  # Sn/Pb iodide alloys
+]
 
 CSV = Path(__file__).parent / "data" / "perovskite_bandgap_merged.csv"
-EXP = pd.read_csv(CSV)
-# ------------------------------------------------------------------
-FALLBACK_GAPS = {
-    # values (eV) copied once from MP or literature
-    "CsSnI3": 1.30,  "CsPbI3": 1.73,
-    "CsSnBr3": 2.30, "CsPbBr3": 2.80,
-    "CsSnCl3": 3.40, "CsPbCl3": 3.90,
-    "MASnI3": 1.30,  "FASnI3": 1.41,
-    "CsSnI2Br": 1.90, "CsSnI2Cl": 2.15,
-    # add more end-members as needed
-}
+RAW = pd.read_csv(CSV)
 
-_cache: dict[str, float] = {}
+def _match_any(comp: str) -> bool:
+    comp = clean_formula(comp)
+    return any(pat.search(comp) for pat in PATS)
+
+EXP = RAW[RAW["Composition"].apply(_match_any)].copy()
+print(f"[validate] keeping {EXP.shape[0]}/{RAW.shape[0]} rows that match model")
+
+# ══════════════════════════════════════════════════════════════════════════
+# 2.  Materials-Project band-gap cache
+# ══════════════════════════════════════════════════════════════════════════
+@lru_cache(maxsize=None)
 def mp_gap(formula: str) -> float:
     """
-    1) Return cached value if we already looked it up.
-    2) If formula in the fallback table, use it (no API hit).
-    3) Else try Materials-Project; on error fall back to NaN.
+    One-line MP look-up with silent failure → NaN.
     """
-    if formula in _cache:
-        return _cache[formula]
-
-    if formula in FALLBACK_GAPS:
-        _cache[formula] = FALLBACK_GAPS[formula]
-        return _cache[formula]
-
     try:
         doc = fetch_mp_data(formula, ["band_gap"])
-        val = doc["band_gap"] if doc else np.nan
-    except Exception:
-        val = np.nan
+        return doc["band_gap"] if doc else np.nan
+    except Exception:                  # network, quota, 404 …
+        return np.nan
 
-    _cache[formula] = val
-    return val
-# ------------------------------------------------------------------
-SN_GAP = mp_gap("CsSnI3")   # ≈1.30 eV
-PB_GAP = mp_gap("CsPbI3")   # ≈1.73 eV  (example)
 
-# ------------------------------------------------------------------
+SN_GAP = mp_gap("CsSnI3") or 1.30     # fall-back default
+PB_GAP = mp_gap("CsPbI3") or 1.73
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3.  Simple predictor
+# ══════════════════════════════════════════════════════════════════════════
 def predict_gap(row: pd.Series, b: float = 0.30) -> float:
     """
-    1. If the composition is a CsSn1-xPbxI3 alloy → Vegard + bowing
-       (regex now tolerates trailing text like “… QDs (~4 nm)”).
-    2. Otherwise fallback to Materials-Project band-gap for the
-       cleaned formula (may be NaN if MP has no record).
+    ①  Vegard+bowing for CsSn₁₋ₓPbₓI₃ alloys (x = Pb fraction)
+    ②  Else: single-compound gap from MP
     """
     comp = clean_formula(row["Composition"])
 
-    # 1️⃣  Vegard + bowing for iodide Sn/Pb alloys
-    m = re.match(r"CsSn(?P<x>[0-9.]+)Pb(?P<y>[0-9.]+)I3", comp)
+    m = re.match(r"CsSn(?P<x>[0-9.]+)Pb(?P<y>[0-9.]+)I3$", comp)
     if m:
-        x_pb = float(m["y"])                 # Pb fraction (Sn = 1-x)
+        x_pb = float(m["y"])
         return (1 - x_pb) * SN_GAP + x_pb * PB_GAP - b * x_pb * (1 - x_pb)
 
-    # 2️⃣  All other compositions – use Materials-Project gap
-    return mp_gap(comp)                      # may be NaN → row dropped
-# ------------------------------------------------------------------
+    return mp_gap(comp)   # may be NaN → row dropped
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4.  Public API
+# ══════════════════════════════════════════════════════════════════════════
 def validate(b: float = 0.30):
+    """
+    Returns
+        metrics : dict   {N, MAE, RMSE, R2}
+        resid   : DataFrame  (Composition, Eg_eV, Eg_pred, abs_err)
+    """
     df = EXP.copy()
     df["Eg_pred"] = df.apply(lambda r: predict_gap(r, b), axis=1)
-    sub = df.dropna(subset=["Eg_pred"]).copy()
 
+    sub = df.dropna(subset=["Eg_pred"]).copy()
     sub["abs_err"] = (sub.Eg_pred - sub.Eg_eV.astype(float)).abs()
+
     metrics = dict(
         N    = int(sub.shape[0]),
         MAE  = sub.abs_err.mean(),
-        RMSE = np.sqrt((sub.abs_err ** 2).mean()),
+        RMSE = np.sqrt((sub.abs_err**2).mean()),
         R2   = np.corrcoef(sub.Eg_pred, sub.Eg_eV.astype(float))[0, 1] ** 2
     )
     return metrics, sub[["Composition", "Eg_eV", "Eg_pred", "abs_err"]]
 
-# CLI helper ------------------------------------------------------
-if __name__ == "__main__":
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5.  CLI helper
+# ══════════════════════════════════════════════════════════════════════════
+if __name__ == "__main__":            #  python -m backend.validate
     m, res = validate()
     print(json.dumps(m, indent=2))
     res.to_csv("validation_residuals.csv", index=False)
