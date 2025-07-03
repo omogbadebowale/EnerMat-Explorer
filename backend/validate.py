@@ -23,14 +23,26 @@ def clean_formula(raw: str) -> str:
 CSV = Path(__file__).parent / "data" / "perovskite_bandgap_merged.csv"
 EXP = pd.read_csv(CSV)
 
+# ------------------------------------------------------------------
 _cache: dict[str, float] = {}
 def mp_gap(formula: str) -> float:
-    """Cached Materials-Project band-gap lookup (SnI3 / PbI3 end-members)."""
-    if formula not in _cache:
-        doc = fetch_mp_data(formula, ["band_gap"])
-        _cache[formula] = doc["band_gap"] if doc else np.nan
-    return _cache[formula]
+    """
+    Cached Materials-Project band-gap look-up.
+    If the API call fails (rate-limit, network, etc.) fall back to
+    NaN so the row is kept but skipped in the error metrics.
+    """
+    if formula in _cache:
+        return _cache[formula]
 
+    try:
+        doc = fetch_mp_data(formula, ["band_gap"])
+        val = doc["band_gap"] if doc else np.nan
+    except Exception:                      # includes MPRestError
+        val = np.nan
+
+    _cache[formula] = val
+    return val
+# ------------------------------------------------------------------
 SN_GAP = mp_gap("CsSnI3")   # ≈1.30 eV
 PB_GAP = mp_gap("CsPbI3")   # ≈1.73 eV  (example)
 
