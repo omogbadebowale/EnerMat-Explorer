@@ -56,12 +56,21 @@ def _predict_one(formula: str, b: float) -> float:
     return (1 - x) * E_PB + x * E_SN - b * x * (1 - x)
 
 # ─── public validate() ────────────────────────────────────────────────────
-def validate(
-    b: float = 0.30,
-    df: pd.DataFrame | None = None,
-) -> tuple[dict[str, float], pd.DataFrame, pd.DataFrame]:
-    if df is None:
-        df = load_default_dataset()
+ def validate(
+     b: float = 0.30,
+     df: pd.DataFrame | None = None,
+ ) -> tuple[dict[str, float], pd.DataFrame, pd.DataFrame]:
+-    if df is None:
++    if df is None:
+         df = load_default_dataset()
++    # ─── normalize column names (so “Eg eV”, “ Eg_eV ”, “Eg (eV)” all become Eg_eV)
++    df.columns = (
++        df.columns
++        .str.strip()
++        .str.replace(" ", "_")
++        .str.replace(r"[^\w_]", "", regex=True)
++    )
+
     df = df.copy()
     df["Eg_pred"] = df["Composition"].apply(lambda f: _predict_one(f, b))
 
