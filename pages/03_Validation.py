@@ -10,6 +10,10 @@ from backend.validate import validate, load_default_dataset
 st.set_page_config(page_title="Validation", page_icon="✅", layout="wide")
 st.markdown("## ✅ Validation – Experimental Band-Gap Benchmark")
 
+# Initialize bowing parameter in session state
+if "b_value" not in st.session_state:
+    st.session_state.b_value = 0.30
+
 # ─── 0) Upload or default dataset ────────────────────────────────────────
 up = st.file_uploader(
     "📥  Upload a CSV or ODS benchmark file (leave empty to use the built-in 27-point dataset)",
@@ -19,7 +23,6 @@ if up:
     if up.name.lower().endswith(".csv"):
         df_exp = pd.read_csv(up)
     else:
-        # requires odf-py in your environment, which Streamlit Cloud already has
         df_exp = pd.read_excel(up, engine="odf")
 else:
     df_exp = load_default_dataset()
@@ -27,15 +30,27 @@ else:
 # ─── 1) Bowing slider + optimise button ─────────────────────────────────
 lc, rc = st.columns([4, 1])
 with lc:
-    b = st.slider("Bowing parameter *b* (eV)", 0.00, 1.00, 0.30, 0.01)
+    b = st.slider(
+        "Bowing parameter *b* (eV)",
+        min_value=0.00,
+        max_value=1.00,
+        value=st.session_state.b_value,
+        step=0.01,
+    )
+    # store slider changes
+    if b != st.session_state.b_value:
+        st.session_state.b_value = b
 with rc:
     if st.button("🔍 optimise"):
         grid = np.linspace(0.00, 1.00, 51)
-        # find the b that minimises MAE on-the-fly
-        b_opt = float(min(grid, key=lambda bb: validate(bb, df_exp)[0]["MAE"]))
-        st.success(f"Optimal b ≃ {b_opt:.2f} eV")
-        # rerun with the new b value
-        st.experimental_rerun()
+        best = float(
+            min(grid, key=lambda bb: validate(bb, df_exp)[0]["MAE"])
+        )
+        st.session_state.b_value = best
+        st.success(f"Optimal b ≃ {best:.2f} eV")
+
+# use the session‐state value from slider or optimise
+b = st.session_state.b_value
 
 # ─── 2) Run validation ───────────────────────────────────────────────────
 metrics, resid, skipped = validate(b, df_exp)
@@ -67,13 +82,11 @@ fig = px.scatter(
     labels={"Eg_eV": "Experimental E₉ (eV)", "Eg_pred": "Predicted E₉ (eV)"},
     height=500,
 )
-# add 1:1 guide line
 x0, x1 = resid.Eg_eV.min(), resid.Eg_eV.max()
 fig.add_shape(type="line", x0=x0, y0=x0, x1=x1, y1=x1, line=dict(dash="dash"))
 st.plotly_chart(fig, use_container_width=True)
 
 # ─── 5) Residuals table with an Outlier flag ────────────────────────────
-# mark any |error| > 0.15 eV as an outlier
 resid = resid.assign(Outlier=lambda df: df.abs_err > 0.15)
 st.markdown("#### Residuals (|error| > 0.15 eV flagged)")
 st.dataframe(resid, hide_index=True, height=300)
