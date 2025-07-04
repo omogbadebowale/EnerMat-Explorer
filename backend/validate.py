@@ -6,23 +6,25 @@ import pandas as pd
 import re
 from pathlib import Path
 
-# ─── point to the *built-in* 27-point CSV ────────────────────────────────
+# ─── point to the built-in 27-point CSV ────────────────────────────────
 DATA_CSV = Path(__file__).parent / "data" / "perovskite_bandgap_merged.csv"
 
-# ─── simple parser for CsSnxPbxI3 formulas ───────────────────────────────
+# ─── simple parser for CsSnxPbxI3 formulas ─────────────────────────────
 _RE_SN = re.compile(r"Sn(?P<frac>[0-9.]+)?")
 _RE_PB = re.compile(r"Pb(?P<frac>[0-9.]+)?")
-def _frac(regex, text):
+def _frac(regex: re.Pattern[str], text: str) -> float:
     m = regex.search(text)
-    if not m or m.group("frac") in (None, ""):
-        return 0.0 if m is None else 1.0
-    return float(m.group("frac"))
+    if not m:
+        return 0.0
+    raw = m.group("frac")
+    return 1.0 if raw in (None, "") else float(raw)
 
 # ─── load experimental dataset ───────────────────────────────────────────
 def load_default_dataset() -> pd.DataFrame:
+    """27-point experimental benchmark shipped with the repo."""
     return pd.read_csv(DATA_CSV)
 
-# ─── fetch end-member gaps (falls back if no API) ─────────────────────────
+# ─── fetch end-member gaps (falls back if no API) ────────────────────────
 try:
     from .perovskite_utils import fetch_mp_data
 except ImportError:
@@ -45,7 +47,7 @@ def _mp_gap(formula: str) -> float:
 E_SN = _mp_gap("CsSnI3")
 E_PB = _mp_gap("CsPbI3")
 
-# ─── predict via Vegard + bowing ──────────────────────────────────────────
+# ─── predict via Vegard + bowing ─────────────────────────────────────────
 def _predict_one(formula: str, b: float) -> float:
     x_sn = _frac(_RE_SN, formula)
     x_pb = _frac(_RE_PB, formula)
@@ -55,28 +57,40 @@ def _predict_one(formula: str, b: float) -> float:
     x = x_sn / tot
     return (1 - x) * E_PB + x * E_SN - b * x * (1 - x)
 
-# ─── public validate() ────────────────────────────────────────────────────
- def validate(
-     b: float = 0.30,
-     df: pd.DataFrame | None = None,
- ) -> tuple[dict[str, float], pd.DataFrame, pd.DataFrame]:
--    if df is None:
-+    if df is None:
-         df = load_default_dataset()
-+    # ─── normalize column names (so “Eg eV”, “ Eg_eV ”, “Eg (eV)” all become Eg_eV)
-+    df.columns = (
-+        df.columns
-+        .str.strip()
-+        .str.replace(" ", "_")
-+        .str.replace(r"[^\w_]", "", regex=True)
-+    )
+# ─── public validate() ───────────────────────────────────────────────────
+def validate(
+    b: float = 0.30,
+    df: pd.DataFrame | None = None,
+) -> tuple[dict[str, float], pd.DataFrame, pd.DataFrame]:
+    """
+    Run the validation for bowing parameter *b*.
 
+    Returns
+    -------
+    metrics : dict   – N, MAE, RMSE, R²
+    residuals : DataFrame[Composition, Eg_eV, Eg_pred, abs_err]
+    skipped   : DataFrame[Composition, Eg_eV]
+    """
+    if df is None:
+        df = load_default_dataset()
+
+    # normalize column names so Eg_eV is always present
     df = df.copy()
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.replace(" ", "_")
+        .str.replace(r"[^\w_]", "", regex=True)
+    )
+
     df["Eg_pred"] = df["Composition"].apply(lambda f: _predict_one(f, b))
 
     skipped = df[df.Eg_pred.isna()][["Composition", "Eg_eV"]]
     good = df.dropna(subset=["Eg_pred"]).copy()
-    good["abs_err"] = (good.Eg_pred - good.Eg_eV.astype(float)).abs()
+    good["abs_err"] = (good["Eg_pred"] - good["Eg_eV"].astype(float)).abs()
+
+    if good.empty:
+        raise ValueError("No parsable compositions in the supplied file.")
 
     metrics = dict(
         N=int(good.shape[0]),
