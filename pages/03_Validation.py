@@ -1,101 +1,102 @@
-# backend/validate.py
+# pages/03_Validation.py
 
-from __future__ import annotations
 import numpy as np
 import pandas as pd
-import re
-from pathlib import Path
+import plotly.express as px
+import streamlit as st
 
-# ─── point to the built-in 27-point CSV ────────────────────────────────
-DATA_CSV = Path(__file__).parent / "data" / "perovskite_bandgap_merged.csv"
+from backend.validate import validate, load_default_dataset
 
-# ─── simple parser for CsSnxPbxI3 formulas ─────────────────────────────
-_RE_SN = re.compile(r"Sn(?P<frac>[0-9.]+)?")
-_RE_PB = re.compile(r"Pb(?P<frac>[0-9.]+)?")
-def _frac(regex: re.Pattern[str], text: str) -> float:
-    m = regex.search(text)
-    if not m:
-        return 0.0
-    raw = m.group("frac")
-    return 1.0 if raw in (None, "") else float(raw)
+st.set_page_config(page_title="Validation", page_icon="✅", layout="wide")
+st.markdown("## ✅ Validation – Experimental Band-Gap Benchmark")
 
-# ─── load experimental dataset ───────────────────────────────────────────
-def load_default_dataset() -> pd.DataFrame:
-    """27-point experimental benchmark shipped with the repo."""
-    return pd.read_csv(DATA_CSV)
+# Initialize bowing parameter in session state
+if "b_value" not in st.session_state:
+    st.session_state.b_value = 0.30
 
-# ─── fetch end-member gaps (falls back if no API) ────────────────────────
-try:
-    from .perovskite_utils import fetch_mp_data
-except ImportError:
-    fetch_mp_data = None
+# ─── 0) Upload or default dataset ────────────────────────────────────────
+uploaded = st.file_uploader(
+    "📥  Upload a CSV or ODS benchmark file "
+    "(leave empty to use the built-in 27-point dataset)",
+    type=["csv", "ods"],
+)
 
-_FALLBACK = {"CsSnI3": 1.30, "CsPbI3": 1.73}
-_CACHE: dict[str, float] = {}
-def _mp_gap(formula: str) -> float:
-    if formula not in _CACHE:
-        if fetch_mp_data:
-            try:
-                doc = fetch_mp_data(formula, ["band_gap"])
-                _CACHE[formula] = float(doc["band_gap"])
-            except Exception:
-                _CACHE[formula] = _FALLBACK.get(formula, np.nan)
-        else:
-            _CACHE[formula] = _FALLBACK.get(formula, np.nan)
-    return _CACHE[formula]
+if uploaded:
+    if uploaded.name.lower().endswith(".csv"):
+        df_exp = pd.read_csv(uploaded)
+    else:
+        df_exp = pd.read_excel(uploaded, engine="odf")
+else:
+    df_exp = load_default_dataset()
 
-E_SN = _mp_gap("CsSnI3")
-E_PB = _mp_gap("CsPbI3")
-
-# ─── predict via Vegard + bowing ─────────────────────────────────────────
-def _predict_one(formula: str, b: float) -> float:
-    x_sn = _frac(_RE_SN, formula)
-    x_pb = _frac(_RE_PB, formula)
-    tot = x_sn + x_pb
-    if tot == 0:
-        return np.nan
-    x = x_sn / tot
-    return (1 - x) * E_PB + x * E_SN - b * x * (1 - x)
-
-# ─── public validate() ───────────────────────────────────────────────────
-def validate(
-    b: float = 0.30,
-    df: pd.DataFrame | None = None,
-) -> tuple[dict[str, float], pd.DataFrame, pd.DataFrame]:
-    """
-    Run the validation for bowing parameter *b*.
-
-    Returns
-    -------
-    metrics : dict   – N, MAE, RMSE, R²
-    residuals : DataFrame[Composition, Eg_eV, Eg_pred, abs_err]
-    skipped   : DataFrame[Composition, Eg_eV]
-    """
-    if df is None:
-        df = load_default_dataset()
-
-    # normalize column names so Eg_eV is always present
-    df = df.copy()
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.replace(" ", "_")
-        .str.replace(r"[^\w_]", "", regex=True)
+# ─── 1) Bowing slider + optimise button ─────────────────────────────────
+col1, col2 = st.columns([4, 1])
+with col1:
+    b = st.slider(
+        "Bowing parameter *b* (eV)",
+        0.00, 1.00,
+        value=st.session_state.b_value,
+        step=0.01,
     )
+    if b != st.session_state.b_value:
+        st.session_state.b_value = b
+with col2:
+    if st.button("🔍 optimise"):
+        grid = np.linspace(0.00, 1.00, 51)
+        best_b = float(
+            min(grid, key=lambda bb: validate(bb, df_exp)[0]["MAE"])
+        )
+        st.session_state.b_value = best_b
+        st.success(f"Optimal b ≃ {best_b:.2f} eV")
 
-    df["Eg_pred"] = df["Composition"].apply(lambda f: _predict_one(f, b))
+b = st.session_state.b_value
 
-    skipped = df[df.Eg_pred.isna()][["Composition", "Eg_eV"]]
-    good = df.dropna(subset=["Eg_pred"]).copy()
-    good["abs_err"] = (good["Eg_pred"] - good["Eg_eV"].astype(float)).abs()
+# ─── 2) Run validation ───────────────────────────────────────────────────
+metrics, resid, skipped = validate(b, df_exp)
 
-    if good.empty:
-        raise ValueError("No parsable compositions in the supplied file.")
+# ─── 3) KPI display + bootstrap CI on MAE ───────────────────────────────
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("N points", metrics["N"])
+c2.metric("MAE (eV)", f"{metrics['MAE']:.3f}")
+c3.metric("RMSE (eV)", f"{metrics['RMSE']:.3f}")
+c4.metric("R²", f"{metrics['R2']:.3f}")
 
-    metrics = dict(
-        N=int(good.shape[0]),
-        MAE=good.abs_err.mean(),
-        RMSE=np.sqrt((good.abs_err ** 2).mean()),
-        R2=np.corrcoef(good.Eg_eV.astype(float), good.Eg_pred)[0, 1] ** 2,
-    )
-    return metrics, good[["Composition", "Eg_eV", "Eg_pred", "abs_err"]], skipped
+def bootstrap_ci(y_true, y_pred, n=2000):
+    idx = np.random.randint(0, len(y_true), (n, len(y_true)))
+    maes = np.abs(y_true[idx] - y_pred[idx]).mean(axis=1)
+    return np.percentile(maes, [2.5, 97.5])
+
+lo, hi = bootstrap_ci(
+    resid.Eg_eV.to_numpy(dtype=float),
+    resid.Eg_pred.to_numpy(dtype=float),
+)
+st.caption(f"95 % CI on MAE: **{lo:.3f} – {hi:.3f} eV**")
+
+# ─── 4) Parity plot ──────────────────────────────────────────────────────
+fig = px.scatter(
+    resid,
+    x="Eg_eV",
+    y="Eg_pred",
+    hover_data=["Composition", "abs_err"],
+    labels={"Eg_eV": "Experimental E₉ (eV)", "Eg_pred": "Predicted E₉ (eV)"},
+    height=500,
+)
+x0, x1 = resid.Eg_eV.min(), resid.Eg_eV.max()
+fig.add_shape(type="line", x0=x0, y0=x0, x1=x1, y1=x1, line=dict(dash="dash"))
+st.plotly_chart(fig, use_container_width=True)
+
+# ─── 5) Residuals table with Outlier flag ────────────────────────────────
+resid = resid.assign(Outlier=lambda df: df.abs_err > 0.15)
+st.markdown("#### Residuals (|error| > 0.15 eV flagged)")
+st.dataframe(resid, hide_index=True, height=300)
+st.download_button(
+    "💾 Download residuals CSV",
+    resid.to_csv(index=False).encode(),
+    "validation_residuals.csv",
+    "text/csv",
+)
+
+# ─── 6) Show skipped compositions, if any ────────────────────────────────
+if not skipped.empty:
+    with st.expander(f"⚠️ {len(skipped)} skipped compositions"):
+        st.dataframe(skipped, hide_index=True)
