@@ -67,13 +67,17 @@ x0, x1 = resid.Eg_eV.min(), resid.Eg_eV.max()
 fig.add_shape(type="line", x0=x0, y0=x0, x1=x1, y1=x1, line=dict(dash="dash"))
 st.plotly_chart(fig, use_container_width=True)
 
-# ─── 5) Residual table (highlight |err|>0.15) ─────────────────────────
+# ─── 5) Residual table (highlight |err|>0.15) ────────────────────────
 styled = resid.style.apply(
     lambda r: ["background:#fee" if v > 0.15 else "" for v in r.abs_err],
     axis=1,
-)
+).hide_index()
+
 st.markdown("#### Residuals")
-st.dataframe(styled, hide_index=True, height=300)
+# render the styled DataFrame as HTML
+resid_html = styled.to_html()
+st.markdown(resid_html, unsafe_allow_html=True)
+
 st.download_button(
     "💾 Download residuals CSV",
     resid.to_csv(index=False).encode(),
