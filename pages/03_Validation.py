@@ -1,5 +1,3 @@
-# pages/03_Validation.py
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -25,7 +23,6 @@ if uploaded:
     if uploaded.name.lower().endswith(".csv"):
         df_exp = pd.read_csv(uploaded)
     else:
-        # if you installed odfpy in requirements.txt
         df_exp = pd.read_excel(uploaded, engine="odf")
 else:
     df_exp = load_default_dataset()
