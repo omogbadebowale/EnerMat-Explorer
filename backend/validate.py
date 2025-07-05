@@ -71,10 +71,11 @@ def validate(
     residuals : DataFrame[Composition, Eg_eV, Eg_pred, abs_err]
     skipped   : DataFrame[Composition, Eg_eV]
     """
+    # 1) Load default if none provided
     if df is None:
         df = load_default_dataset()
 
-    # normalize column names so Eg_eV is always present
+    # 2) Normalize column names so we always have Composition and Eg_eV
     df = df.copy()
     df.columns = (
         df.columns
@@ -83,19 +84,30 @@ def validate(
         .str.replace(r"[^\w_]", "", regex=True)
     )
 
+    # 3) Coerce Eg_eV to numeric, drop rows where it fails or Composition missing
+    df["Eg_eV"] = pd.to_numeric(df.get("Eg_eV", pd.Series()), errors="coerce")
+    df = df.dropna(subset=["Composition", "Eg_eV"])
+
+    # 4) Predict using Vegard + bowing
     df["Eg_pred"] = df["Composition"].apply(lambda f: _predict_one(f, b))
 
+    # 5) Split into skipped (no Eg_pred) vs valid
     skipped = df[df.Eg_pred.isna()][["Composition", "Eg_eV"]]
     good = df.dropna(subset=["Eg_pred"]).copy()
-    good["abs_err"] = (good["Eg_pred"] - good["Eg_eV"].astype(float)).abs()
+    good["abs_err"] = (good["Eg_pred"] - good["Eg_eV"]).abs()
 
     if good.empty:
-        raise ValueError("No parsable compositions in the supplied file.")
+        raise ValueError("No valid compositions remain after parsing and type coercion.")
 
+    # 6) Compute metrics
     metrics = dict(
         N=int(good.shape[0]),
         MAE=good.abs_err.mean(),
         RMSE=np.sqrt((good.abs_err ** 2).mean()),
-        R2=np.corrcoef(good.Eg_eV.astype(float), good.Eg_pred)[0, 1] ** 2,
+        R2=np.corrcoef(good.Eg_eV.to_numpy(), good.Eg_pred.to_numpy())[0, 1] ** 2,
     )
-    return metrics, good[["Composition", "Eg_eV", "Eg_pred", "abs_err"]], skipped
+
+    # 7) Return metrics, residuals, and any skipped rows
+    residuals = good[["Composition", "Eg_eV", "Eg_pred", "abs_err"]]
+    return metrics, residuals, skipped
+
