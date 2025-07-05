@@ -1,79 +1,96 @@
 # pages/03_Validation.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import KFold, cross_val_predict
-from sklearn.impute import SimpleImputer
 
-# your featurizer; adjust path if needed
+# your loader from backend.validate
+from backend.validate import load_default_dataset  
+# your featurizer from backend.perovskite_utils
 from backend.perovskite_utils import featurize  
-from backend.validate import load_default_dataset 
-from backend.perovskite_utils import featurize
 
+# ─── Page setup ────────────────────────────────────────────
 st.set_page_config(page_title="Validation – Experimental Band-Gap Benchmark")
 st.markdown("## ✅ Validation – Experimental Band-Gap Benchmark")
 
-# 1. load uploaded or default
+# ─── 1) Load experimental DataFrame ───────────────────────
 uploaded = st.file_uploader("📥 Upload a CSV benchmark file", type="csv")
-if uploaded is None:
-    st.warning("Please upload a CSV benchmark file. The built-in dataset is disabled.")
+if uploaded:
+    df_exp = pd.read_csv(uploaded)
+    st.success(f"Loaded {df_exp.shape[0]} rows from your file")
+else:
+    df_exp = load_default_dataset()
+    st.info(f"No upload detected – using built-in {len(df_exp)}-point dataset")
+
+# ─── 2) Normalize column names ─────────────────────────────
+df_exp = df_exp.copy()
+df_exp.columns = (
+    df_exp.columns.str.strip()
+                     .str.replace(" ", "_")
+                     .str.replace(r"[^\w_]", "", regex=True)
+)
+
+# require exactly these two columns
+if not {"Composition","Eg_eV"}.issubset(df_exp.columns):
+    st.error("❌ Your CSV must contain columns ‘Composition’ and ‘Eg_eV’")
     st.stop()
-df = pd.read_csv(uploaded)
 
-# 2. normalize column names
-df.columns = (
-    df.columns
-      .str.strip()
-      .str.replace(" ", "_")
-      .str.replace(r"[^\w_]", "", regex=True)
-)
+# ─── 3) Build feature matrix with featurize() ─────────────
+# this will return NaN-filled dict whenever parsing fails
+X_full = pd.DataFrame([featurize(c) for c in df_exp["Composition"]])
 
-# 3. build features + target
-df = df.reset_index(drop=True)
-X_full = pd.DataFrame([featurize(comp) for comp in df["Composition"]])
-y = df["Eg_eV"].to_numpy()
+# warn if any compositions failed to featurize
+n_bad = X_full.isna().any(axis=1).sum()
+if n_bad:
+    st.warning(f"⚠️  {n_bad} composition(s) failed to parse and will be mean-imputed")
 
-# 4. impute any NaNs in X
-imp = SimpleImputer(strategy="mean")
-X = imp.fit_transform(X_full)
-n_imputed = np.isnan(X_full.values).sum()
-if n_imputed > 0:
-    st.warning(f"⚠️ Imputed {n_imputed} missing feature values (mean‐fill)")
+# target vector
+y = df_exp["Eg_eV"].to_numpy()
 
-# 5. train RidgeCV
+# ─── 4) Build and fit a Pipeline that imputes THEN RidgeCV ──
 alphas = np.logspace(-3, 2, 30)
-cv = KFold(5, shuffle=True, random_state=0)
-model = RidgeCV(alphas=alphas, cv=cv)
-model.fit(X, y)
+pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="mean")),
+    ("ridgecv", RidgeCV(alphas=alphas, cv=KFold(5, shuffle=True, random_state=0))),
+])
 
-# 6. display upload + training metrics
+# cross-val predictions (imputer+model always sees no NaNs)
+y_cv = cross_val_predict(pipeline, X_full, y, cv=5)
+
+# CV metrics
+cv_mae = np.mean(np.abs(y_cv - y))
+cv_std = np.std (np.abs(y_cv - y))
+
+# now fit on the full dataset
+pipeline.fit(X_full, y)
+model = pipeline.named_steps["ridgecv"]
+
+# ─── 5) Display summary metrics ────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("N uploaded", len(df))
-col2.metric("N features", X.shape[1])
-cv_preds = cross_val_predict(model, X, y, cv=cv)
-cv_mae = np.mean(np.abs(cv_preds - y))
-cv_std = np.std(np.abs(cv_preds - y))
-col3.metric("5-Fold CV MAE", f"{cv_mae:.3f} ± {cv_std:.3f} eV")
-col4.metric("Ridge α", f"{model.alpha_:.3f}")
+col1.metric("N points",     len(y))
+col2.metric("5-Fold CV MAE", f"{cv_mae:.3f} ± {cv_std:.3f} eV")
+col3.metric("RMSE (CV)",     f"{np.sqrt(np.mean((y_cv-y)**2)):.3f} eV")
+col4.metric("R² (CV)",       f"{pipeline.score(X_full,y):.3f}")
 
-# 7. predict & plot
-df["Eg_pred"] = model.predict(X)
-df["abs_err"] = np.abs(df["Eg_pred"] - df["Eg_eV"])
-st.metric("MAE", f"{df['abs_err'].mean():.3f} eV")
-st.metric("RMSE", f"{np.sqrt((df['abs_err']**2).mean()):.3f} eV")
+# ─── 6) Predict on full set & plot ────────────────────────
+df_exp["Eg_pred"] = model.predict(X_full)
+df_exp["abs_err"] = (df_exp["Eg_pred"] - df_exp["Eg_eV"]).abs()
 
-fig = px.scatter(
-    df, x="Eg_eV", y="Eg_pred", trendline="ols",
-    labels={"Eg_eV": "Experimental E₉ (eV)", "Eg_pred":"Predicted E₉ (eV)"}
-)
+fig = px.scatter(df_exp, x="Eg_eV", y="Eg_pred", trendline="ols",
+                 labels={"Eg_eV":"Experimental E₉","Eg_pred":"Predicted E₉"})
 st.plotly_chart(fig, use_container_width=True)
 
-# 8. show outliers & download
-outliers = df[df["abs_err"] > 0.15]
-st.markdown("### Residuals (|error| > 0.15 eV flagged)")
+# downstream residuals table
+outliers = df_exp[df_exp["abs_err"] > 0.15]
+st.markdown("### Residuals (|error| > 0.15 eV)")
 st.dataframe(outliers[["Composition","Eg_eV","Eg_pred","abs_err"]], hide_index=True, height=300)
-csv = df.to_csv(index=False)
+
+# Download CSV of the residuals
+csv = outliers.to_csv(index=False)
 st.download_button("Download residuals CSV", csv, "residuals.csv")
