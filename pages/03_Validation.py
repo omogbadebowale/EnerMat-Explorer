@@ -72,14 +72,22 @@ def featurize(comp):
     }
 
 # ─── Build feature matrix & target ─────────────────────────────────────────
-X = pd.DataFrame([featurize(c) for c in valid["Composition"]])
-y = valid["Eg_eV"].to_numpy()
+# ─── Build feature matrix & target ─────────────────────────────────────────
+X_full = pd.DataFrame([featurize(c) for c in valid["Composition"]])
+y_full = valid["Eg_eV"].to_numpy()
+
+# ─── Drop any rows where featurization failed (NaN tol, etc) ───────────────
+mask = X_full.notnull().all(axis=1)
+if not mask.all():
+    dropped = (~mask).sum()
+    st.warning(f"⚠️ Dropping {dropped} composition(s) with invalid features")
+X = X_full.loc[mask].reset_index(drop=True)
+y = y_full[mask]
 
 # ─── Train RidgeCV with 5-fold CV ──────────────────────────────────────────
-alphas = np.logspace(-3,2,30)
-model = RidgeCV(alphas=alphas, cv=KFold(5,shuffle=True,random_state=0))
+alphas = np.logspace(-3, 2, 30)
+model = RidgeCV(alphas=alphas, cv=KFold(5, shuffle=True, random_state=0))
 model.fit(X, y)
-
 cv_maes = -cross_val_score(
     model, X, y,
     cv=KFold(5,shuffle=True,random_state=0),
