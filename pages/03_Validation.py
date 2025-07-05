@@ -29,16 +29,26 @@ else:
     st.info(f"No upload detected – using built-in {len(df_exp)}-point dataset")
 
 # ─── 2) Normalize column names ─────────────────────────────
-df_exp = df_exp.copy()
-df_exp.columns = (
-    df_exp.columns.str.strip()
-                     .str.replace(" ", "_")
-                     .str.replace(r"[^\w_]", "", regex=True)
-)
+ df = df.copy()
+ df.columns = (
+     df.columns.str.strip()
+              .str.replace(" ", "_")
+              .str.replace(r"[^\w_]", "", regex=True)
+ )
 
-# require exactly these two columns
-if not {"Composition","Eg_eV"}.issubset(df_exp.columns):
-    st.error("❌ Your CSV must contain columns ‘Composition’ and ‘Eg_eV’")
+-# early bail if columns missing
+-if not {"Composition","Eg_eV"}.issubset(df.columns):
++## ─── 2.a) Make sure your target is numeric ─────────────────────
++df["Eg_eV"] = pd.to_numeric(df["Eg_eV"], errors="coerce")
++bad_y = df["Eg_eV"].isna().sum()
++if bad_y:
++    st.warning(f"⚠️ Dropping {bad_y} row(s) whose Eg_eV failed to parse")
++    df = df[df["Eg_eV"].notna()].reset_index(drop=True)
++
++# now bail if you’ve literally lost your two key columns:
++if not {"Composition","Eg_eV"}.issubset(df.columns):
+     st.error("❌ Must have columns ‘Composition’ and ‘Eg_eV’")
+
     st.stop()
 
 # ─── 3) Build feature matrix with featurize() ─────────────
