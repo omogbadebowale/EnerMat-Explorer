@@ -85,7 +85,6 @@ col4.metric("Dataset MAE",    f"{np.mean(np.abs(model.predict(X) - y)):.3f} eV")
 fig = px.scatter(
     valid.assign(Eg_pred=model.predict(X)),
     x="Eg_eV", y="Eg_pred",
-    trendline="ols",
     labels={"Eg_eV":"Experimental E₉ (eV)", "Eg_pred":"Predicted E₉ (eV)"}
 )
 st.plotly_chart(fig, use_container_width=True)
