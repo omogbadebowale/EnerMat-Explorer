@@ -10,3 +10,4 @@ python-docx
 kaleido>=0.2.1
 plotly>=5.20
 odfpy>=1.4.1
+scikit-learn>=1.2.0
