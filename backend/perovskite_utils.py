@@ -140,32 +140,37 @@ def screen_ternary(
 
 # alias for backwards compatibility
 _summary = fetch_mp_data
-diff --git a/backend/perovskite_utils.py b/backend/perovskite_utils.py
-index abc1234..def5678 100644
---- a/backend/perovskite_utils.py
-+++ b/backend/perovskite_utils.py
-@@ (end of file)
-     return result  # <-- your last existing function's return
+import numpy as np
+import pandas as pd
+from pymatgen.core import Composition
 
-+
-+def featurize(composition: str) -> dict[str, float]:
-+    """
-+    Convert a formula string (e.g. "CsSn0.5Pb0.5I3") into a flat dict of numeric features.
-+    Here’s a simple example that returns:
-+      - fraction of Sn
-+      - fraction of Pb
-+      - total number of atoms
-+      - average atomic number
-+    You should expand this with whatever descriptors your model needs.
-+    """
-+    comp = Composition(composition)
-+    el_amt = {el.symbol: amt for el, amt in comp.get_el_amt_dict().items()}
-+    total = sum(el_amt.values())
-+    return {
-+        "frac_Sn": el_amt.get("Sn", 0) / total,
-+        "frac_Pb": el_amt.get("Pb", 0) / total,
-+        "n_atoms": total,
-+        "avg_Z": np.mean([el.Z for el in comp.elements]),
-+        # … add more chemically meaningful features here …
-+    }
+# ─── your existing imports & utilities ──────────────────────────────────
+# (e.g. any CSV-loading helpers or other domain functions)
 
+# … everything you already had above …
+
+# ─── your new featurizer ──────────────────────────────────────────────
+
+def featurize(composition: str) -> dict[str, float]:
+    """
+    Convert a formula string (e.g. "CsSn0.5Pb0.5I3") into a flat dict of numeric features.
+    Example features:
+      - fraction of Sn
+      - fraction of Pb
+      - total number of atoms
+      - average atomic number
+    Expand this with any descriptors your model needs.
+    """
+    comp = Composition(composition)
+    el_amt = comp.get_el_amt_dict()           # { 'Cs': 1.0, 'Sn': 0.5, 'Pb': 0.5, 'I': 3.0 }
+    total = sum(el_amt.values())
+    # calculate average atomic number
+    avg_Z = np.mean([el.Z for el in comp.elements])
+
+    return {
+        "frac_Sn": el_amt.get("Sn", 0) / total,
+        "frac_Pb": el_amt.get("Pb", 0) / total,
+        "n_atoms": total,
+        "avg_Z": avg_Z,
+        # … add more chemically meaningful features here …
+    }
