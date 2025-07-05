@@ -150,27 +150,30 @@ from pymatgen.core import Composition
 # … everything you already had above …
 
 # ─── your new featurizer ──────────────────────────────────────────────
+# ─── backend/perovskite_utils.py ─────────────────────────────────────────
+import numpy as np
+from pymatgen.core import Composition
 
 def featurize(composition: str) -> dict[str, float]:
     """
-    Convert a formula string (e.g. "CsSn0.5Pb0.5I3") into a flat dict of numeric features.
-    Example features:
-      - fraction of Sn
-      - fraction of Pb
-      - total number of atoms
-      - average atomic number
-    Expand this with any descriptors your model needs.
+    Convert a formula string (e.g. "CsSn0.5Pb0.5I3") into numeric features.
+    Returns NaN-filled dict if pymatgen fails to parse.
     """
-    comp = Composition(composition)
-    el_amt = comp.get_el_amt_dict()           # { 'Cs': 1.0, 'Sn': 0.5, 'Pb': 0.5, 'I': 3.0 }
-    total = sum(el_amt.values())
-    # calculate average atomic number
-    avg_Z = np.mean([el.Z for el in comp.elements])
+    # define your feature names once
+    feature_names = ["frac_Sn", "frac_Pb", "n_atoms", "avg_Z"]
+    try:
+        comp = Composition(composition)
+        el_amt = comp.get_el_amt_dict()
+        total = sum(el_amt.values())
+        avg_Z = np.mean([el.Z for el in comp.elements])
 
-    return {
-        "frac_Sn": el_amt.get("Sn", 0) / total,
-        "frac_Pb": el_amt.get("Pb", 0) / total,
-        "n_atoms": total,
-        "avg_Z": avg_Z,
-        # … add more chemically meaningful features here …
-    }
+        return {
+            "frac_Sn": el_amt.get("Sn", 0) / total,
+            "frac_Pb": el_amt.get("Pb", 0) / total,
+            "n_atoms": total,
+            "avg_Z": avg_Z,
+        }
+    except Exception:
+        # any parse error => return NaNs for all features
+        return {name: np.nan for name in feature_names}
+
