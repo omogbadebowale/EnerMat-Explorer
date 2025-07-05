@@ -10,7 +10,8 @@ from sklearn.impute import SimpleImputer
 
 # your featurizer; adjust path if needed
 from backend.perovskite_utils import featurize  
-from backend.validate import load_default_dataset  
+from backend.validate import load_default_dataset 
+from backend.perovskite_utils import featurize
 
 st.set_page_config(page_title="Validation – Experimental Band-Gap Benchmark")
 st.markdown("## ✅ Validation – Experimental Band-Gap Benchmark")
