@@ -78,21 +78,9 @@ df["Eg_pred"] = vegard_bowing(df["x"], bow)
 mae = mean_absolute_error(df["Eg_exp"], df["Eg_pred"])
 r2  = r2_score(df["Eg_exp"], df["Eg_pred"])
 
-# ── 4‑A.  Compact summary table (Target vs. Achieved) ──────────
-summary_md = f"""
-| Metric | Target | Achieved | Comment |
-|--------|--------|----------|---------|
-| **MAE (eV)** | ≤ 0.15 | **{mae:.3f}** | {'✔️ 5× better' if mae <= 0.15 else '⚠️ Above target'} |
-| **R²**       | ≥ 0.85 | **{r2:.2f}** | {'✔️ Very good' if r2 >= 0.85 else '⚠️ Below target'} |
-"""
-
-st.markdown("### Validation summary")
-st.markdown(summary_md)
-
-# ── 4‑B.  Metric widgets ───────────────────────────────────────
 col1, col2 = st.columns(2)
-col1.metric("Mean Absolute Error (eV)", f"{mae:.3f}", delta=f"Target ≤ 0.15")
-col2.metric("R²", f"{r2:.2f}", delta=f"Target ≥ 0.85")
+col1.metric("Mean Absolute Error (eV)", f"{mae:.3f}")
+col2.metric("R²", f"{r2:.2f}")
 
 # ── 5.  Parity plot ───────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(5, 5))
@@ -106,11 +94,6 @@ st.pyplot(fig)
 
 # ── 6.  Download results ─────────────────────────────────────
 st.download_button(
-    "Download results (CSV)",
-    df.to_csv(index=False).encode(),
-    "validation_results.csv",
-    "text/csv",
-)(
     "Download results (CSV)",
     df.to_csv(index=False).encode(),
     "validation_results.csv",
