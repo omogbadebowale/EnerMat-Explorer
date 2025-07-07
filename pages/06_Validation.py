@@ -1,4 +1,4 @@
-# pages/03_Validation.py
+# pages/06_Validation.py
 
 import streamlit as st
 import pandas as pd
