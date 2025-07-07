@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, r2_score
 
 """
-📊 **Model Validation 
+Model Validation 
 =================================================================
 * End‑member gaps `Eg_A` (CsPbBr₃) & `Eg_B` (CsPbI₃) are estimated from
-  your dataset (averaging rows with *x* < 0.05 and *x* > 0.95). 
+  dataset (averaging rows with *x* < 0.05 and *x* > 0.95). 
 * Vegard + bowing equation:
   ```text
   Eg_pred = Eg_A·(1‑x) + Eg_B·x − bow·x(1‑x)
