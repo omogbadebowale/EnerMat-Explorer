@@ -6,13 +6,10 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, r2_score
 
 """
-📊 **Model Validation – calibrated end‑members (no external API)**
+📊 **Model Validation 
 =================================================================
-* Works **offline** – no Materials‑Project lookup, so it’s instant and
-  cannot fail on missing API keys.
 * End‑member gaps `Eg_A` (CsPbBr₃) & `Eg_B` (CsPbI₃) are estimated from
-  your dataset (averaging rows with *x* < 0.05 and *x* > 0.95). If either
-  end is missing, we fall back to literature values 2.30 eV and 1.73 eV.
+  your dataset (averaging rows with *x* < 0.05 and *x* > 0.95). 
 * Vegard + bowing equation:
   ```text
   Eg_pred = Eg_A·(1‑x) + Eg_B·x − bow·x(1‑x)
