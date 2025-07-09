@@ -29,24 +29,26 @@ st.set_page_config(page_title="Model Validation", page_icon="✅")
 st.title("📊 Model Validation (calibrated)")
 
 # ── 1.  Load CSV ───────────────────────────────────────────────
-from pathlib import Path
-HERE = Path(__file__).parent                # pages/
-DEFAULT_PATH = (HERE / ".." / "data" / "benchmark_eg.csv").resolve()
+DEFAULT_PATH = "data/benchmark_eg.csv"
 
-file_up = st.file_uploader(
-    "⬆️ Upload experimental CSV (optional)", type=["csv"]
-)
+df_upload = st.file_uploader("⬆️ Upload experimental CSV (optional)", type=["csv"])
 
-if file_up is not None:                     # 1️⃣ user supplied a file
-    df = pd.read_csv(file_up)
-elif DEFAULT_PATH.exists():                 # 2️⃣ fall-back to our dataset
+if df_upload is not None:
+    df = pd.read_csv(df_upload)
+elif os.path.exists(DEFAULT_PATH):
     df = pd.read_csv(DEFAULT_PATH)
-else:                                       # 3️⃣ nothing available
-    st.info(
-        "Upload a CSV or add one at **data/benchmark_eg.csv** "
-        "(expected columns: x, Eg_exp, …)"
-    )
+else:
+    df = None
+
+if df is None:
+    st.info("Upload a CSV or place one at data/benchmark_eg.csv (6 columns)")
     st.stop()
+
+# Basic numeric cleaning
+for col in ("x", "Eg_exp"):
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+df.dropna(subset=["x", "Eg_exp"], inplace=True)
 
 # ── 2.  Calibrate end‑member gaps ──────────────────────────────
 DEFAULT_EG_A = 2.30  # CsPbBr3
