@@ -31,16 +31,14 @@ st.title("📊 Model Validation (calibrated)")
 # ── 1.  Load CSV ───────────────────────────────────────────────
 DEFAULT_PATH = "data/benchmark_eg.csv"
 
-df_upload = st.file_uploader("⬆️ Upload experimental CSV (optional)", type=["csv"])
+df_upload = st.file_uploader("⬆️ Upload experimental CSV (optional)",
+                             type=["csv"])
 
-if df_upload is not None:
+if df_upload is not None:                      # visitor supplied a file
     df = pd.read_csv(df_upload)
-elif os.path.exists(DEFAULT_PATH):
+elif os.path.exists(DEFAULT_PATH):             # fall back to benchmark
     df = pd.read_csv(DEFAULT_PATH)
-else:
-    df = None
-
-if df is None:
+else:                                          # nothing to work with
     st.info("Upload a CSV or place one at data/benchmark_eg.csv (6 columns)")
     st.stop()
 
