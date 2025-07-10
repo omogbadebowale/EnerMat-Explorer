@@ -25,7 +25,7 @@ Required columns (order‑independent)   →  `x`, `Eg_exp`
 (other fields are ignored here).
 """
 
-st.set_page_config(page_title="Model Validation"
+st.set_page_config(page_title="Model Validation", page_icon="✅")
 st.title("📊 Model Validation (calibrated)")
 
 # ── 1. Load CSV ────────────────────────────────────────────────
