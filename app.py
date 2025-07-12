@@ -56,6 +56,7 @@ with st.sidebar:
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model Settings"
+# Sidebar widget  –  copy/paste exactly
 bowing = st.number_input(
     "Bowing b  (negative for Br→Cl)",
     min_value = -1.0,
@@ -75,7 +76,6 @@ df = run_screen(
         bowing    = bowing,   # ← MUST be 'bowing'
         dx        = dx,
 )
-
 
 # ─── Execution Control ────────────────────────────────────────────────────────
 col_run, col_back = st.columns([3, 1])
