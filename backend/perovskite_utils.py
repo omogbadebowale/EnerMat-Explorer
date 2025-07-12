@@ -4,7 +4,7 @@ Clean build • 2025‑07‑12 🟢
 • calibrated experimental gaps
 • strict optical window (step 0/1)
 • convex‑hull lattice stability (Ehull)
-• Sn²⁺→Sn⁴⁺ oxidation penalty ΔEox
+• Sn²⁺→Sn⁴⁺ oxidation penalty ΔEox (fixed O₂ reference)
 • tidy binary + ternary screens, VALID Python
 """
 
@@ -49,8 +49,6 @@ IONIC_RADII = {
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-# Materials‑Project O₂ energy (with FERE correction) per molecule
-E_O2 = -9.86  # eV / O2
 # effective temperature used in oxidation penalty
 K_T_EFF = 0.20  # eV
 
@@ -74,12 +72,14 @@ def fetch_mp_data(formula: str, fields: list[str]):
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str, hal: str) -> float:
-    """ΔE per Sn for   CsSnX3 + ½ O2 → ½ Cs2SnX6 + ½ SnO2  (negative → easy)."""
+    """ΔE per Sn for   CsSnX3 + ½ O₂ → ½ Cs₂SnX₆ + ½ SnO₂  (negative → easy)."""
     e_reac = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
     e_prod1 = fetch_mp_data(f"Cs2Sn{hal}6", ["energy_per_atom"])["energy_per_atom"]
     e_prod2 = fetch_mp_data("SnO2", ["energy_per_atom"])["energy_per_atom"]
+    # O₂ reference **query live** then multiply by 2 atoms per molecule
+    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0
     e_products = (e_prod1 + e_prod2) / 2.0
-    return (e_products + 0.5 * E_O2) - e_reac
+    return (e_products + 0.5 * e_o2) - e_reac
 
 score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
@@ -190,5 +190,5 @@ def screen_ternary(
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
 
-# alias for legacy callers
+# legacy alias
 _summary = fetch_mp_data
