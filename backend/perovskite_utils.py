@@ -174,4 +174,4 @@ def screen_ternary(
                 z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
             )
             dEox = z * oxA + x * oxB + y * oxC
-            score = math.exp(-max(Eh, 0) / 0.1) * score_band_gap(Eg, lo
+            score = math.exp(-max(Eh, 0) / 0.1) * score_band_gap(Eg, lo)
