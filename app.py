@@ -56,14 +56,7 @@ with st.sidebar:
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model Settings")
-    bowing = st.number_input(
-    "Bowing b  ( < 0 for Br→Cl,  > 0 for Sn↔Pb )",
-    min_value=-1.0,         # allow negatives
-    max_value= 1.0,
-    value   =-0.15,         # default for Br↔Cl
-    step    = 0.05,
-    format  ="%.2f",
-)
+    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode == "Ternary A–B–C":
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
@@ -305,15 +298,9 @@ with tab_plot:
         # Uncomment to export a sharp 3D PNG/SVG:
         # fig3d.write_image("ternary_screening.png", scale=3)
 
-# ─── Download Tab ───────────────────────────────────────────────────────────
+# ─── Download Tab ────────────────────────────────────────────────────────────
 with tab_dl:
-    csv = df.to_csv(
-        index=False,
-        columns=[
-            c for c in ["x", "y", "Eg", "Eg_error", "stability", "gap_score", "score"]
-            if c in df.columns
-        ]
-    ).encode()
+    csv = df.to_csv(index=False).encode()
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
     top = df.iloc[0]
