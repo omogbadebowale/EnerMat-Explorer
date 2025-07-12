@@ -55,7 +55,7 @@ with st.sidebar:
     st.header("Target Band Gap [eV]")
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
-    st.header("Model Settings"
+    st.header("Model Settings")
 # Sidebar widget  –  copy/paste exactly
 bowing = st.number_input(
     "Bowing b  (negative for Br→Cl)",
