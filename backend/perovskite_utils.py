@@ -100,7 +100,7 @@ def mix_abx3(
         form = np.exp(-0.5 * ((t - 0.90)/0.07)**2) * np.exp(-0.5 * ((mu - 0.50)/0.07)**2)
         env  = 1 + alpha * rh/100 + beta * temp/100
         score = form * stab * gap / env
-       rows.append({
+    rows.append({
     "x": round(x, 3),          # Br fraction
     "y": round(y, 3),          # Cl fraction
     "Eg": round(Eg, 3),
