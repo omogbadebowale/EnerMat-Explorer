@@ -22,12 +22,24 @@ mpr = MPRester(API_KEY)
 # ── Supported end-members ──────────────────────────────────────────────
 END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
-# ── Ionic radii (Å) for Goldschmidt tolerance ──────────────────────────
-IONIC_RADII = {
-    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
-    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
+# ── Calibrated experimental band-gaps (eV) ─────────────────────────────
+CALIBRATED_GAPS = {
+    # tin perovskites
+    "CsSnBr3": 1.79,     # Weller et al., 2015
+    "CsSnCl3": 2.83,     # Sun et al., 2021
+    "CsSnI3" : 1.30,     # Hao et al., 2014
+
+    # lead references (optional)
+    "CsPbBr3": 2.30,
+    "CsPbI3" : 1.73,
 }
 
+# ── Ionic radii (Å) for Goldschmidt tolerance ──────────────────────────
+IONIC_RADII = {
+    "Cs": 1.88, "Sn2+": 1.18, "Pb2+": 1.19,
+    "I": 2.20,  "Br": 1.96,  "Cl": 1.81,
+    # ...
+}
 
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
     """Return a dict of the first matching entry's requested fields, or None."""
