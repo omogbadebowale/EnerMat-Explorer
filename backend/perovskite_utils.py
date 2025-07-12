@@ -127,7 +127,15 @@ def mix_abx3(
         env = 1 + alpha * rh / 100 + beta * temp / 100
         score = form * stab * gap * ox_pen / env
 
-        rows.append({
+                    rows.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(dEox, 3),
+                "score": round(score, 3),
+                "formula": f"CsSn(Br{z:.2f}Cl{y:.2f}I{x:.2f})₃",
+            }){
             "x": round(x, 3),
             "Eg": round(Eg, 3),
             "Ehull": round(Ehull, 4),
@@ -136,42 +144,9 @@ def mix_abx3(
             "formula": f"{formula_A}-{formula_B} x={x:.2f}",
         })
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
-# ────────────────────────────────────────────────────────
-# Ternary  A–B–C  screen
-# ────────────────────────────────────────────────────────
-
-def screen_ternary(
-    A: str, B: str, C: str,
-    rh: float, temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    dx: float = 0.1, dy: float = 0.1,
-    n_mc: int = 200,   # unused – kept for API compatibility
-) -> pd.DataFrame:
-
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
-    if not (dA and dB and dC):
-        return pd.DataFrame()
-
-    oxA = oxidation_energy(A, "Br")  # assume A=Bromide, B=Chloride, C=Iodide for demo
-    oxB = oxidation_energy(B, "Cl")
-    oxC = oxidation_energy(C, "I")
-
-    lo, hi = bg
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
-            z = 1 - x - y
-            Eg = (
-                z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y
-            )
-            Eh = (
-                z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-            )
-            dEox = z * oxA + x * oxB + y * oxC
-            score = math.exp(-max(Eh, 0) / 0.1) * score_band_gap(Eg, lo)
+        # ---- end loops ---------------------------------------------------------
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
