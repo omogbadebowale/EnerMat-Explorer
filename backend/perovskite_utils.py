@@ -60,14 +60,23 @@ IONIC_RADII = {
 # Helpers
 # -------------------------------------------------------------------
 @lru_cache(maxsize=None)
+# backend/perovskite_utils.py  ⇢  inside fetch_mp_data()
+
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
-    """Return dict of requested fields for the first MP entry (cached)."""
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+    """Return a dict of the first matching entry's requested fields, or None."""
+    # 🔒 guarantee hashable
+    fields = tuple(fields)           # convert *once*, whatever came in
+    try:
+        docs = mpr.summary.search(formula=formula, fields=fields)
+    except TypeError as err:
+        # Defensive: log the offending type and re-raise a cleaner error
+        raise RuntimeError(f"MP query failed for {formula}: {err}") from err
+
     if not docs:
         return None
+
     entry = docs[0]
     return {f: getattr(entry, f) for f in fields if hasattr(entry, f)}
-
 
 def _apply_gap_corrections(formula: str, doc: dict) -> None:
     """Mutate *doc* in‑place so that 'band_gap' is physically calibrated."""
