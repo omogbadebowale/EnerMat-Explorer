@@ -1,185 +1,142 @@
-"""
-perovskite_backend.py  •  physics-corrected 2025-07-12
-======================================================
-High-throughput screening utilities for CsSn(Br,Cl,I)₃ alloys.
-Implements all fixes discussed with Explore-GPT:
 
-* +0.70/0.80/0.90 eV PBE→exp gap offsets for Br/Cl/I
-* negative bowing for Br↔Cl   (default −0.15 eV)
-* +25 meV·x(1−x) mixing enthalpy
-* exponential stability  exp(−Ehull/0.05 eV)
-* optical window 1.0–1.4 eV (strict)
-* optional uniform RH/T penalty (doesn’t distort ranking)
-* cubic perovskite filter in MP query
-
-Author: <your name>
-Licence: MIT
-"""
-
-from __future__ import annotations
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
+# for secrets fallback on Streamlit Cloud
+import streamlit as st
+
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ───────────────────────────────
-# 1.  Materials-Project set-up
-# ───────────────────────────────
-load_dotenv()
-_API = os.getenv("MP_API_KEY")
-if not _API or len(_API) != 32:
-    raise RuntimeError("Set a valid 32-char MP_API_KEY in .env or Streamlit Secrets.")
-mpr = MPRester(_API)
-
-# ───────────────────────────────
-# 2.  Empirical gap offsets (eV)
-# ───────────────────────────────
-GAP_CORR = {"I": 0.90, "Br": 0.70, "Cl": 0.80}
-
-# ───────────────────────────────
-# 3.  Helper functions
-# ───────────────────────────────
-def _mp_summary(formula: str) -> dict:
-    """First cubic-phase summary with band_gap & energy_above_hull."""
-    docs = mpr.summary.search(
-        formula=formula,
-        spacegroup_number={"$in": [221, 225]},   # Pm-3m / Fm-3m
-        fields=["band_gap", "energy_above_hull"],
+# ── Load Materials Project API key ─────────────────────────────────────
+API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
+if not API_KEY or len(API_KEY) != 32:
+    raise RuntimeError(
+        "🛑 Please set MP_API_KEY to your 32-character Materials Project API key"
     )
+mpr = MPRester(API_KEY)
+
+# ── Supported end-members ──────────────────────────────────────────────
+END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
+
+# ── Ionic radii (Å) for Goldschmidt tolerance ──────────────────────────
+IONIC_RADII = {
+    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
+    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
+}
+
+
+def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
+    """Return a dict of the first matching entry's requested fields, or None."""
+    docs = mpr.summary.search(formula=formula)
     if not docs:
-        raise ValueError(f"No cubic MP entry for {formula}")
-    d = docs[0]
-    return {"band_gap": d.band_gap, "Ehull": d.energy_above_hull}
+        return None
+    entry = docs[0]
+    out: dict = {}
+    for f in fields:
+        if hasattr(entry, f):
+            out[f] = getattr(entry, f)
+    return out if out else None
 
 
-def _correct_gap(formula: str, Eg_raw: float) -> float:
-    hal = next(h for h in GAP_CORR if h in formula)
-    return Eg_raw + GAP_CORR[hal]
+def score_band_gap(bg: float, lo: float, hi: float) -> float:
+    """How close bg is to the [lo, hi] window."""
+    if bg < lo:
+        return max(0.0, 1 - (lo - bg) / (hi - lo))
+    if bg > hi:
+        return max(0.0, 1 - (bg - hi) / (hi - lo))
+    return 1.0
 
 
-def _optical_weight(Eg: float, lo: float = 1.0, hi: float = 1.4) -> float:
-    """1.0 inside window, 0.0 outside."""
-    return 1.0 if lo <= Eg <= hi else 0.0
-
-
-def _env_penalty(RH: float, T: float) -> float:
-    """Uniform environment penalty; composition-independent."""
-    return 1.0 / (1 + RH / 100 + T / 100)
-
-# ───────────────────────────────
-# 4.  Binary screening
-# ───────────────────────────────
 def mix_abx3(
-    A: str,
-    B: str,
-    rh: float = 50.0,
-    temp: float = 25.0,
+    formula_A: str,
+    formula_B: str,
+    rh: float,
+    temp: float,
+    bg_window: tuple[float, float],
+    bowing: float = 0.0,
     dx: float = 0.05,
-    bowing: float = -0.15,            # negative for Br↔Cl
+    alpha: float = 1.0,
+    beta: float = 1.0,
 ) -> pd.DataFrame:
-    """Return DataFrame of x, Eg, Ehull, score for A(1-x)B(x)."""
+    """Binary screening A–B across x from 0→1."""
+    lo, hi = bg_window
+    dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
+    if not (dA and dB):
+        return pd.DataFrame()
 
-    dA = _mp_summary(A)
-    dB = _mp_summary(B)
-    Eg_A = _correct_gap(A, dA["band_gap"])
-    Eg_B = _correct_gap(B, dB["band_gap"])
+    comp = Composition(formula_A)
+    A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
+    B_site = next(e.symbol for e in comp.elements if e.symbol in {"Pb", "Sn"})
+    X_site = next(e.symbol for e in comp.elements if e.symbol in {"I", "Br", "Cl"})
+    rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
 
-    out = []
-    for x in np.arange(0.0, 1.0 + 1e-6, dx):
-        # band gap
-        Eg = (1 - x) * Eg_A + x * Eg_B - bowing * x * (1 - x)
+    rows = []
+    for x in np.arange(0, 1 + 1e-6, dx):
+        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
+        hull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        stability = max(0.0, 1 - hull)
+        gap_score = score_band_gap(Eg, lo, hi)
+        t = (rA + rX) / (np.sqrt(2) * (rB + rX))
+        mu = rB / rX
+        form_score = np.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * np.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
+        env_pen = 1 + alpha * (rh / 100) + beta * (temp / 100)
+        score = form_score * stability * gap_score / env_pen
+        rows.append({
+            "x": round(x, 3),
+            "Eg": round(Eg, 3),
+            "stability": round(stability, 3),
+            "score": round(score, 3),
+            "formula": f"{formula_A}-{formula_B} x={x:.2f}",
+        })
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-        # formation energy with +25 meV x(1-x) penalty
-        Ehull = (
-            (1 - x) * dA["Ehull"]
-            + x * dB["Ehull"]
-            + 0.025 * x * (1 - x)
-        )
 
-        stab = np.exp(-Ehull / 0.05)          # 50 meV e-fold
-        f_Eg = _optical_weight(Eg)
-        score = stab * f_Eg * _env_penalty(rh, temp)
-
-        out.append(
-            dict(
-                x=round(x, 3),
-                Eg=round(Eg, 3),
-                Ehull=round(Ehull, 3),
-                score=round(score, 3),
-            )
-        )
-
-    return pd.DataFrame(out).sort_values("score", ascending=False).reset_index(drop=True)
-
-# ───────────────────────────────
-# 5.  Ternary screening (MC)
-# ───────────────────────────────
 def screen_ternary(
     A: str,
     B: str,
     C: str,
-    rh: float = 50.0,
-    temp: float = 25.0,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bows: dict[str, float],
+    dx: float = 0.1,
+    dy: float = 0.1,
     n_mc: int = 200,
-    bows: dict[str, float] | None = None,
 ) -> pd.DataFrame:
-    """
-    Sample A(1-x-y) B(x) C(y) with Latin-hypercube dirichlet.
-    bows = {"AB":-0.15, "AC":+0.30, "BC":-0.15} default.
-    """
-    bows = bows or {"AB": -0.15, "AC": 0.30, "BC": -0.15}
+    """Ternary screening A–B–C over x,y fractions."""
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    if not (dA and dB and dC):
+        return pd.DataFrame()
 
-    dA = _mp_summary(A)
-    dB = _mp_summary(B)
-    dC = _mp_summary(C)
-    Eg_A = _correct_gap(A, dA["band_gap"])
-    Eg_B = _correct_gap(B, dB["band_gap"])
-    Eg_C = _correct_gap(C, dC["band_gap"])
-
-    rng = np.random.default_rng(0)
-    samples = rng.dirichlet((1, 1, 1), size=n_mc)  # z,x,y
-
+    lo, hi = bg
     rows = []
-    for z, x, y in samples:
-        Eg = (
-            z * Eg_A
-            + x * Eg_B
-            + y * Eg_C
-            - bows["AB"] * x * z
-            - bows["AC"] * y * z
-            - bows["BC"] * x * y
-        )
-
-        Ehull = (
-            z * dA["Ehull"]
-            + x * dB["Ehull"]
-            + y * dC["Ehull"]
-            + 0.025 * (x * y + x * z + y * z)   # simple mix penalty
-        )
-
-        stab = np.exp(-Ehull / 0.05)
-        f_Eg = _optical_weight(Eg)
-        score = stab * f_Eg * _env_penalty(rh, temp)
-
-        rows.append(
-            dict(
-                x_B=round(x, 3),
-                y_C=round(y, 3),
-                Eg=round(Eg, 3),
-                Ehull=round(Ehull, 3),
-                score=round(score, 3),
+    for x in np.arange(0, 1 + 1e-6, dx):
+        for y in np.arange(0, 1 - x + 1e-6, dy):
+            z = 1 - x - y
+            Eg = (
+                (1 - x - y) * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
+                - bows["AB"] * x * (1 - x - y)
+                - bows["AC"] * y * (1 - x - y)
+                - bows["BC"] * x * y
             )
-        )
-
+            Eh_val = (
+                (1 - x - y) * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+                + bows["AB"] * x * (1 - x - y)
+                + bows["AC"] * y * (1 - x - y)
+                + bows["BC"] * x * y
+            )
+            stability = np.exp(-max(Eh_val, 0) / 0.1)
+            gap_score = score_band_gap(Eg, lo, hi)
+            score = stability * gap_score
+            rows.append({"x": round(x,3), "y": round(y,3), "Eg": round(Eg,3), "score": round(score,3)})
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-# ───────────────────────────────
-# 6. quick demo if invoked directly
-# ───────────────────────────────
-if __name__ == "__main__":
-    print("Binary CsSnBr3–CsSnCl3 (50 % RH, 25 °C)")
-    print(mix_abx3("CsSnBr3", "CsSnCl3").head(), "\n")
-    print("Random ternary CsSnBr3–CsSnCl3–CsSnI3 (n=200)")
-    print(screen_ternary("CsSnBr3", "CsSnCl3", "CsSnI3").head())
+# alias for backwards compatibility
+_summary = fetch_mp_data
