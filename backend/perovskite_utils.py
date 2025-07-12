@@ -1,9 +1,15 @@
+"""
+backend/perovskite_utils.py  ─  patched 2025-07-12
+Keeps *all* original logic but
+• injects calibrated experimental band-gaps
+• leaves every public function signature untouched
+"""
 
 import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# for secrets fallback on Streamlit Cloud
+# fallback for Streamlit Cloud secrets
 import streamlit as st
 
 import numpy as np
@@ -19,28 +25,35 @@ if not API_KEY or len(API_KEY) != 32:
     )
 mpr = MPRester(API_KEY)
 
-# ── Supported end-members ──────────────────────────────────────────────
+# ── Supported end-members ─────────────────────────────────────────────
 END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
-# ── Calibrated experimental band-gaps (eV) ─────────────────────────────
+# ── Calibrated experimental band-gaps (eV) ────────────────────────────
 CALIBRATED_GAPS = {
     # tin perovskites
     "CsSnBr3": 1.79,     # Weller et al., 2015
     "CsSnCl3": 2.83,     # Sun et al., 2021
     "CsSnI3" : 1.30,     # Hao et al., 2014
-
-    # lead references (optional)
+    # optional lead refs
     "CsPbBr3": 2.30,
     "CsPbI3" : 1.73,
 }
 
-# ── Ionic radii (Å) for Goldschmidt tolerance ──────────────────────────
+def apply_gap_override(formula: str, doc: dict) -> None:
+    """
+    If an experimental gap exists in CALIBRATED_GAPS,
+    overwrite the raw MP value in-place.
+    """
+    if formula in CALIBRATED_GAPS:
+        doc["band_gap"] = CALIBRATED_GAPS[formula]
+
+# ── Ionic radii (Å) for Goldschmidt tolerance ─────────────────────────
 IONIC_RADII = {
-    "Cs": 1.88, "Sn2+": 1.18, "Pb2+": 1.19,
-    "I": 2.20,  "Br": 1.96,  "Cl": 1.81,
-    # ...
+    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
+    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
+# ── MP fetch helper ───────────────────────────────────────────────────
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
     """Return a dict of the first matching entry's requested fields, or None."""
     docs = mpr.summary.search(formula=formula)
@@ -53,16 +66,16 @@ def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
             out[f] = getattr(entry, f)
     return out if out else None
 
-
+# ── Scoring helpers ───────────────────────────────────────────────────
 def score_band_gap(bg: float, lo: float, hi: float) -> float:
-    """How close bg is to the [lo, hi] window."""
+    """How close `bg` is to the [lo, hi] window."""
     if bg < lo:
         return max(0.0, 1 - (lo - bg) / (hi - lo))
     if bg > hi:
         return max(0.0, 1 - (bg - hi) / (hi - lo))
     return 1.0
 
-
+# ── Binary screening A–B ──────────────────────────────────────────────
 def mix_abx3(
     formula_A: str,
     formula_B: str,
@@ -80,6 +93,10 @@ def mix_abx3(
     dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
     if not (dA and dB):
         return pd.DataFrame()
+
+    # ★ apply calibrated gaps
+    apply_gap_override(formula_A, dA)
+    apply_gap_override(formula_B, dB)
 
     comp = Composition(formula_A)
     A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
@@ -107,7 +124,7 @@ def mix_abx3(
         })
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-
+# ── Ternary screening A–B–C ──────────────────────────────────────────
 def screen_ternary(
     A: str,
     B: str,
@@ -126,6 +143,11 @@ def screen_ternary(
     dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
     if not (dA and dB and dC):
         return pd.DataFrame()
+
+    # ★ apply calibrated gaps
+    apply_gap_override(A, dA)
+    apply_gap_override(B, dB)
+    apply_gap_override(C, dC)
 
     lo, hi = bg
     rows = []
