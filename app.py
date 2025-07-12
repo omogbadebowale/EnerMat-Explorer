@@ -227,19 +227,41 @@ with tab_dl:
     st.download_button("📥 Download CSV", csv, "EnerMat_results.csv", "text/csv")
 
     top = df.iloc[0]
-    top_label = top.formula if mode == "Binary A–B" else f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
-    txt = f"""EnerMat report ({datetime.date.today()})\nTop candidate : {top_label}\nBand-gap     : {top.Eg}\nStability    : {top.stability}\nScore        : {top.score}\n"""
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+    # ─── Build simple text & docx reports ──────────────────────────────
+top_label = (
+    top.formula if mode == "Binary A–B"
+    else f"{A}-{B}-{C} x={top.x:.2f} y={top.y:.2f}"
+)
 
-    doc = Document()
-    doc.add_heading("EnerMat Report", 0)
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {top_label}")
-    tbl = doc.add_table(rows=1, cols=2)
-    hdr_cells = tbl.rows[0].cells
-    hdr_cells[0].text = "Property"; hdr_cells[1].text = "Value"
-    for k, v in [("Band-gap", top.Eg), ("Stability", top.stability), ("Score", top.score)]:
-        row = tbl.add_row(); row.cells[0].text = k; row.cells[1].text = str(v)
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
-    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
-                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+# fall back gracefully if column was renamed
+ehull_val = top.get("Ehull", top.get("stability", "N/A"))
+
+txt = (
+    f"EnerMat report ({datetime.date.today()})\n"
+    f"Top candidate : {top_label}\n"
+    f"Band-gap      : {top.Eg}\n"
+    f"Ehull (eV)    : {ehull_val}\n"
+    f"Score         : {top.score}\n"
+)
+
+st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+
+doc = Document()
+doc.add_heading("EnerMat Report", 0)
+doc.add_paragraph(f"Date: {datetime.date.today()}")
+doc.add_paragraph(f"Top candidate: {top_label}")
+
+tbl = doc.add_table(rows=1, cols=2)
+hdr = tbl.rows[0].cells
+hdr[0].text, hdr[1].text = "Property", "Value"
+for k, v in [("Band-gap", top.Eg), ("Ehull (eV)", ehull_val), ("Score", top.score)]:
+    row = tbl.add_row()
+    row.cells[0].text, row.cells[1].text = k, str(v)
+
+buf = io.BytesIO()
+doc.save(buf)
+buf.seek(0)
+st.download_button(
+    "📝 Download DOCX", buf, "EnerMat_report.docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+)
