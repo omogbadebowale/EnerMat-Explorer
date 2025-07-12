@@ -62,7 +62,7 @@ IONIC_RADII = {
 @lru_cache(maxsize=None)
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
     """Return dict of requested fields for the first MP entry (cached)."""
-    docs = mpr.summary.search(formula=formula, fields=fields)
+    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
     if not docs:
         return None
     entry = docs[0]
