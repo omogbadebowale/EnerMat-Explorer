@@ -1,11 +1,14 @@
 """
-EnerMat Perovskite Explorer – backend/perovskite_utils.py
-CLEAN 2025-07-12:  4-space indents, calibrated gaps,
-strict optical filter, formula columns for binary + ternary
+EnerMat Perovskite Explorer – backend/perovskite_utils.py
+FULL BACKEND (2025‑07‑12) 
+• calibrated 0‑K hull stability
+• strict optical filter
+• Sn²⁺ → Sn⁴⁺ oxidation penalty (ΔEₒₓ)
+• formula column for binary + ternary
+• four‑space indents only
 """
 
 from __future__ import annotations
-
 import os
 import numpy as np
 import pandas as pd
@@ -14,23 +17,32 @@ from dotenv import load_dotenv
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ── API KEY ────────────────────────────────────────────────────────
 load_dotenv()
+
+# ────────────────────────────────────────────────────
+#  API KEY
+# ────────────────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑 32-character MP_API_KEY missing")
+    raise RuntimeError("🛑 32‑character MP_API_KEY missing")
+
 mpr = MPRester(API_KEY)
 
-# ── PRESETS & CORRECTIONS ──────────────────────────────────────────
+# ────────────────────────────────────────────────────
+#  STATIC DATA
+# ────────────────────────────────────────────────────
 END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
+# Fully scissored experimental gaps for quick calibration
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.79,
     "CsSnCl3": 2.83,
-    "CsSnI3":  1.30,
+    "CsSnI3" : 1.30,
     "CsPbBr3": 2.30,
-    "CsPbI3":  1.73,
+    "CsPbI3" : 1.73,
 }
+
+# If a composition is missing from the dict above we apply an element‑wise offset
 GAP_OFFSET = {"I": 0.90, "Br": 0.70, "Cl": 0.80}
 
 IONIC_RADII = {
@@ -38,26 +50,62 @@ IONIC_RADII = {
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-# ── HELPERS ────────────────────────────────────────────────────────
+# Materials Project formation energies for oxidation products are reused repeatedly → small cache
+_CACHE: dict[str, float] = {}
+
+# ────────────────────────────────────────────────────
+#  HELPERS
+# ────────────────────────────────────────────────────
+
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
-    """Summary doc with calibrated band-gap applied."""
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+    """Return a dict with calibrated band‑gap; safe against MP hash issues."""
+    fields_t = tuple(fields)
+    docs = mpr.summary.search(formula=formula, fields=fields_t)
     if not docs:
         return None
     entry = docs[0]
     data = {f: getattr(entry, f, None) for f in fields}
 
+    # band‑gap correction
     if formula in CALIBRATED_GAPS:
         data["band_gap"] = CALIBRATED_GAPS[formula]
     else:
         hal = next(h for h in ("I", "Br", "Cl") if h in formula)
-        data["band_gap"] = (data["band_gap"] or 0) + GAP_OFFSET[hal]
-
+        data["band_gap"] = (data["band_gap"] or 0.0) + GAP_OFFSET[hal]
     return data
 
+
+def oxidation_energy(formula_sn2: str, hal: str) -> float:
+    """ΔE per Sn for:  CsSnX₃ + ½ O₂ → ½ Cs₂SnX₆ + ½ SnO₂ (exergonic ⇒ < 0)."""
+    key = f"{formula_sn2}|{hal}"
+    if key in _CACHE:
+        return _CACHE[key]
+
+    # reactant (per atom energy)
+    e_reac = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
+
+    # products averaged per Sn
+    e_cs2snx6 = fetch_mp_data(f"Cs2Sn{hal}6", ["energy_per_atom"])["energy_per_atom"]
+    e_sno2    = fetch_mp_data("SnO2", ["energy_per_atom"])["energy_per_atom"]
+    e_prod    = (e_cs2snx6 + e_sno2) / 2.0
+
+    # Materials Project O₂ energy reference (incl. 1.36 eV correction)
+    e_o2 = -9.86   # eV per O₂ molecule
+
+    dE = (e_prod + 0.5 * e_o2) - e_reac
+    _CACHE[key] = dE
+    return dE
+
+
+# strict optical gate
 score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
-# ── BINARY SCREEN ─────────────────────────────────────────────────-
+K_T_EFF = 0.20   # eV – softness for oxidation penalty  (≈ 8 k_BT at 300 K)
+
+# ────────────────────────────────────────────────────
+#  BINARY  A–B  SCREEN
+# ────────────────────────────────────────────────────
+
 def mix_abx3(
     formula_A: str,
     formula_B: str,
@@ -82,29 +130,55 @@ def mix_abx3(
     X_site = next(e.symbol for e in comp.elements if e.symbol in {"I", "Br", "Cl"})
     rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
 
+    # oxidation energy for the end‑member used across the loop
+    dE_ox_A = oxidation_energy(formula_A, X_site)
+    dE_ox_B = oxidation_energy(formula_B, X_site)
+
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        # band‑gap with bowing
         Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
+
+        # convex‑hull stability
         Ehull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        stab = max(0.0, 1 - Ehull)
+        stab  = max(0.0, 1 - Ehull)
+
+        # oxidation penalty (linear interpolation)
+        dEox   = (1 - x) * dE_ox_A + x * dE_ox_B
+        ox_pen = np.exp(-max(dEox, 0.0) / K_T_EFF)
+
+        # optical merit
         gap = score_band_gap(Eg, lo, hi)
-        t = (rA + rX) / (np.sqrt(2) * (rB + rX))
+
+        # geometric formability
+        t  = (rA + rX) / (np.sqrt(2) * (rB + rX))
         mu = rB / rX
         form = np.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * np.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
+
+        # environment (humidity / temp)
         env = 1 + alpha * rh / 100 + beta * temp / 100
-        score = form * stab * gap / env
+
+        score = form * stab * gap * ox_pen / env
 
         rows.append({
-            "x": round(x, 3),
-            "Eg": round(Eg, 3),
-            "Ehull": round(Ehull, 4),
-            "score": round(score, 3),
+            "x":      round(x, 3),
+            "Eg":     round(Eg, 3),
+            "Ehull":  round(Ehull, 4),
+            "Eox":    round(dEox, 3),
+            "score":  round(score, 3),
             "formula": f"{formula_A}-{formula_B} x={x:.2f}",
         })
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
 
-# ── TERNARY SCREEN ────────────────────────────────────────────────
+# ────────────────────────────────────────────────────
+#  TERNARY  A–B–C  SCREEN
+# ────────────────────────────────────────────────────
+
 def screen_ternary(
     A: str, B: str, C: str,
     rh: float, temp: float,
@@ -117,34 +191,4 @@ def screen_ternary(
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
     dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
-    if not (dA and dB and dC):
-        return pd.DataFrame()
-
-    lo, hi = bg
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-6, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-6, dy):
-            z = 1 - x - y
-            Eg = (
-                z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y
-            )
-            Eh = (
-                z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-                + bows["AB"] * x * z + bows["AC"] * y * z + bows["BC"] * x * y
-            )
-            score = np.exp(-max(Eh, 0) / 0.1) * score_band_gap(Eg, lo, hi)
-
-            rows.append({
-                "x": round(x, 3),
-                "y": round(y, 3),
-                "Eg": round(Eg, 3),
-                "Ehull": round(Eh, 4),
-                "score": round(score, 3),
-                "formula": f"CsSn(Br{1-x-y:.2f}Cl{y:.2f}I{x:.2f})₃",
-            })
-
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
-# ── Legacy alias ───────────────────────────────────────────────────
-_summary = fetch_mp_data
+    if not (
