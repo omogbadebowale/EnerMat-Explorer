@@ -72,13 +72,23 @@ def fetch_mp_data(formula: str, fields: list[str]):
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str, hal: str) -> float:
-    """ΔE per Sn for   CsSnX3 + ½ O₂ → ½ Cs₂SnX₆ + ½ SnO₂  (negative → easy)."""
-    e_reac = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
+    """ΔE per Sn for  CsSnX3 + ½ O₂ → ½ Cs₂SnX₆ + ½ SnO₂  (positive ⇒ uphill).
+    Pb‑based or Sn‑free formulas return **0** so they are not penalised.
+    Cached for speed by @lru_cache.
+    """
+    # Only CsSnX3 is subject to the Sn²⁺ → Sn⁴⁺ red‑ox penalty.
+    if "Sn" not in formula_sn2:
+        return 0.0  # Pb or mixed‑metal perovskites: no ox penalty
+
+    # ── fetch energies ──
+    e_reac  = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
     e_prod1 = fetch_mp_data(f"Cs2Sn{hal}6", ["energy_per_atom"])["energy_per_atom"]
     e_prod2 = fetch_mp_data("SnO2", ["energy_per_atom"])["energy_per_atom"]
-    # O₂ reference **query live** then multiply by 2 atoms per molecule
-    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0
-    e_products = (e_prod1 + e_prod2) / 2.0
+
+    # O₂ reference **as stored in MP (per atom)**
+    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0  # per molecule
+
+    e_products = 0.5 * (e_prod1 + e_prod2)
     return (e_products + 0.5 * e_o2) - e_reac
 
 score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
