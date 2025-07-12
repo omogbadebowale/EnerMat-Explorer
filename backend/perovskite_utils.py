@@ -198,4 +198,5 @@ def screen_ternary(
             .reset_index(drop=True))
 
 # legacy alias for backward compatibility
-_summary = fetch
+# legacy alias for backward compatibility
+_summary = fetch_mp_data
