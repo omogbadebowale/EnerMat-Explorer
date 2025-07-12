@@ -100,13 +100,15 @@ def mix_abx3(
         form = np.exp(-0.5 * ((t - 0.90)/0.07)**2) * np.exp(-0.5 * ((mu - 0.50)/0.07)**2)
         env  = 1 + alpha * rh/100 + beta * temp/100
         score = form * stab * gap / env
-        rows.append({
-            "x": round(x, 3),
-            "Eg": round(Eg, 3),
-            "Ehull": round(Ehull, 4),
-            "score": round(score, 3),
-            "formula": f"{formula_A}-{formula_B} x={x:.2f}"
-        })
+       rows.append({
+    "x": round(x, 3),          # Br fraction
+    "y": round(y, 3),          # Cl fraction
+    "Eg": round(Eg, 3),
+    "Ehull": round(Eh, 4),
+    "score": round(score, 3),
+    # --- NEW: human-readable formula -------------------------------
+    "formula": f"CsSn(Br{1-x-y:.2f}Cl{y:.2f}I{x:.2f})₃"
+})
 
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
