@@ -56,7 +56,14 @@ with st.sidebar:
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model Settings")
-    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
+    bowing = st.number_input(
+    "Bowing b  ( < 0 for Br→Cl,  > 0 for Sn↔Pb )",
+    min_value=-1.0,         # allow negatives
+    max_value= 1.0,
+    value   =-0.15,         # default for Br↔Cl
+    step    = 0.05,
+    format  ="%.2f",
+)
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode == "Ternary A–B–C":
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
