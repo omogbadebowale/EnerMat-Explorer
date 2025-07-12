@@ -32,10 +32,13 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 # ─── Sidebar Configuration ────────────────────────────────────────────────────
+# ─── Sidebar Configuration ──────────────────────────────────────────────
 with st.sidebar:
+    # ── Mode ────────────────────────────────────────────────────────────
     st.header("Mode")
     mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
+    # ── End-members ─────────────────────────────────────────────────────
     st.header("End-members")
     preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
     preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
@@ -43,31 +46,39 @@ with st.sidebar:
     custom_B = st.text_input("Custom B (optional)", "").strip()
     A = custom_A or preset_A
     B = custom_B or preset_B
+
     if mode == "Ternary A–B–C":
         preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
         custom_C = st.text_input("Custom C (optional)", "").strip()
         C = custom_C or preset_C
 
+    # ── Environment ────────────────────────────────────────────────────
     st.header("Environment")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
+    rh   = st.slider("Humidity [%]",     0, 100, 50)
     temp = st.slider("Temperature [°C]", -20, 100, 25)
 
+    # ── Target band-gap window ─────────────────────────────────────────
     st.header("Target Band Gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
+    bg_lo, bg_hi = st.slider("Gap window [eV]",
+                             0.50, 3.00, (1.00, 1.40), 0.01)
 
+    # ── Model settings ────────────────────────────────────────────────
     st.header("Model Settings")
-bowing = st.number_input(
-    "Bowing b  (use negative for Br→Cl alloys)",
-    min_value = -1.0,      # allow -1.0 eV
-    max_value =  1.0,
-    value     = -0.15,     # default for CsSnBr3↔CsSnCl3
-    step      =  0.05,
-    format    = "%.2f",
-)
+
+    bowing = st.number_input(
+        "Bowing b  (use **negative** for Br→Cl alloys)",
+        min_value = -1.0,
+        max_value =  1.0,
+        value     = -0.15,   # default for CsSnBr3↔CsSnCl3
+        step      =  0.05,
+        format    = "%.2f",
+    )
+
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode == "Ternary A–B–C":
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
+    # ── Utility buttons & version stamp ────────────────────────────────
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
