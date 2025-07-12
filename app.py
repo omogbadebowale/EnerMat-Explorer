@@ -138,7 +138,7 @@ elif do_run:
             st.stop()
 
     # Rename for UI clarity: Ehull → stability
-    df = df.rename(columns={"Ehull": "stability"})
+    df = df.rename(columns={"Ehull": "Ehull (eV)"})
 
     entry = {
         "mode": mode,
