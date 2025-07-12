@@ -49,7 +49,7 @@ IONIC_RADII = {
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-# effective temperature used in oxidation penalty
+# effective temperature used in oxidation penalty (tunable)
 K_T_EFF = 0.20  # eV
 
 # ───────────────────────── helpers ───────────────────────────
@@ -76,17 +76,14 @@ def oxidation_energy(formula_sn2: str, hal: str) -> float:
     Pb‑based or Sn‑free formulas return **0** so they are not penalised.
     Cached for speed by @lru_cache.
     """
-    # Only CsSnX3 is subject to the Sn²⁺ → Sn⁴⁺ red‑ox penalty.
     if "Sn" not in formula_sn2:
-        return 0.0  # Pb or mixed‑metal perovskites: no ox penalty
+        return 0.0  # nothing to oxidise -> no penalty
 
-    # ── fetch energies ──
     e_reac  = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
     e_prod1 = fetch_mp_data(f"Cs2Sn{hal}6", ["energy_per_atom"])["energy_per_atom"]
     e_prod2 = fetch_mp_data("SnO2", ["energy_per_atom"])["energy_per_atom"]
-
-    # O₂ reference **as stored in MP (per atom)**
-    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0  # per molecule
+    # O2 reference as stored in MP (per *atom*). Multiply by 2 for molecule.
+    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0
 
     e_products = 0.5 * (e_prod1 + e_prod2)
     return (e_products + 0.5 * e_o2) - e_reac
@@ -122,10 +119,9 @@ def mix_abx3(
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
         Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        stab = math.exp(-max(Eh, 0) / 0.10)   # Boltzmann weight, Δ=0.1 eV
+        stab = math.exp(-max(Eh, 0) / 0.10)  # Boltzmann‑like weight
         dEox = (1 - x) * dEox_A + x * dEox_B
-        # penalise exergonic (ΔEox < 0) reactions — the more negative, the smaller the weight
-        ox_pen = math.exp(dEox / K_T_EFF)  # dEox ≤ 0 → 0‥1,  uphill (>0) ⇒ weight ≥ 1
+        ox_pen = math.exp(dEox / K_T_EFF)  # ≤1 when dEox < 0
         gap = score_band_gap(Eg, lo, hi)
         t  = (rA + rX) / (math.sqrt(2) * (rB + rX))
         mu = rB / rX
@@ -175,8 +171,8 @@ def screen_ternary(
 
     lo, hi = bg
     rows: list[dict] = []
-    for x in np.arange(0, 1 + 1e-9, dx):
-        for y in np.arange(0, 1 - x + 1e-9, dy):
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
             z = 1 - x - y
             Eg = (
                 z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
@@ -187,8 +183,7 @@ def screen_ternary(
             )
             stab = math.exp(-max(Eh, 0) / 0.10)
             dEox = z*oxA + x*oxB + y*oxC
-            # penalise exergonic (ΔEox < 0) reactions — the more negative, the smaller the weight
-        ox_pen = math.exp(dEox / K_T_EFF)  # dEox ≤ 0 → 0‥1,  uphill (>0) ⇒ weight ≥ 1
+            ox_pen = math.exp(dEox / K_T_EFF)
             score = stab * score_band_gap(Eg, lo, hi) * ox_pen
 
             rows.append({
@@ -202,5 +197,5 @@ def screen_ternary(
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
 
-# legacy alias
-_summary = fetch_mp_data
+# legacy alias for backward compatibility
+_summary = fetch
