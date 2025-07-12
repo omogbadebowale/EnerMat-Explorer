@@ -56,26 +56,32 @@ with st.sidebar:
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model Settings")
-# Sidebar widget  –  copy/paste exactly
-bowing = st.number_input(
-    "Bowing b  (negative for Br→Cl)",
-    min_value = -1.0,
-    max_value =  1.0,
-    value     = -0.15,     # default we want
-    step      =  0.05,
-    format    = "%.2f",
-)
+    bow = st.number_input("Bowing [eV]", 0.0, 1.0, 0.30, 0.05)
+    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+    if mode == "Ternary A–B–C":
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
-# When you call run_screen() make sure you use the SAME name:
-df = run_screen(
-        formula_A = A,
-        formula_B = B,
-        rh        = rh,
-        temp      = temp,
-        bg_window = (bg_lo, bg_hi),
-        bowing    = bowing,   # ← MUST be 'bowing'
-        dx        = dx,
-)
+    if st.button("🗑 Clear history"):
+        st.session_state.history.clear()
+        st.experimental_rerun()
+
+    GIT_SHA = st.secrets.get("GIT_SHA", "dev")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    st.caption(f"⚙️ Version: `{GIT_SHA}` • ⏱ {ts}")
+    st.caption("© 2025 Dr Gbadebo Taofeek Yusuf")
+
+# ─── Cached Screen Runner ─────────────────────────────────────────────────────
+@st.cache_data(show_spinner="⏳ Running screening…", max_entries=20)
+def run_screen(formula_A, formula_B, rh, temp, bg_window, bowing, dx):
+    return screen(
+        formula_A=formula_A,
+        formula_B=formula_B,
+        rh=rh,
+        temp=temp,
+        bg_window=bg_window,
+        bowing=bowing,
+        dx=dx
+    )
 
 # ─── Execution Control ────────────────────────────────────────────────────────
 col_run, col_back = st.columns([3, 1])
