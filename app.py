@@ -56,7 +56,7 @@ with st.sidebar:
     bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model Settings")
-   bowing = st.number_input(
+bowing = st.number_input(
     "Bowing b  (use negative for Br→Cl alloys)",
     min_value = -1.0,      # allow -1.0 eV
     max_value =  1.0,
