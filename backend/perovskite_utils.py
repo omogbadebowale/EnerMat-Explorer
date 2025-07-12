@@ -124,7 +124,8 @@ def mix_abx3(
         Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
         stab = math.exp(-max(Eh, 0) / 0.10)   # Boltzmann weight, Δ=0.1 eV
         dEox = (1 - x) * dEox_A + x * dEox_B
-        ox_pen = math.exp(-max(dEox, 0) / K_T_EFF)
+        # penalise exergonic (ΔEox < 0) reactions — the more negative, the smaller the weight
+        ox_pen = math.exp(dEox / K_T_EFF)  # dEox ≤ 0 → 0‥1,  uphill (>0) ⇒ weight ≥ 1
         gap = score_band_gap(Eg, lo, hi)
         t  = (rA + rX) / (math.sqrt(2) * (rB + rX))
         mu = rB / rX
@@ -186,7 +187,8 @@ def screen_ternary(
             )
             stab = math.exp(-max(Eh, 0) / 0.10)
             dEox = z*oxA + x*oxB + y*oxC
-            ox_pen = math.exp(-max(dEox, 0) / K_T_EFF)
+            # penalise exergonic (ΔEox < 0) reactions — the more negative, the smaller the weight
+        ox_pen = math.exp(dEox / K_T_EFF)  # dEox ≤ 0 → 0‥1,  uphill (>0) ⇒ weight ≥ 1
             score = stab * score_band_gap(Eg, lo, hi) * ox_pen
 
             rows.append({
