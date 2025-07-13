@@ -1,129 +1,135 @@
 """
 EnerMat Perovskite Explorer – backend/perovskite_utils.py
-Clean build • 2025‑07‑13 🟢   (patched with Sn‑oxidation fixes)
-• calibrated experimental gaps
-• strict optical window (step 0/1)
-• convex‑hull lattice stability (Ehull)
-• Sn²⁺→Sn⁴⁺ oxidation penalty ΔEox (fixed O₂ reference)
-• tidy binary + ternary screens, VALID Python
-"""
+Clean build • 2025‑07‑13 🟢
 
+* calibrated experimental gaps
+* convex‑hull stability filter
+* **composition‑resolved Sn²⁺→Sn⁴⁺ oxidation energy ΔEox**
+  (weighted by mix‑fraction so the column is **not** constant!)
+* binary and ternary screen helpers consumed by the Streamlit front‑end.
+
+Install deps:  `pip install mp-api pymatgen python-dotenv`  (Streamlit only
+needed on the UI side).
+"""
 from __future__ import annotations
-import math, os
-from functools import lru_cache
+
+import math, os, functools, logging
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-import streamlit as st
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ─────────────────────────  API key  ──────────────────────────
+# Optional – Streamlit may not exist inside a pure‑backend unit‑test env
+try:
+    import streamlit as st  # type: ignore
+except ModuleNotFoundError:  # no Streamlit = no UI warnings
+    class _Dummy:  # pylint: disable=too-few-public-methods
+        def __getattr__(self, _name):
+            return None
+    st = _Dummy()  # type: ignore
+
+# ──────────────────────────────────────────── logging helpers
+_log = logging.getLogger("perovskite_utils")
+
+# ──────────────────────────────────── API key & Materials Project client
 load_dotenv()
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
+API_KEY = os.getenv("MP_API_KEY") or getattr(st.secrets, "MP_API_KEY", None)
 if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑 32‑character MP_API_KEY missing in env or secrets")
+    raise RuntimeError("🛑 Please supply your 32‑character MP_API_KEY in .env or Streamlit secrets!")
+_mpr = MPRester(API_KEY)
 
-mpr = MPRester(API_KEY)
-
-# ────────────────────── reference tables ─────────────────────
-END_MEMBERS = [
-    "CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3",
-]
-
-# experimentally calibrated gaps (eV)
-CALIBRATED_GAPS = {
-    "CsSnBr3": 1.79,
-    "CsSnCl3": 2.83,
-    "CsPbI3": 1.46,
-    "CsPbBr3": 2.32,
+# ───────────────────────────────────────────── reference data
+CALIBRATED_GAPS: Dict[str, float] = {
+    "CsSnBr3": 1.79, "CsSnCl3": 2.83, "CsSnI3": 1.30,
+    "CsPbBr3": 2.30, "CsPbI3": 1.73,
 }
+# PBE → exp offsets when no calibrated value available
+_GAP_OFFSET = {"I": 0.90, "Br": 0.70, "Cl": 0.80}
 
-# empirical gap offsets for raw DFT → experiment alignment (eV)
-GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
-
-# simplified ionic radii for Goldschmidt tolerance factor (Å)
 IONIC_RADII = {
-    "Cs": 1.88, "Sn": 1.18, "Pb": 1.19,
-    "I": 2.20, "Br": 1.96, "Cl": 1.81,
+    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
+    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-# effective ‘kT’ (eV) for soft penalty factors used in scoring
-K_T_EFF = 0.20  # ≈8 kT at 300 K
+# fallback per‑atom energy for molecular O2 (PBEsol, 2025 mail talk)
+_FALLBACK_E_O2 = -4.93  # eV / atom
 
-# -----------------------------------------------------------------------------
-# ↓↓↓  Low‑level helpers  ↓↓↓
-# -----------------------------------------------------------------------------
+# ──────────────────────────────────────────────── utilities
 
-def fetch_mp_data(formula: str, fields: list[str]):
-    """Query MP‑API and return a dict of requested fields (may be None)."""
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+def _find_halide(formula: str) -> str:
+    """Return first matching X ∈ {I,Br,Cl} in the formula."""
+    try:
+        return next(h for h in ("I", "Br", "Cl") if h in formula)
+    except StopIteration as exc:  # pragma: no cover – non‑halide caller bug
+        raise ValueError(f"No halide found in {formula}") from exc
+
+
+def _fetch_mp(formula: str, fields: List[str]) -> Dict[str, Any] | None:
+    """Wrapper around MP summary search that patches band_gap calibration."""
+    docs = _mpr.summary.search(formula=formula, fields=tuple(fields))
     if not docs:
+        _log.warning("MP entry for %s not found", formula)
         return None
-    entry = docs[0]
-    out = {f: getattr(entry, f, None) for f in fields}
-    # apply experimental gap calibration
+
+    d = {f: getattr(docs[0], f, None) for f in fields}
+
+    # patch gap if needed
     if "band_gap" in fields:
         if formula in CALIBRATED_GAPS:
-            out["band_gap"] = CALIBRATED_GAPS[formula]
+            d["band_gap"] = CALIBRATED_GAPS[formula]
         else:
-            hal = next(h for h in ("I", "Br", "Cl") if h in formula)
-            out["band_gap"] = (out["band_gap"] or 0.0) + GAP_OFFSET[hal]
-    return out
+            hal = _find_halide(formula)
+            d["band_gap"] = (d["band_gap"] or 0.0) + _GAP_OFFSET[hal]
+    return d
 
-@lru_cache(maxsize=64)
+
+def _safe_energy(formula: str) -> float | None:
+    """Return total energy per atom if found, else None."""
+    d = _fetch_mp(formula, ["energy_per_atom"])
+    return None if d is None else d["energy_per_atom"]
+
+# ────────────────────────────────── optical filter (strict 0/1 score)
+
+def _within_band_gap(Eg: float, lo: float, hi: float) -> float:
+    return 1.0 if lo <= Eg <= hi else 0.0
+
+# ───────────────────────────────────────── Sn²⁺ → Sn⁴⁺ oxidation energy
+#   CsSnX3 + ½ O2  →  ½(Cs2SnX6 + SnO2)
+
+@functools.lru_cache(maxsize=None)
 def oxidation_energy(formula_sn2: str) -> float:
-    """Return ΔEₒₓ per Sn for
-    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
+    """Positive ΔEox ⇒ harder to oxidise Sn²⁺.
 
-    Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
-    Returns **0.0** for Pb‑based or Sn‑free formulas.
-
-    Halide (X) is auto‑detected from the formula.
-    Values are cached to avoid excessive MP API calls.
+    Uses MP total energies. If the O₂ molecule entry is missing, fall back to a
+    constant PBEsol value so the function never raises inside a screening run.
     """
-    if "Sn" not in formula_sn2:
-        return 0.0  # nothing to oxidise
+    hal = _find_halide(formula_sn2)
 
-    try:
-        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
-    except StopIteration:
-        # Non‑halide (rare) – skip oxidation penalty
+    energies = {
+        "reac": _safe_energy(f"CsSn{hal}3"),
+        "prod1": _safe_energy(f"Cs2Sn{hal}6"),
+        "prod2": _safe_energy("SnO2"),
+        "o2": _safe_energy("O2") or _FALLBACK_E_O2,
+    }
+    if any(v is None for v in energies.values()):
+        _log.warning("Oxidation‑energy incomplete for %s – returning 0.0", formula_sn2)
         return 0.0
 
-    def e(formula: str) -> float:
-        """Fetch energy_per_atom with minimal error handling."""
-        doc = fetch_mp_data(formula, ["energy_per_atom"])
-        if not doc or doc["energy_per_atom"] is None:
-            raise ValueError(f"Missing MP entry for {formula}")
-        return doc["energy_per_atom"]
+    reac, prod1, prod2, e_o2 = energies.values()
+    return 0.5 * prod1 + 0.5 * prod2 - reac - 0.5 * e_o2  # eV per Sn atom
 
-    e_reac  = e(formula_sn2)
-    e_prod1 = e(f"Cs2Sn{hal}6")
-    e_prod2 = e("SnO2")
-
-    # O₂: MP stores energy per atom; multiply by 2 for the molecule.
-    try:
-        e_o2 = e("O2") * 2.0
-    except ValueError:
-        # Fallback: fixed PBE value –4.93 eV/atom
-        e_o2 = (-4.93) * 2.0
-
-    return 0.5 * (e_prod1 + e_prod2 + e_o2) - e_reac
-
-score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
-
-# -----------------------------------------------------------------------------
-# ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
-# -----------------------------------------------------------------------------
+# ───────────────────────────────────────────── Binary screening helper
 
 def mix_abx3(
     formula_A: str,
     formula_B: str,
     rh: float,
     temp: float,
-    bg_window: tuple[float, float],
+    bg_window: Tuple[float, float],
     bowing: float = 0.0,
     dx: float = 0.05,
     alpha: float = 1.0,
@@ -131,43 +137,52 @@ def mix_abx3(
 ) -> pd.DataFrame:
 
     lo, hi = bg_window
-    dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
+    dA = _fetch_mp(formula_A, ["band_gap", "energy_above_hull"])
+    dB = _fetch_mp(formula_B, ["band_gap", "energy_above_hull"])
     if not (dA and dB):
         return pd.DataFrame()
 
-    # choose halide from first end‑member for tolerance‑factor radius
-    hal = next(h for h in ("I", "Br", "Cl") if h in formula_A)
-    rA, rB, rX = (IONIC_RADII[s] for s in ("Cs", "Sn", hal))
-    dEox_A = oxidation_energy(formula_A)
-    dEox_B = oxidation_energy(formula_B)
+    # pre‑compute oxidation energies of endpoints
+    eox_A = oxidation_energy(formula_A)
+    eox_B = oxidation_energy(formula_B)
 
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+    # geometric tolerance factor – use A‑site radii as proxy
+    comp_A = Composition(formula_A)
+    A_site = next(e.symbol for e in comp_A.elements if e.symbol in IONIC_RADII)
+    B_site = next(e.symbol for e in comp_A.elements if e.symbol in {"Pb", "Sn"})
+    X_site = _find_halide(formula_A)
+    rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
+
+    rows: List[Dict[str, Any]] = []
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
         Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
         Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        dEox = (1 - x) * dEox_A + x * dEox_B
-        ox_pen = math.exp(dEox / K_T_EFF)  # ≤1 when dEox < 0
-        stab = math.exp(-Eh / (alpha * 0.0259))
-        tfac = (rA + rX) / (math.sqrt(2) * (rB + rX))
-        fit = math.exp(-beta * abs(tfac - 0.95))
-        form = score_band_gap(Eg, lo, hi)
-        score = form * stab * fit * ox_pen
+        stab = max(0.0, 1 - Eh / 0.025)  # ≥1 inside 25 meV/atom,
+        gap  = _within_band_gap(Eg, lo, hi)
+
+        t  = (rA + rX) / (math.sqrt(2) * (rB + rX))
+        mu = rB / rX
+        form = math.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * math.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
+
+        # composition‑weighted oxidation penalty (NEW – varies with x!)
+        eox = (1 - x) * eox_A + x * eox_B
+        ox_pen = math.exp(eox / 0.20)  # +ve ΔEox favours, −ve penalises
+
+        env = 1 + alpha * rh / 100 + beta * temp / 100
+        score = form * stab * gap * ox_pen / env
 
         rows.append({
             "x": round(x, 3),
-            "Eg": round(Eg, 3), "Ehull": round(Eh, 4), "Eox": round(dEox, 3),
+            "Eg": round(Eg, 3),
+            "Ehull": round(Eh, 4),
+            "Eox": round(eox, 3),
             "score": round(score, 3),
             "formula": f"{formula_A}-{formula_B} x={x:.2f}",
         })
 
-    return (pd.DataFrame(rows)
-            .sort_values("score", ascending=False)
-            .reset_index(drop=True))
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-# -----------------------------------------------------------------------------
-# ↓↓↓  Ternary compositional screen  ↓↓↓
-# -----------------------------------------------------------------------------
+# ────────────────────────────────────────────── Ternary screening
 
 def screen_ternary(
     A: str,
@@ -175,52 +190,49 @@ def screen_ternary(
     C: str,
     rh: float,
     temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
+    bg: Tuple[float, float],
+    bows: Dict[str, float] | None = None,
     dx: float = 0.10,
     dy: float = 0.10,
-    n_mc: int = 200,
 ) -> pd.DataFrame:
 
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    bows = bows or {"AB": 0.0, "AC": 0.0, "BC": 0.0}
+    dA = _fetch_mp(A, ["band_gap", "energy_above_hull"])
+    dB = _fetch_mp(B, ["band_gap", "energy_above_hull"])
+    dC = _fetch_mp(C, ["band_gap", "energy_above_hull"])
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # oxidation energies for each vertex (infer halide internally)
-    oxA = oxidation_energy(A)
-    oxB = oxidation_energy(B)
-    oxC = oxidation_energy(C)
-
+    eox_A, eox_B, eox_C = oxidation_energy(A), oxidation_energy(B), oxidation_energy(C)
     lo, hi = bg
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
+
+    rows: List[Dict[str, Any]] = []
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-6, dy):
             z = 1 - x - y
-            Eg = (
-                z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y
-            )
-            Eh = (
-                z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-            )
-            dEox = z*oxA + x*oxB + y*oxC
-            ox_pen = math.exp(dEox / K_T_EFF)
-            form = score_band_gap(Eg, lo, hi)
-            stab = math.exp(-Eh / (0.0259 * 2.0))
-            score = form * stab * ox_pen
+            Eg = (z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
+                  - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y)
+
+            Eh = (z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+                  + bows["AB"] * x * z + bows["AC"] * y * z + bows["BC"] * x * y)
+
+            stab = math.exp(-max(Eh, 0) / 0.025)
+            gap  = _within_band_gap(Eg, lo, hi)
+
+            eox = z * eox_A + x * eox_B + y * eox_C
+            score = stab * gap * math.exp(eox / 0.20)
 
             rows.append({
-                "x": round(x, 3), "y": round(y, 3),
-                "Eg": round(Eg, 3), "Ehull": round(Eh, 4), "Eox": round(dEox, 3),
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(eox, 3),
                 "score": round(score, 3),
                 "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f}",
             })
 
-    return (pd.DataFrame(rows)
-            .sort_values("score", ascending=False)
-            .reset_index(drop=True))
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-# legacy alias for backward compatibility
-_summary = fetch_mp_data
+# backward compat alias (legacy notebooks)
+_summary = _fetch_mp
