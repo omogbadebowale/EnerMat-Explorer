@@ -1,8 +1,4 @@
 # app.py  –  EnerMat Perovskite Explorer v9.6  (2025-07-13, “oxidation-fixed” edition)
-st.title("🔬 EnerMat **Perovskite** Explorer v9.7")  # ← was v9.6
-...
-st.caption(f"⚙️  Build SHA: {st.secrets.get('GIT_SHA','dev')} • "
-           f"🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
 import io, os, datetime
 from pathlib import Path
 
