@@ -75,44 +75,44 @@ def fetch_mp_data(formula: str, fields: list[str]):
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
     """Return ΔEₒₓ per Sn for
-    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
+    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
 
     Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
-    Returns **0.0** for Pb‑based or Sn‑free formulas.
+    Returns **0.0** for Pb-based or Sn-free formulas.
 
-    Halide (X) is auto‑detected from the formula.
+    Halide (X) is auto-detected from the formula.
     Values are cached to avoid excessive MP API calls.
     """
+    # Early exits
     if "Sn" not in formula_sn2:
-        return 0.0  # nothing to oxidise
-
+        return 0.0
     try:
         hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
     except StopIteration:
-        # Non‑halide (rare) – skip oxidation penalty
         return 0.0
 
-    def e(formula: str) -> float:
-        """Fetch energy_per_atom with minimal error handling."""
+    # Helper: total DFT energy of one formula unit
+    def total_energy(formula: str) -> float:
         doc = fetch_mp_data(formula, ["energy_per_atom"])
         if not doc or doc["energy_per_atom"] is None:
             raise ValueError(f"Missing MP entry for {formula}")
-        return doc["energy_per_atom"]
+        comp = Composition(formula)
+        return doc["energy_per_atom"] * comp.num_atoms
 
-    e_reac  = e(formula_sn2)
-    e_prod1 = e(f"Cs2Sn{hal}6")
-    e_prod2 = e("SnO2")
-
-    # O₂: MP stores energy per atom; multiply by 2 for the molecule.
+    # Compute total energies
+    E_reac  = total_energy(formula_sn2)
+    E_prod1 = total_energy(f"Cs2Sn{hal}6")
+    E_prod2 = total_energy("SnO2")
     try:
-        e_o2 = e("O2") * 2.0
+        E_o2 = total_energy("O2")
     except ValueError:
-        # Fallback: fixed PBE value –4.93 eV/atom
-        e_o2 = (-4.93) * 2.0
+        # Fallback if O2 isn’t in MP
+        E_o2 = -4.93 * Composition("O2").num_atoms
 
-    return 0.5 * (e_prod1 + e_prod2 + e_o2) - e_reac
+    # Reaction: CsSnX3 + ½ O₂ → ½ (Cs2SnX6 + SnO2)
+    # ΔE per formula unit (per Sn)
+    return 0.5 * (E_prod1 + E_prod2) - (E_reac + 0.5 * E_o2)
 
-score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
 # ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
 # -----------------------------------------------------------------------------
