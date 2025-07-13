@@ -163,6 +163,29 @@ def mix_abx3(
     return (pd.DataFrame(rows)
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
+@lru_cache(maxsize=64)
+def oxidation_energy(formula_sn2: str) -> float:
+    if "Sn" not in formula_sn2:
+        return 0.0
+    try:
+        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
+    except StopIteration:
+        return 0.0
+
+    def formation_energy_fu(formula: str) -> float:
+        # ΔHf per atom × #atoms = eV per formula unit
+        doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
+        if not doc or doc["formation_energy_per_atom"] is None:
+            raise ValueError(f"Missing formation-energy for {formula}")
+        comp = Composition(formula)
+        return doc["formation_energy_per_atom"] * comp.num_atoms
+
+    H_reac  = formation_energy_fu(formula_sn2)        # CsSnX3
+    H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")      # Cs2SnX6
+    H_prod2 = formation_energy_fu("SnO2")             # SnO2
+
+    # ΔEₒₓ = ½[H(CS2SnX6) + H(SnO2)] – H(CsSnX3)
+    return 0.5 * (H_prod1 + H_prod2) - H_reac
 
 # -----------------------------------------------------------------------------
 # ↓↓↓  Ternary compositional screen  ↓↓↓
