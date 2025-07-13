@@ -1,221 +1,150 @@
-# app.py  –  EnerMat Perovskite Explorer v9.6  (2025-07-13, “oxidation-fixed” edition)
+"""
+EnerMat Perovskite Explorer – backend/perovskite_utils.py
+CLEAN 2025-07-12:  4-space indents, calibrated gaps,
+strict optical filter, formula columns for binary + ternary
+"""
 
-import io, os, datetime
-from pathlib import Path
+from __future__ import annotations
 
-import streamlit as st
+import os
+import numpy as np
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from docx import Document
+import streamlit as st
+from dotenv import load_dotenv
+from mp_api.client import MPRester
+from pymatgen.core import Composition
 
-# ── Materials-Project API key ────────────────────────────────────────────────
+# ── API KEY ────────────────────────────────────────────────────────
+load_dotenv()
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    st.error("🛑  You need a valid 32-character MP_API_KEY in Secrets.")
-    st.stop()
+    raise RuntimeError("🛑 32-character MP_API_KEY missing")
+mpr = MPRester(API_KEY)
 
-# ── Backend helpers ─────────────────────────────────────────────────────────
-from backend.perovskite_utils import (
-    mix_abx3    as screen_binary,
-    screen_ternary,
-    END_MEMBERS,
-    fetch_mp_data as _summary,
-)
+# ── PRESETS & CORRECTIONS ──────────────────────────────────────────
+END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3"]
 
-# ── Streamlit page config ───────────────────────────────────────────────────
-st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+CALIBRATED_GAPS = {
+    "CsSnBr3": 1.79,
+    "CsSnCl3": 2.83,
+    "CsSnI3":  1.30,
+    "CsPbBr3": 2.30,
+    "CsPbI3":  1.73,
+}
+GAP_OFFSET = {"I": 0.90, "Br": 0.70, "Cl": 0.80}
 
-# ── Session state ───────────────────────────────────────────────────────────
-if "history" not in st.session_state:
-    st.session_state.history = []
+IONIC_RADII = {
+    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
+    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
+}
 
-# ── Sidebar – I/O controls ──────────────────────────────────────────────────
-with st.sidebar:
-    st.header("Mode")
-    mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
+# ── HELPERS ────────────────────────────────────────────────────────
+def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
+    """Summary doc with calibrated band-gap applied."""
+    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+    if not docs:
+        return None
+    entry = docs[0]
+    data = {f: getattr(entry, f, None) for f in fields}
 
-    st.header("End-members")
-    preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
-    preset_B = st.selectbox("Preset B", END_MEMBERS, 1)
-    custom_A = st.text_input("Custom A (optional)").strip()
-    custom_B = st.text_input("Custom B (optional)").strip()
-    A = custom_A or preset_A
-    B = custom_B or preset_B
-    if mode == "Ternary A–B–C":
-        preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
-        custom_C = st.text_input("Custom C (optional)").strip()
-        C = custom_C or preset_C
-
-    st.header("Environment")
-    rh   = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
-
-    st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window", 0.5, 3.0, (1.0, 1.4), 0.01)
-
-    st.header("Model settings")
-    bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
-    dx  = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
-    if mode == "Ternary A–B–C":
-        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
-
-    if st.button("🗑 Clear history"):
-        st.session_state.history.clear()
-        st.experimental_rerun()
-
-    st.caption(f"⚙️  Build SHA: {st.secrets.get('GIT_SHA','dev')} • "
-               f"🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
-
-# ── Cached runner wrappers (binary & ternary) ───────────────────────────────
-@st.cache_data(show_spinner="⏳  Screening …", max_entries=20)
-def _run_binary(*args, **kws):
-    return screen_binary(*args, **kws)
-
-@st.cache_data(show_spinner="⏳  Screening …", max_entries=10)
-def _run_ternary(*args, **kws):
-    return screen_ternary(*args, **kws)
-
-# ── Control buttons ─────────────────────────────────────────────────────────
-col_run, col_prev = st.columns([3, 1])
-do_run   = col_run.button("▶ Run screening", type="primary")
-do_prev  = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
-
-# ── Retrieve previous result ────────────────────────────────────────────────
-if do_prev:
-    st.session_state.history.pop()          # discard current
-    prev = st.session_state.history[-1]     # get last
-    mode, df = prev["mode"], prev["df"]
-    (A, B, rh, temp, (bg_lo, bg_hi),
-     bow, dx) = (prev[k] for k in
-                 ("A","B","rh","temp","bg","bow","dx"))
-    if mode == "Ternary A–B–C":
-        C, dy = prev["C"], prev["dy"]
-    st.success("Showing previous result")
-
-# ── Run a fresh screen ──────────────────────────────────────────────────────
-elif do_run:
-    try:
-        _summary(A, [])  # quick probe to ensure formula is valid
-        _summary(B, [])
-        if mode == "Ternary A–B–C":
-            _summary(C, [])
-    except Exception as e:
-        st.error(f"❌  Formula error / MP lookup failed: {e}")
-        st.stop()
-
-    if mode == "Binary A–B":
-        df = _run_binary(
-            A, B, rh, temp,
-            (bg_lo, bg_hi), bow, dx
-        )
+    if formula in CALIBRATED_GAPS:
+        data["band_gap"] = CALIBRATED_GAPS[formula]
     else:
-        df = _run_ternary(
-            A, B, C, rh, temp,
-            (bg_lo, bg_hi),
-            bows={"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy
-        )
+        hal = next(h for h in ("I", "Br", "Cl") if h in formula)
+        data["band_gap"] = (data["band_gap"] or 0) + GAP_OFFSET[hal]
 
-    st.session_state.history.append({
-        "mode": mode, "A": A, "B": B, "rh": rh, "temp": temp,
-        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
-        "df": df, **({"C": C, "dy": dy} if mode.startswith("Ternary") else {})
-    })
+    return data
 
-# ── If nothing to show yet ──────────────────────────────────────────────────
-elif not st.session_state.history:
-    st.info("Press ▶ Run screening to begin.")
-    st.stop()
+score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
-# ── Current dataframe ───────────────────────────────────────────────────────
-df = st.session_state.history[-1]["df"]
+# ── BINARY SCREEN ─────────────────────────────────────────────────-
+def mix_abx3(
+    formula_A: str,
+    formula_B: str,
+    rh: float,
+    temp: float,
+    bg_window: tuple[float, float],
+    bowing: float = 0.0,
+    dx: float = 0.05,
+    alpha: float = 1.0,
+    beta: float = 1.0,
+) -> pd.DataFrame:
 
-# ── Tabs: table · plot · download ───────────────────────────────────────────
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
+    lo, hi = bg_window
+    dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
+    if not (dA and dB):
+        return pd.DataFrame()
 
-# ── Table view ──────────────────────────────────────────────────────────────
-with tab_tbl:
-    st.markdown("### Run parameters")
-    param_rows = [
-        ("Humidity [%]", rh),
-        ("Temperature [°C]", temp),
-        ("Gap window [eV]", f"{bg_lo:.2f} – {bg_hi:.2f}"),
-        ("Bowing [eV]", bow),
-        ("x-step", dx),
-    ]
-    if mode.startswith("Ternary"):
-        param_rows.append(("y-step", dy))
-    st.table(pd.DataFrame(param_rows, columns=["Parameter", "Value"]))
+    comp = Composition(formula_A)
+    A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_RADII)
+    B_site = next(e.symbol for e in comp.elements if e.symbol in {"Pb", "Sn"})
+    X_site = next(e.symbol for e in comp.elements if e.symbol in {"I", "Br", "Cl"})
+    rA, rB, rX = IONIC_RADII[A_site], IONIC_RADII[B_site], IONIC_RADII[X_site]
 
-    st.markdown("### Candidate results")
-    st.dataframe(df, use_container_width=True, height=400)
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
+        Ehull = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        stab = max(0.0, 1 - Ehull)
+        gap = score_band_gap(Eg, lo, hi)
+        t = (rA + rX) / (np.sqrt(2) * (rB + rX))
+        mu = rB / rX
+        form = np.exp(-0.5 * ((t - 0.90) / 0.07) ** 2) * np.exp(-0.5 * ((mu - 0.50) / 0.07) ** 2)
+        env = 1 + alpha * rh / 100 + beta * temp / 100
+        score = form * stab * gap / env
 
-# ── Plot view ───────────────────────────────────────────────────────────────
-with tab_plot:
-    if mode.startswith("Binary"):
-        have = set(df.columns)
-        needed = {"Eg", "Ehull", "score"}
-        if not needed.issubset(have):
-            st.warning("Missing columns for binary plot.")
-        else:
-            fig = px.scatter(
-                df, x="Ehull", y="Eg", color="score",
-                color_continuous_scale="Turbo",
-                hover_data=df.columns, width=1150, height=780
+        rows.append({
+            "x": round(x, 3),
+            "Eg": round(Eg, 3),
+            "Ehull": round(Ehull, 4),
+            "score": round(score, 3),
+            "formula": f"{formula_A}-{formula_B} x={x:.2f}",
+        })
+
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+
+# ── TERNARY SCREEN ────────────────────────────────────────────────
+def screen_ternary(
+    A: str, B: str, C: str,
+    rh: float, temp: float,
+    bg: tuple[float, float],
+    bows: dict[str, float],
+    dx: float = 0.1, dy: float = 0.1,
+    n_mc: int = 200,
+) -> pd.DataFrame:
+
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    if not (dA and dB and dC):
+        return pd.DataFrame()
+
+    lo, hi = bg
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-6, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-6, dy):
+            z = 1 - x - y
+            Eg = (
+                z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
+                - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y
             )
-            fig.update_traces(marker=dict(size=10, line=dict(width=1, color="black")))
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        needed = {"x", "y", "score"}
-        if not needed.issubset(df.columns):
-            st.warning("Missing columns for ternary plot.")
-        else:
-            fig3d = px.scatter_3d(
-                df, x="x", y="y", z="score",
-                color="score", color_continuous_scale="Turbo",
-                hover_data=df.columns, width=1150, height=820
+            Eh = (
+                z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+                + bows["AB"] * x * z + bows["AC"] * y * z + bows["BC"] * x * y
             )
-            fig3d.update_traces(marker=dict(size=4, line=dict(width=0.5, color="black")))
-            st.plotly_chart(fig3d, use_container_width=True)
+            score = np.exp(-max(Eh, 0) / 0.1) * score_band_gap(Eg, lo, hi)
 
-# ── Download view ───────────────────────────────────────────────────────────
-with tab_dl:
-    st.download_button(
-        "📥 Download CSV",
-        df.to_csv(index=False).encode(),
-        "EnerMat_results.csv", "text/csv"
-    )
+            rows.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "score": round(score, 3),
+                "formula": f"CsSn(Br{1-x-y:.2f}Cl{y:.2f}I{x:.2f})₃",
+            })
 
-    top = df.iloc[0]
-    label = (top.formula if mode.startswith("Binary")
-             else f"{A}+{B}+{C} (x={top.x:.2f}, y={top.y:.2f})")
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-    txt = (f"EnerMat auto-report  {datetime.date.today()}\n"
-           f"Top candidate   : {label}\n"
-           f"Band-gap [eV]   : {top.Eg}\n"
-           f"Ehull  [eV/atom]: {top.Ehull}\n"
-           f"Eox   [eV/Sn]   : {getattr(top,'Eox','N/A')}\n"
-           f"Score           : {top.score}\n")
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
-
-    # DOCX
-    doc = Document()
-    doc.add_heading("EnerMat Report", 0)
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {label}")
-    tbl = doc.add_table(rows=1, cols=2)
-    hdr = tbl.rows[0].cells
-    hdr[0].text, hdr[1].text = "Property", "Value"
-    for k in ("Eg", "Ehull", "Eox", "score"):
-        if k in top:
-            row = tbl.add_row()
-            row.cells[0].text, row.cells[1].text = k, str(top[k])
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    st.download_button(
-        "📝 Download DOCX", buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+# ── Legacy alias ───────────────────────────────────────────────────
+_summary = fetch_mp_data
