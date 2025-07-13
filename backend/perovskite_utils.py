@@ -1,132 +1,121 @@
-
 """
-EnerMat backend – v9.6 (2025-07-13)
-• calibrated band-gaps
-• convex-hull stability
-• optical window (strict)
-• Sn-oxidation term  (CsSnX3 + ½ O2 → ½ Cs2SnX6 + ½ SnO2)
-"""
+EnerMat Perovskite Explorer – Streamlit Front‑End
+Clean build • 2025‑07‑13 🟢
 
+Run locally with:
+    streamlit run frontend/app.py
+
+The UI lets you:
+* pick binary or ternary mixes from a pre‑set list or free text,
+* set relative humidity, temperature, band‑gap window,
+* view a sortable table including ΔEox and overall score,
+* plot Eg vs ΔEox (bubble size ∝ score),
+* download the DataFrame as CSV.
+"""
 from __future__ import annotations
-import os, math, numpy as np, pandas as pd, streamlit as st
-from dotenv import load_dotenv
-from mp_api.client import MPRester
-from pymatgen.core import Composition
 
-# ── API key ─────────────────────────────────────────────────────────
-load_dotenv()
-API = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY", "")
-if len(API) != 32:
-    raise RuntimeError("🛑 MP_API_KEY missing or wrong length (32 chars)")
-mpr = MPRester(API)
+import io
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
 
-# ── presets / constants ────────────────────────────────────────────
-END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsSnI3"]
+# ─── backend helpers -----------------------------------------------------------
+from backend.perovskite_utils import (
+    mix_abx3 as screen_binary,
+    screen_ternary,
+    END_MEMBERS,
+    fetch_mp_data,  # legacy import still available in backend
+)
 
-CAL_GAP   = {"CsSnBr3":1.79,"CsSnCl3":2.83,"CsSnI3":1.30,
-             "CsPbBr3":2.30,"CsPbI3":1.73}
-GAP_SHIFT = {"I":0.90,"Br":0.70,"Cl":0.80}
-IONIC_R   = {"Cs":1.88,"Rb":1.72,"MA":2.17,"FA":2.53,
-             "Pb":1.19,"Sn":1.18,"I":2.20,"Br":1.96,"Cl":1.81}
+st.set_page_config(page_title="EnerMat Explorer", layout="wide")
+st.title("⚛️ EnerMat Perovskite Explorer")
 
-# ── helper functions ───────────────────────────────────────────────
-def _find_halide(formula:str) -> str:
-    return next(h for h in ("I","Br","Cl") if h in formula)
+# ─── sidebar – global parameters ---------------------------------------------
+st.sidebar.header("Global parameters")
+bg_lo = st.sidebar.number_input("Min Eg (eV)", 0.8, 3.5, 1.1, 0.05)
+bg_hi = st.sidebar.number_input("Max Eg (eV)", 0.8, 3.5, 1.6, 0.05)
+rh    = st.sidebar.slider("Relative humidity (%)", 0, 100, 30)
+Temp  = st.sidebar.slider("Ambient T (°C)", 0, 100, 25)
 
-def fetch_mp_data(formula:str, fields:list[str]) -> dict|None:
-    """Return dict(field→value) with calibrated gap inserted."""
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
-    if not docs:
-        return None
-    ent = docs[0]
-    d   = {f:getattr(ent,f,None) for f in fields}
+mode = st.sidebar.radio("Screening mode", ["Binary", "Ternary"], index=0)
 
-    if "band_gap" in fields:
-        if formula in CAL_GAP:
-            d["band_gap"] = CAL_GAP[formula]
+# ─── input helpers ------------------------------------------------------------
+def _pick_formula(label: str) -> str:
+    preset = st.selectbox(label + " – presets", END_MEMBERS, key=label)
+    custom = st.text_input(label + " – custom", key=label + "_custom")
+    return custom.strip() or preset
+
+# ─── run screening ------------------------------------------------------------
+
+if mode == "Binary":
+    st.header("Binary ABX₃ → (1−x)A + xB")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fA = _pick_formula("Formula A")
+    with col2:
+        fB = _pick_formula("Formula B")
+
+    run = st.button("Run binary screen →")
+    if run:
+        df = screen_binary(
+            fA, fB,
+            rh=rh, temp=Temp,
+            bg_window=(bg_lo, bg_hi),
+        )
+        if df.empty:
+            st.error("No data – check formulas or MP API quota.")
         else:
-            hal = _find_halide(formula)
-            d["band_gap"] = (d["band_gap"] or 0) + GAP_SHIFT[hal]
-    return d
+            st.success(f"{len(df)} compositions evaluated")
+            st.dataframe(df)
 
-def _E_formula(formula:str) -> float:
-    d = fetch_mp_data(formula,["energy_per_atom"])
-    if not d: raise RuntimeError(f"no MP entry for {formula}")
-    return d["energy_per_atom"] * Composition(formula).num_atoms
+            # plot Eg vs Eox
+            fig, ax = plt.subplots()
+            sc = ax.scatter(df["Eg"], df["Eox"], s=df["score"]*200,
+                            alpha=0.6)
+            ax.set_xlabel("Band gap Eg (eV)")
+            ax.set_ylabel("ΔEox (eV)")
+            ax.set_title("Optical gap vs Sn oxidation driving‑force")
+            st.pyplot(fig)
 
-def oxidation_energy(formula:str) -> float:
-    """
-    ΔE per Sn  for  CsSnX3 + ½O2 → ½(Cs2SnX6 + SnO2)   (eV Sn⁻¹)
-    """
-    hal   = _find_halide(formula)
-    E_re  = _E_formula(f"CsSn{hal}3")
-    E_p1  = _E_formula(f"Cs2Sn{hal}6")
-    E_p2  = _E_formula("SnO2")
-    E_O2  = _E_formula("O2")
-    return 0.5*E_p1 + 0.5*E_p2 - E_re + 0.5*E_O2
+            # download button
+            csv = df.to_csv(index=False).encode()
+            st.download_button("Download CSV", csv, file_name="binary_screen.csv")
 
-score_gap = lambda Eg,lo,hi: 1.0 if lo<=Eg<=hi else 0.0
+else:  # ternary mode
+    st.header("Ternary ABX₃ → zA + xB + yC  with z=1−x−y")
 
-# ── binary screen ───────────────────────────────────────────────────
-def mix_abx3(formA:str,formB:str,
-             rh:float,temp:float,
-             bg:(float,float),
-             bow:float=0.0,dx:float=0.05,
-             alpha:float=1.0,beta:float=1.0)->pd.DataFrame:
+    colA, colB, colC = st.columns(3)
+    with colA:
+        fA = _pick_formula("Formula A")
+    with colB:
+        fB = _pick_formula("Formula B")
+    with colC:
+        fC = _pick_formula("Formula C")
 
-    dA = fetch_mp_data(formA,["band_gap","energy_above_hull"])
-    dB = fetch_mp_data(formB,["band_gap","energy_above_hull"])
-    if not(dA and dB): return pd.DataFrame()
+    dx = st.sidebar.slider("Δx step", 0.05, 0.25, 0.10, 0.05)
 
-    comp = Composition(formA)
-    A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_R)
-    rA,rB,rX = IONIC_R[A_site],IONIC_R["Sn" if "Sn" in formA else "Pb"],IONIC_R[_find_halide(formA)]
+    run = st.button("Run ternary screen →")
+    if run:
+        df = screen_ternary(
+            fA, fB, fC,
+            rh=rh, temp=Temp,
+            bg=(bg_lo, bg_hi),
+            dx=dx, dy=dx,
+        )
+        if df.empty:
+            st.error("No data – check formulas or MP API quota.")
+        else:
+            st.success(f"{len(df)} compositions evaluated")
+            st.dataframe(df)
 
-    eA,eB   = oxidation_energy(formA),oxidation_energy(formB)
-    lo,hi   = bg; rows=[]
-    for x in np.arange(0,1+1e-6,dx):
-        Eg   = (1-x)*dA["band_gap"]+x*dB["band_gap"]-bow*x*(1-x)
-        Eh   = (1-x)*dA["energy_above_hull"]+x*dB["energy_above_hull"]
-        Eox  = (1-x)*eA + x*eB
-        t    = (rA+rX)/ (math.sqrt(2)*(rB+rX))
-        mu   = rB/rX
-        form = math.exp(-0.5*((t-0.90)/0.07)**2)*math.exp(-0.5*((mu-0.50)/0.07)**2)
-        env  = 1+alpha*rh/100+beta*temp/100
-        score= form*max(0,1-Eh)*score_gap(Eg,lo,hi)*math.exp(Eox/0.2)/env
-        rows.append(dict(x=round(x,3),Eg=round(Eg,3),
-                         Ehull=round(Eh,4),Eox=round(Eox,3),
-                         score=round(score,3),
-                         formula=f"{formA}-{formB} x={x:.2f}"))
-    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+            fig, ax = plt.subplots()
+            sc = ax.scatter(df["Eg"], df["Eox"], s=df["score"]*120,
+                            alpha=0.6)
+            ax.set_xlabel("Band gap Eg (eV)")
+            ax.set_ylabel("ΔEox (eV)")
+            ax.set_title("Optical gap vs Sn oxidation driving‑force")
+            st.pyplot(fig)
 
-# ── ternary screen ──────────────────────────────────────────────────
-def screen_ternary(A:str,B:str,C:str,
-                   rh:float,temp:float,
-                   bg:(float,float),
-                   bows:dict[str,float],
-                   dx:float=0.2,dy:float=0.2)->pd.DataFrame:
-
-    dA=fetch_mp_data(A,["band_gap","energy_above_hull"])
-    dB=fetch_mp_data(B,["band_gap","energy_above_hull"])
-    dC=fetch_mp_data(C,["band_gap","energy_above_hull"])
-    if not(dA and dB and dC): return pd.DataFrame()
-
-    eA,eB,eC = oxidation_energy(A),oxidation_energy(B),oxidation_energy(C)
-    lo,hi    = bg; rows=[]
-    for x in np.arange(0,1+1e-6,dx):
-        for y in np.arange(0,1-x+1e-6,dy):
-            z  = 1-x-y
-            Eg = (z*dA["band_gap"]+x*dB["band_gap"]+y*dC["band_gap"]
-                  - bows["AB"]*x*z - bows["AC"]*y*z - bows["BC"]*x*y)
-            Eh = (z*dA["energy_above_hull"]+x*dB["energy_above_hull"]+y*dC["energy_above_hull"]
-                  + bows["AB"]*x*z + bows["AC"]*y*z + bows["BC"]*x*y)
-            Eox= z*eA + x*eB + y*eC
-            score= math.exp(-max(Eh,0)/0.1)*score_gap(Eg,lo,hi)*math.exp(Eox/0.2)
-            rows.append(dict(x=round(x,2),y=round(y,2),
-                             Eg=round(Eg,3),Ehull=round(Eh,4),
-                             Eox=round(Eox,3),score=round(score,3),
-                             formula=f"{A}-{B}-{C} x={x:.2f} y={y:.2f}"))
-    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
-
-# ── public symbols (import *) ───────────────────────────────────────
-__all__ = ["mix_abx3","screen_ternary","END_MEMBERS","fetch_mp_data"]
+            csv = df.to_csv(index=False).encode()
+            st.download_button("Download CSV", csv, file_name="ternary_screen.csv")
