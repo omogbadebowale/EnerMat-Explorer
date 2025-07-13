@@ -43,23 +43,23 @@ IONIC_RADII = {
 }
 
 # ──────────────────────────────────────────────────────────── helpers
-def _find_halide(formula: str) -> str:
-    return next(h for h in ("I", "Br", "Cl") if h in formula)
-
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
-    """MP summary with calibrated / offset gap."""
+    """Return MP summary dict; apply calibrated / offset gap **only if requested**."""
     doc = mpr.summary.search(formula=formula, fields=tuple(fields))
     if not doc:
         return None
     d: dict = {f: getattr(doc[0], f, None) for f in fields}
 
-    if formula in CALIBRATED_GAPS:
-        d["band_gap"] = CALIBRATED_GAPS[formula]
-    else:
-        hal = _find_halide(formula)
-        d["band_gap"] = (d["band_gap"] or 0) + GAP_OFFSET[hal]
+    # --- gap correction is needed only when the caller asked for "band_gap" ---
+    if "band_gap" in fields:
+        if formula in CALIBRATED_GAPS:
+            d["band_gap"] = CALIBRATED_GAPS[formula]
+        else:
+            hal = _find_halide(formula)
+            d["band_gap"] = (d["band_gap"] or 0) + GAP_OFFSET[hal]
 
     return d
+
 
 # optical test – strict 0/1
 def score_band_gap(Eg: float, lo: float, hi: float) -> float:
