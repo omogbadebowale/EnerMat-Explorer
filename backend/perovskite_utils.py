@@ -74,41 +74,51 @@ def fetch_mp_data(formula: str, fields: list[str]):
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
-    """Return ΔEₒₓ per Sn for
-    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
-
-    Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
-    Returns **0.0** for Pb‑based or Sn‑free formulas.
-
-    Halide (X) is auto‑detected from the formula.
-    Values are cached to avoid excessive MP API calls.
     """
-    if "Sn" not in formula_sn2:
-        return 0.0  # nothing to oxidise
+    ΔE_ox  (per Sn) for
+        CsSnX3  + ½ O2  → ½ (Cs2SnX6 + SnO2)
 
+    • Returns 0.0 when the formula contains no Sn.
+    • Positive  value  ⇒ oxidation thermodynamically *unfavourable* (good).
+      Negative value  ⇒ Sn2+ wants to oxidise (bad).
+
+    IMPORTANT — normalisation:
+      – All MP energies are **energy_per_atom** (eV/atom).  
+      – We convert them to “per-formula” energies (eV/formula unit),
+        carry out the reaction enthalpy, **then divide by the number of Sn atoms
+        in the reactant formula** (usually 1) so the result is ≈ –0.1 … –0.3 eV,
+        not –5 eV.
+    """
+    # ─── skip non-Sn formulas ───────────────────────────────────────────────
+    if "Sn" not in formula_sn2:
+        return 0.0
+
+    # identify the halide (assumes only one of I / Br / Cl is present)
     try:
         hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
     except StopIteration:
-        # Non‑halide (rare) – skip oxidation penalty
-        return 0.0
+        return 0.0  # exotic / non-halide – ignore
 
-    def e(formula: str) -> float:
-        """Fetch energy_per_atom with minimal error handling."""
+    # helper: energy per FORMULA (eV/formula)  ------------------------------
+    def e_formula(formula: str) -> float:
         doc = fetch_mp_data(formula, ["energy_per_atom"])
         if not doc or doc["energy_per_atom"] is None:
-            raise ValueError(f"Missing MP entry for {formula}")
-        return doc["energy_per_atom"]
+            raise ValueError(f"Missing energy for {formula}")
+        atoms = Composition(formula).num_atoms
+        return doc["energy_per_atom"] * atoms  # convert to eV / formula unit
 
-    e_reac  = e(formula_sn2)
-    e_prod1 = e(f"Cs2Sn{hal}6")
-    e_prod2 = e("SnO2")
+    # energies (eV / formula) ------------------------------------------------
+    E_reac   = e_formula(formula_sn2)                 # CsSnX3
+    E_prod1  = e_formula(f"Cs2Sn{hal}6")              # Cs2SnX6
+    E_prod2  = e_formula("SnO2")                      # SnO2
+    E_O2     = e_formula("O2")                        # O2 (2 atoms)
 
-    # O₂: MP stores energy per atom; multiply by 2 for the molecule.
-    try:
-        e_o2 = e("O2") * 2.0
-    except ValueError:
-        # Fallback: fixed PBE value –4.93 eV/atom
-        e_o2 = (-4.93) * 2.0
+    # reaction enthalpy (eV / formula) --------------------------------------
+    dE_total = 0.5 * (E_prod1 + E_prod2 + E_O2) - E_reac
+
+    # normalise per Sn atom in the reactant formula -------------------------
+    n_sn = Composition(formula_sn2).get_el_amt_dict().get("Sn", 1)
+    return dE_total / n_sn
 
     return 0.5 * (e_prod1 + e_prod2 + e_o2) - e_reac
 
