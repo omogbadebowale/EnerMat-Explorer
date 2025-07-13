@@ -116,6 +116,14 @@ def oxidation_energy(formula_sn2: str) -> float:
 
 # ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
 # -----------------------------------------------------------------------------
+# ──────────────────────── helpers ────────────────────────
+
+def score_band_gap(Eg: float, lo: float, hi: float) -> float:
+    """
+    Return 1.0 if the computed band-gap Eg lies between lo and hi (inclusive),
+    else 0.0. Used to hard-filter compositions outside your target window.
+    """
+    return 1.0 if lo <= Eg <= hi else 0.0
 
 def mix_abx3(
     formula_A: str,
