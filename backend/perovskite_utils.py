@@ -35,12 +35,19 @@ def _find_halide(formula: str) -> str:
 def fetch_mp_data(formula: str, fields: list[str]) -> dict:
     doc = mpr.summary.search(formula=formula, fields=tuple(fields))[0]
     d = {f: getattr(doc, f, None) for f in fields}
+
+    # ----- ensure band-gap key always exists ------------------------
+    if "band_gap" not in d:          # <── NEW line ➊
+        d["band_gap"] = None         # <── NEW line ➋
+    # ----------------------------------------------------------------
+
     if formula in CALIBRATED_GAPS:
         d["band_gap"] = CALIBRATED_GAPS[formula]
     else:
         hal = _find_halide(formula)
         d["band_gap"] = (d["band_gap"] or 0) + GAP_OFFSET[hal]
     return d
+
 
 def _mp_formula_energy(formula: str) -> float:
     """DFT total energy (eV) per *formula unit*"""
