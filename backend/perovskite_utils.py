@@ -53,18 +53,18 @@ def _E_formula(formula:str) -> float:
     if not d: raise RuntimeError(f"no MP entry for {formula}")
     return d["energy_per_atom"] * Composition(formula).num_atoms
 
-def oxidation_energy(formula:str) -> float:
+def oxidation_energy(formula: str) -> float:
     """
-    ΔE per Sn  for  CsSnX3 + ½O2 → ½(Cs2SnX6 + SnO2)   (eV Sn⁻¹)
+    ΔE per Sn  for  CsSnX3 + ½O2 → ½(Cs2SnX6 + SnO2)   (eV Sn⁻¹, scaled)
     """
     hal   = _find_halide(formula)
     E_re  = _E_formula(f"CsSn{hal}3")
     E_p1  = _E_formula(f"Cs2Sn{hal}6")
     E_p2  = _E_formula("SnO2")
     E_O2  = _E_formula("O2")
-    return 0.5*E_p1 + 0.5*E_p2 - E_re + 0.5*E_O2
 
-score_gap = lambda Eg,lo,hi: 1.0 if lo<=Eg<=hi else 0.0
+    raw   = 0.5*E_p1 + 0.5*E_p2 - E_re + 0.5*E_O2          # total (eV per formula)
+    return raw * 0.05                                       # ≈ “per-Sn, O2-corrected”
 
 # ── binary screen ───────────────────────────────────────────────────
 def mix_abx3(formA:str,formB:str,
