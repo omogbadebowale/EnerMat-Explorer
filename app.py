@@ -181,16 +181,7 @@ with tab_plot:
             st.plotly_chart(fig3d, use_container_width=True)
 
 # ── Download view ───────────────────────────────────────────────────────────
-@@ with tab_dl:
--    top = df.iloc[0]
--    label = (top.formula if mode.startswith("Binary")
--             else f"{A}+{B}+{C} (x={top.x:.2f}, y={top.y:.2f})")
-+    top = df.iloc[0]
-+    if mode.startswith("Binary"):
-+        label = top["formula"]
-+    else:
-+        label = f"{A}+{B}+{C} (x={top['x']:.2f}, y={top['y']:.2f})"
-
+with tab_dl:
     st.download_button(
         "📥 Download CSV",
         df.to_csv(index=False).encode(),
