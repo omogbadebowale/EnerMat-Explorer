@@ -13,11 +13,10 @@ from docx import Document
 
 # ── backend helpers ──────────────────────────────────────────────
 from backend.perovskite_utils import (
-    mix_abx3 as screen_binary,
+    mix_abx3        as screen_binary,
     screen_ternary,
     END_MEMBERS,
-    fetch_mp_data as _summary,
-)
+    fetch_mp_data   as _summary,      # << same spelling as in the backend
 
 # ── API key sanity check ─────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
