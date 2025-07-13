@@ -43,6 +43,14 @@ if not API_KEY or len(API_KEY) != 32:
 _mpr = MPRester(API_KEY)
 
 # ───────────────────────────────────────────── reference data
+
+# ── common end‑member library used by the Streamlit front‑end
+END_MEMBERS = [
+    "CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3",
+]
+# Legacy code in the UI expects singular name – keep as alias
+END_MEMBER = END_MEMBERS
+
 CALIBRATED_GAPS: Dict[str, float] = {
     "CsSnBr3": 1.79, "CsSnCl3": 2.83, "CsSnI3": 1.30,
     "CsPbBr3": 2.30, "CsPbI3": 1.73,
