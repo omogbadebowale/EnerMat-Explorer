@@ -1,23 +1,22 @@
-# app.py  –  EnerMat Perovskite Explorer  v9.6  (2025-07-12)
-# Streamlit front-end only.  All heavy lifting lives in backend/perovskite_utils.py
-
-import datetime
-import io
-import os
-from pathlib import Path
-
-import pandas as pd
-import plotly.express as px
-import streamlit as st
+import io, os, datetime, streamlit as st, pandas as pd
+import plotly.express as px, plotly.graph_objects as go
 from docx import Document
 
-# ── backend helpers ──────────────────────────────────────────────
+# ── API key check ──────────────────────────────────────────────────
+API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
+if not API_KEY or len(API_KEY) != 32:
+    st.error("🛑 Please set MP_API_KEY (32 chars) in Secrets.")
+    st.stop()
+
+# ── backend helpers ────────────────────────────────────────────────
 from backend.perovskite_utils import (
-    mix_abx3        as screen_binary,
+    mix_abx3      as screen_binary,
     screen_ternary,
     END_MEMBERS,
-    fetch_mp_data   as _summary,      # << same spelling as in the backend
+    fetch_mp_data as _summary,
 )
+
+# (everything else in app.py stays exactly as you already had it)
 
 # ── API key sanity check ─────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
