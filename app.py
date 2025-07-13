@@ -1,3 +1,7 @@
+st.title("🔬 EnerMat **Perovskite** Explorer v9.7")  # ← was v9.6
+...
+st.caption(f"⚙️  Build SHA: {st.secrets.get('GIT_SHA','dev')} • "
+           f"🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
 # app.py  –  EnerMat Perovskite Explorer v9.6  (2025-07-13, “oxidation-fixed” edition)
 
 import io, os, datetime
