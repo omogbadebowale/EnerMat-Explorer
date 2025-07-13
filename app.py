@@ -1,220 +1,173 @@
-# app.py  –  EnerMat Perovskite Explorer v9.6  (2025-07-13, “oxidation-fixed” edition)
-import io, os, datetime
-from pathlib import Path
+# app.py  –  EnerMat Perovskite Explorer  v9.6  (2025-07-13, oxide-ready)
 
-import streamlit as st
+from __future__ import annotations
+import datetime, io, os, textwrap
+
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+import streamlit as st
 from docx import Document
 
-# ── Materials-Project API key ────────────────────────────────────────────────
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
-if not API_KEY or len(API_KEY) != 32:
-    st.error("🛑  You need a valid 32-character MP_API_KEY in Secrets.")
-    st.stop()
-
-# ── Backend helpers ─────────────────────────────────────────────────────────
-from backend.perovskite_utils import (
-    mix_abx3    as screen_binary,
-    screen_ternary,
+# ─── back-end helpers ──────────────────────────────────────────────
+from backend.perovskite_utils import (            # ← your 2025-07-13 backend
+    mix_abx3          as screen_binary,
+    screen_ternary    as screen_ternary,
     END_MEMBERS,
-    fetch_mp_data as _summary,
+    fetch_mp_data     as _summary,
 )
 
-# ── Streamlit page config ───────────────────────────────────────────────────
-st.set_page_config(page_title="EnerMat Perovskite Explorer", layout="wide")
+# ─── Streamlit page & session ─────────────────────────────────────
+st.set_page_config("EnerMat Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-# ── Session state ───────────────────────────────────────────────────────────
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ── Sidebar – I/O controls ──────────────────────────────────────────────────
+# ─── sidebar – input widgets ──────────────────────────────────────
 with st.sidebar:
     st.header("Mode")
     mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
     st.header("End-members")
-    preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
-    preset_B = st.selectbox("Preset B", END_MEMBERS, 1)
-    custom_A = st.text_input("Custom A (optional)").strip()
-    custom_B = st.text_input("Custom B (optional)").strip()
+    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
+    custom_A = st.text_input("Custom A (optional)", "").strip()
+    custom_B = st.text_input("Custom B (optional)", "").strip()
     A = custom_A or preset_A
     B = custom_B or preset_B
-    if mode == "Ternary A–B–C":
-        preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
-        custom_C = st.text_input("Custom C (optional)").strip()
+
+    if mode.startswith("Ternary"):
+        preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
+        custom_C = st.text_input("Custom C (optional)", "").strip()
         C = custom_C or preset_C
 
     st.header("Environment")
-    rh   = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
+    rh   = st.slider("Humidity [%]",      0, 100, 50)
+    temp = st.slider("Temperature [°C]",-20, 100, 25)
 
     st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window", 0.5, 3.0, (1.0, 1.4), 0.01)
+    bg_lo, bg_hi = st.slider("Gap window [eV]", 0.5, 3.0, (1.0, 1.4), 0.01)
 
     st.header("Model settings")
-    bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
-    dx  = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
-    if mode == "Ternary A–B–C":
-        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
+    bow = st.number_input("Bowing (eV, neg ⇒ gap ↑)",-1.0, 1.0,-0.15, 0.05)
+    dx  = st.number_input("x-step",0.01,0.50,0.05,0.01)
+    if mode.startswith("Ternary"):
+        dy = st.number_input("y-step",0.01,0.50,0.05,0.01)
 
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
 
-    st.caption(f"⚙️  Build SHA: {st.secrets.get('GIT_SHA','dev')} • "
-               f"🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
-
-# ── Cached runner wrappers (binary & ternary) ───────────────────────────────
-@st.cache_data(show_spinner="⏳  Screening …", max_entries=20)
+# ─── cached wrappers (keep UI snappy) ─────────────────────────────
+@st.cache_data(show_spinner="⏳ Binary screen …", max_entries=20)
 def _run_binary(*args, **kws):
     return screen_binary(*args, **kws)
 
-@st.cache_data(show_spinner="⏳  Screening …", max_entries=10)
+@st.cache_data(show_spinner="⏳ Ternary screen …", max_entries=20)
 def _run_ternary(*args, **kws):
     return screen_ternary(*args, **kws)
 
-# ── Control buttons ─────────────────────────────────────────────────────────
-col_run, col_prev = st.columns([3, 1])
-do_run   = col_run.button("▶ Run screening", type="primary")
-do_prev  = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+# ─── run / back buttons ───────────────────────────────────────────
+col_run, col_back = st.columns([3,1])
+run  = col_run.button("▶ Run screening", type="primary")
+back = col_back.button("⏪ Previous", disabled=not st.session_state.history)
 
-# ── Retrieve previous result ────────────────────────────────────────────────
-if do_prev:
-    st.session_state.history.pop()          # discard current
-    prev = st.session_state.history[-1]     # get last
-    mode, df = prev["mode"], prev["df"]
-    (A, B, rh, temp, (bg_lo, bg_hi),
-     bow, dx) = (prev[k] for k in
-                 ("A","B","rh","temp","bg","bow","dx"))
-    if mode == "Ternary A–B–C":
-        C, dy = prev["C"], prev["dy"]
+if back:
+    entry = st.session_state.history.pop()
+    df    = entry["df"]
+    mode  = entry["mode"]
+    A,B,rh,temp,bg_lo,bg_hi,bow,dx = (entry[k] for k in
+        ("A","B","rh","temp","bg_lo","bg_hi","bow","dx"))
+    if mode.startswith("Ternary"):
+        C,dy = entry["C"], entry["dy"]
     st.success("Showing previous result")
 
-# ── Run a fresh screen ──────────────────────────────────────────────────────
-elif do_run:
+elif run:
+    # minimal MP sanity-check so we fail fast
     try:
-        _summary(A, [])  # quick probe to ensure formula is valid
-        _summary(B, [])
-        if mode == "Ternary A–B–C":
-            _summary(C, [])
+        _ = _summary(A,["band_gap"])
+        _ = _summary(B,["band_gap"])
+        if mode.startswith("Ternary"):
+            _ = _summary(C,["band_gap"])
     except Exception as e:
-        st.error(f"❌  Formula error / MP lookup failed: {e}")
+        st.error(f"❌ Error querying Materials Project: {e}")
         st.stop()
 
-    if mode == "Binary A–B":
-        df = _run_binary(
-            A, B, rh, temp,
-            (bg_lo, bg_hi), bow, dx
-        )
+    if mode.startswith("Binary"):
+        df = _run_binary(A,B,rh,temp,(bg_lo,bg_hi), bow, dx)
     else:
-        df = _run_ternary(
-            A, B, C, rh, temp,
-            (bg_lo, bg_hi),
-            bows={"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy
-        )
+        bows = dict(AB=bow, AC=bow, BC=bow)
+        df = _run_ternary(A,B,C,rh,temp,(bg_lo,bg_hi), bows, dx, dy)
 
-    st.session_state.history.append({
-        "mode": mode, "A": A, "B": B, "rh": rh, "temp": temp,
-        "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx,
-        "df": df, **({"C": C, "dy": dy} if mode.startswith("Ternary") else {})
-    })
+    # keep a snapshot
+    st.session_state.history.append(dict(
+        mode=mode, A=A, B=B, C=C if mode.startswith("Ternary") else "",
+        rh=rh,temp=temp,bg_lo=bg_lo,bg_hi=bg_hi,bow=bow,dx=dx,dy=dy if mode.startswith("Ternary") else 0,
+        df=df
+    ))
 
-# ── If nothing to show yet ──────────────────────────────────────────────────
-elif not st.session_state.history:
+elif st.session_state.history:
+    df   = st.session_state.history[-1]["df"]
+    mode = st.session_state.history[-1]["mode"]
+else:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ── Current dataframe ───────────────────────────────────────────────────────
-df = st.session_state.history[-1]["df"]
+# ─── main layout: 3 tabs ──────────────────────────────────────────
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
 
-# ── Tabs: table · plot · download ───────────────────────────────────────────
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
-
-# ── Table view ──────────────────────────────────────────────────────────────
+# — table —
 with tab_tbl:
     st.markdown("### Run parameters")
-    param_rows = [
-        ("Humidity [%]", rh),
-        ("Temperature [°C]", temp),
-        ("Gap window [eV]", f"{bg_lo:.2f} – {bg_hi:.2f}"),
-        ("Bowing [eV]", bow),
-        ("x-step", dx),
-    ]
-    if mode.startswith("Ternary"):
-        param_rows.append(("y-step", dy))
-    st.table(pd.DataFrame(param_rows, columns=["Parameter", "Value"]))
-
+    params = {
+        "Parameter": ["Humidity [%]","Temperature [°C]",
+                      "Gap window [eV]","Bowing [eV]",
+                      "x-step"] + (["y-step"] if mode.startswith("Ternary") else []),
+        "Value":     [rh,temp,f"{bg_lo:.2f}–{bg_hi:.2f}",bow,dx] + ([dy] if mode.startswith("Ternary") else [])
+    }
+    st.table(pd.DataFrame(params))
     st.markdown("### Candidate results")
-    st.dataframe(df, use_container_width=True, height=400)
+    st.dataframe(df,use_container_width=True,height=420)
 
-# ── Plot view ───────────────────────────────────────────────────────────────
+# — plot —
 with tab_plot:
     if mode.startswith("Binary"):
-        have = set(df.columns)
-        needed = {"Eg", "Ehull", "score"}
-        if not needed.issubset(have):
-            st.warning("Missing columns for binary plot.")
-        else:
-            fig = px.scatter(
-                df, x="Ehull", y="Eg", color="score",
-                color_continuous_scale="Turbo",
-                hover_data=df.columns, width=1150, height=780
-            )
-            fig.update_traces(marker=dict(size=10, line=dict(width=1, color="black")))
-            st.plotly_chart(fig, use_container_width=True)
+        fig = px.scatter(df,x="Eox",y="Eg",
+                         size="score",color="score",
+                         hover_data=["x","Eg","Ehull","Eox","score"],
+                         color_continuous_scale="Turbo")
+        st.plotly_chart(fig,use_container_width=True)
     else:
-        needed = {"x", "y", "score"}
-        if not needed.issubset(df.columns):
-            st.warning("Missing columns for ternary plot.")
-        else:
-            fig3d = px.scatter_3d(
-                df, x="x", y="y", z="score",
-                color="score", color_continuous_scale="Turbo",
-                hover_data=df.columns, width=1150, height=820
-            )
-            fig3d.update_traces(marker=dict(size=4, line=dict(width=0.5, color="black")))
-            st.plotly_chart(fig3d, use_container_width=True)
+        fig = px.scatter_3d(df,x="x",y="y",z="score",
+                            color="score",color_continuous_scale="Turbo",
+                            hover_data=["x","y","Eg","Ehull","Eox","score"])
+        fig.update_traces(marker=dict(size=5,opacity=0.9,line=dict(width=0.5,color="black")))
+        st.plotly_chart(fig,use_container_width=True)
 
-# ── Download view ───────────────────────────────────────────────────────────
+# — downloads —
 with tab_dl:
-    st.download_button(
-        "📥 Download CSV",
-        df.to_csv(index=False).encode(),
-        "EnerMat_results.csv", "text/csv"
-    )
+    st.download_button("⬇️ CSV", df.to_csv(index=False).encode(),
+                       "EnerMat_results.csv","text/csv")
 
+    # simple TXT & DOCX summaries (robust for both modes)
     top = df.iloc[0]
-    label = (top.formula if mode.startswith("Binary")
-             else f"{A}+{B}+{C} (x={top.x:.2f}, y={top.y:.2f})")
+    label = top.formula if "formula" in top else (
+        f"{A}-{B}" if mode.startswith("Binary") else f"{A}-{B}-{C}")
 
-    txt = (f"EnerMat auto-report  {datetime.date.today()}\n"
-           f"Top candidate   : {label}\n"
-           f"Band-gap [eV]   : {top.Eg}\n"
-           f"Ehull  [eV/atom]: {top.Ehull}\n"
-           f"Eox   [eV/Sn]   : {getattr(top,'Eox','N/A')}\n"
-           f"Score           : {top.score}\n")
-    st.download_button("📄 Download TXT", txt, "EnerMat_report.txt", "text/plain")
+    txt = textwrap.dedent(f"""
+        EnerMat auto-report ({datetime.date.today()})
+        Top candidate : {label}
+        Band-gap [eV] : {top.Eg}
+        Ehull  [eV]   : {top.Ehull}
+        ΔEox  [eV/Sn] : {top.Eox}
+        Score         : {top.score}
+    """).strip()
+    st.download_button("⬇️ TXT", txt, "EnerMat_report.txt","text/plain")
 
-    # DOCX
     doc = Document()
-    doc.add_heading("EnerMat Report", 0)
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    doc.add_paragraph(f"Top candidate: {label}")
-    tbl = doc.add_table(rows=1, cols=2)
-    hdr = tbl.rows[0].cells
-    hdr[0].text, hdr[1].text = "Property", "Value"
-    for k in ("Eg", "Ehull", "Eox", "score"):
-        if k in top:
-            row = tbl.add_row()
-            row.cells[0].text, row.cells[1].text = k, str(top[k])
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    st.download_button(
-        "📝 Download DOCX", buf, "EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    doc.add_heading("EnerMat auto-report", level=1)
+    for line in txt.splitlines():
+        doc.add_paragraph(line)
+    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
+    st.download_button("⬇️ DOCX", buf, "EnerMat_report.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
