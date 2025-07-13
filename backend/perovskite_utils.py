@@ -72,47 +72,49 @@ def fetch_mp_data(formula: str, fields: list[str]):
             out["band_gap"] = (out["band_gap"] or 0.0) + GAP_OFFSET[hal]
     return out
 
-@lru_cache(maxsize=64)
-def oxidation_energy(formula_sn2: str) -> float:
-    """Return ΔEₒₓ per Sn for
-    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
+ @lru_cache(maxsize=64)
+ def oxidation_energy(formula_sn2: str) -> float:
+     if "Sn" not in formula_sn2:
+         return 0.0
+     try:
+         hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
+     except StopIteration:
+         return 0.0
 
-    Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
-    Returns **0.0** for Pb-based or Sn-free formulas.
+-    def total_energy(formula: str) -> float:
+-        doc = fetch_mp_data(formula, ["energy_per_atom"])
+-        ...
+-        return doc["energy_per_atom"] * comp.num_atoms
++    def total_formation_energy(formula: str) -> float:
++        """
++        Formation energy per formula unit:
++        ΔH_f = formation_energy_per_atom × n_atoms.
++        """
++        doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
++        if not doc or doc["formation_energy_per_atom"] is None:
++            raise ValueError(f"Missing formation-energy for {formula}")
++        comp = Composition(formula)
++        return doc["formation_energy_per_atom"] * comp.num_atoms
 
-    Halide (X) is auto-detected from the formula.
-    Values are cached to avoid excessive MP API calls.
-    """
-    # Early exits
-    if "Sn" not in formula_sn2:
-        return 0.0
-    try:
-        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
-    except StopIteration:
-        return 0.0
-
-    # Helper: total DFT energy of one formula unit
-    def total_energy(formula: str) -> float:
-        doc = fetch_mp_data(formula, ["energy_per_atom"])
-        if not doc or doc["energy_per_atom"] is None:
-            raise ValueError(f"Missing MP entry for {formula}")
-        comp = Composition(formula)
-        return doc["energy_per_atom"] * comp.num_atoms
-
-    # Compute total energies
-    E_reac  = total_energy(formula_sn2)
-    E_prod1 = total_energy(f"Cs2Sn{hal}6")
-    E_prod2 = total_energy("SnO2")
-    try:
-        E_o2 = total_energy("O2")
-    except ValueError:
-        # Fallback if O2 isn’t in MP
-        E_o2 = -4.93 * Composition("O2").num_atoms
-
-    # Reaction: CsSnX3 + ½ O₂ → ½ (Cs2SnX6 + SnO2)
-    # ΔE per formula unit (per Sn)
-    return 0.5 * (E_prod1 + E_prod2) - (E_reac + 0.5 * E_o2)
-
+-    # Compute total energies
+-    E_reac  = total_energy(formula_sn2)
+-    E_prod1 = total_energy(f"Cs2Sn{hal}6")
+-    E_prod2 = total_energy("SnO2")
+-    try:
+-        E_o2 = total_energy("O2")
+-    except ValueError:
+-        E_o2 = -4.93 * Composition("O2").num_atoms
+-
+-    # Reaction: CsSnX3 + ½ O₂ → ½ (Cs2SnX6 + SnO2)
+-    return 0.5 * (E_prod1 + E_prod2) - (E_reac + 0.5 * E_o2)
++    # Formation energies (eV)
++    H_reac  = total_formation_energy(formula_sn2)
++    H_prod1 = total_formation_energy(f"Cs2Sn{hal}6")
++    H_prod2 = total_formation_energy("SnO2")
++
++    # ΔH_f(O2) = 0 by definition, so it drops out
++    # ΔE_ox per Sn = ½ [H(prod1) + H(prod2)] – H(reac)
++    return 0.5 * (H_prod1 + H_prod2) - H_reac
 
 # ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
 # -----------------------------------------------------------------------------
