@@ -188,9 +188,18 @@ with tab_dl:
         "EnerMat_results.csv", "text/csv"
     )
 
-    top = df.iloc[0]
-    label = (top.formula if mode.startswith("Binary")
-             else f"{A}+{B}+{C} (x={top.x:.2f}, y={top.y:.2f})")
+    # --- safe extraction ------------------------------------------
+top = df.iloc[0]              # Series
+formula = top["formula"] if "formula" in top else "UNK"
+x_val   = top.get("x", None)
+y_val   = top.get("y", None)
+
+if mode.standalone:
+    label = formula
+else:
+    label = f"{formula} (x={x_val:.2f}, y={y_val:.2f})"
+# --------------------------------------------------------------
+
 
     txt = (f"EnerMat auto-report  {datetime.date.today()}\n"
            f"Top candidate   : {label}\n"
