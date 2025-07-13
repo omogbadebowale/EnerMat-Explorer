@@ -17,6 +17,7 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
     fetch_mp_data   as _summary,      # << same spelling as in the backend
+)
 
 # ── API key sanity check ─────────────────────────────────────────
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
