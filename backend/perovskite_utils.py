@@ -41,6 +41,15 @@ IONIC_RADII = {
     "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
     "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
+# ── mini-helper: return first halogen symbol contained in the formula ──────────
+def _find_halide(formula: str) -> str:
+    """
+    Pick out the halide (I / Br / Cl) that appears in the chemical formula.
+
+    >>> _find_halide("CsSnBr3")   -> "Br"
+    >>> _find_halide("CsPbI3")    -> "I"
+    """
+    return next(h for h in ("I", "Br", "Cl") if h in formula)
 
 # ──────────────────────────────────────────────────────────── helpers
 def fetch_mp_data(formula: str, fields: list[str]) -> dict | None:
