@@ -1,6 +1,6 @@
 """
 EnerMat Perovskite Explorer – backend/perovskite_utils.py
-Clean build • 2025‑07‑12 🟢
+Clean build • 2025‑07‑13 🟢   (patched with Sn‑oxidation fixes)
 • calibrated experimental gaps
 • strict optical window (step 0/1)
 • convex‑hull lattice stability (Ehull)
@@ -36,32 +36,34 @@ END_MEMBERS = [
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.79,
     "CsSnCl3": 2.83,
-    "CsSnI3":  1.30,
-    "CsPbBr3": 2.30,
-    "CsPbI3":  1.73,
+    "CsPbI3": 1.46,
+    "CsPbBr3": 2.32,
 }
 
-# generic offsets when no explicit calibration
-GAP_OFFSET = {"I": 0.90, "Br": 0.70, "Cl": 0.80}
+# empirical gap offsets for raw DFT → experiment alignment (eV)
+GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
 
+# simplified ionic radii for Goldschmidt tolerance factor (Å)
 IONIC_RADII = {
-    "Cs": 1.88, "Rb": 1.72, "MA": 2.17, "FA": 2.53,
-    "Pb": 1.19, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81,
+    "Cs": 1.88, "Sn": 1.18, "Pb": 1.19,
+    "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-# effective temperature used in oxidation penalty (tunable)
-K_T_EFF = 0.20  # eV
+# effective ‘kT’ (eV) for soft penalty factors used in scoring
+K_T_EFF = 0.20  # ≈8 kT at 300 K
 
-# ───────────────────────── helpers ───────────────────────────
+# -----------------------------------------------------------------------------
+# ↓↓↓  Low‑level helpers  ↓↓↓
+# -----------------------------------------------------------------------------
 
 def fetch_mp_data(formula: str, fields: list[str]):
-    """Return a dict of requested fields, with calibrated band‑gap."""
+    """Query MP‑API and return a dict of requested fields (may be None)."""
     docs = mpr.summary.search(formula=formula, fields=tuple(fields))
     if not docs:
         return None
     entry = docs[0]
     out = {f: getattr(entry, f, None) for f in fields}
-    # apply gap calibration / offset
+    # apply experimental gap calibration
     if "band_gap" in fields:
         if formula in CALIBRATED_GAPS:
             out["band_gap"] = CALIBRATED_GAPS[formula]
@@ -71,26 +73,50 @@ def fetch_mp_data(formula: str, fields: list[str]):
     return out
 
 @lru_cache(maxsize=64)
-def oxidation_energy(formula_sn2: str, hal: str) -> float:
-    """ΔE per Sn for  CsSnX3 + ½ O₂ → ½ Cs₂SnX₆ + ½ SnO₂  (positive ⇒ uphill).
-    Pb‑based or Sn‑free formulas return **0** so they are not penalised.
-    Cached for speed by @lru_cache.
+def oxidation_energy(formula_sn2: str) -> float:
+    """Return ΔEₒₓ per Sn for
+    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
+
+    Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
+    Returns **0.0** for Pb‑based or Sn‑free formulas.
+
+    Halide (X) is auto‑detected from the formula.
+    Values are cached to avoid excessive MP API calls.
     """
     if "Sn" not in formula_sn2:
-        return 0.0  # nothing to oxidise -> no penalty
+        return 0.0  # nothing to oxidise
 
-    e_reac  = fetch_mp_data(formula_sn2, ["energy_per_atom"])["energy_per_atom"]
-    e_prod1 = fetch_mp_data(f"Cs2Sn{hal}6", ["energy_per_atom"])["energy_per_atom"]
-    e_prod2 = fetch_mp_data("SnO2", ["energy_per_atom"])["energy_per_atom"]
-    # O2 reference as stored in MP (per *atom*). Multiply by 2 for molecule.
-    e_o2 = fetch_mp_data("O2", ["energy_per_atom"])["energy_per_atom"] * 2.0
+    try:
+        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
+    except StopIteration:
+        # Non‑halide (rare) – skip oxidation penalty
+        return 0.0
 
-    e_products = 0.5 * (e_prod1 + e_prod2)
-    return (e_products + 0.5 * e_o2) - e_reac
+    def e(formula: str) -> float:
+        """Fetch energy_per_atom with minimal error handling."""
+        doc = fetch_mp_data(formula, ["energy_per_atom"])
+        if not doc or doc["energy_per_atom"] is None:
+            raise ValueError(f"Missing MP entry for {formula}")
+        return doc["energy_per_atom"]
+
+    e_reac  = e(formula_sn2)
+    e_prod1 = e(f"Cs2Sn{hal}6")
+    e_prod2 = e("SnO2")
+
+    # O₂: MP stores energy per atom; multiply by 2 for the molecule.
+    try:
+        e_o2 = e("O2") * 2.0
+    except ValueError:
+        # Fallback: fixed PBE value –4.93 eV/atom
+        e_o2 = (-4.93) * 2.0
+
+    return 0.5 * (e_prod1 + e_prod2 + e_o2) - e_reac
 
 score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
-# ───────────────────────── Binary screen ─────────────────────
+# -----------------------------------------------------------------------------
+# ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
+# -----------------------------------------------------------------------------
 
 def mix_abx3(
     formula_A: str,
@@ -110,30 +136,27 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
+    # choose halide from first end‑member for tolerance‑factor radius
     hal = next(h for h in ("I", "Br", "Cl") if h in formula_A)
     rA, rB, rX = (IONIC_RADII[s] for s in ("Cs", "Sn", hal))
-    dEox_A = oxidation_energy(formula_A, hal)
-    dEox_B = oxidation_energy(formula_B, hal)
+    dEox_A = oxidation_energy(formula_A)
+    dEox_B = oxidation_energy(formula_B)
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
         Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        stab = math.exp(-max(Eh, 0) / 0.10)  # Boltzmann‑like weight
         dEox = (1 - x) * dEox_A + x * dEox_B
         ox_pen = math.exp(dEox / K_T_EFF)  # ≤1 when dEox < 0
-        gap = score_band_gap(Eg, lo, hi)
-        t  = (rA + rX) / (math.sqrt(2) * (rB + rX))
-        mu = rB / rX
-        form = math.exp(-0.5*((t-0.90)/0.07)**2) * math.exp(-0.5*((mu-0.50)/0.07)**2)
-        env = 1 + alpha*rh/100 + beta*temp/100
-        score = form * stab * gap * ox_pen / env
+        stab = math.exp(-Eh / (alpha * 0.0259))
+        tfac = (rA + rX) / (math.sqrt(2) * (rB + rX))
+        fit = math.exp(-beta * abs(tfac - 0.95))
+        form = score_band_gap(Eg, lo, hi)
+        score = form * stab * fit * ox_pen
 
         rows.append({
             "x": round(x, 3),
-            "Eg": round(Eg, 3),
-            "Ehull": round(Eh, 4),
-            "Eox": round(dEox, 3),
+            "Eg": round(Eg, 3), "Ehull": round(Eh, 4), "Eox": round(dEox, 3),
             "score": round(score, 3),
             "formula": f"{formula_A}-{formula_B} x={x:.2f}",
         })
@@ -142,7 +165,9 @@ def mix_abx3(
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
 
-# ──────────────────────── Ternary screen ─────────────────────
+# -----------------------------------------------------------------------------
+# ↓↓↓  Ternary compositional screen  ↓↓↓
+# -----------------------------------------------------------------------------
 
 def screen_ternary(
     A: str,
@@ -163,11 +188,10 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # oxidation energies for each vertex (infer halide)
-    halA = next(h for h in ("I", "Br", "Cl") if h in A)
-    halB = next(h for h in ("I", "Br", "Cl") if h in B)
-    halC = next(h for h in ("I", "Br", "Cl") if h in C)
-    oxA, oxB, oxC = (oxidation_energy(f, h) for f, h in ((A, halA), (B, halB), (C, halC)))
+    # oxidation energies for each vertex (infer halide internally)
+    oxA = oxidation_energy(A)
+    oxB = oxidation_energy(B)
+    oxC = oxidation_energy(C)
 
     lo, hi = bg
     rows: list[dict] = []
@@ -181,10 +205,11 @@ def screen_ternary(
             Eh = (
                 z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
             )
-            stab = math.exp(-max(Eh, 0) / 0.10)
             dEox = z*oxA + x*oxB + y*oxC
             ox_pen = math.exp(dEox / K_T_EFF)
-            score = stab * score_band_gap(Eg, lo, hi) * ox_pen
+            form = score_band_gap(Eg, lo, hi)
+            stab = math.exp(-Eh / (0.0259 * 2.0))
+            score = form * stab * ox_pen
 
             rows.append({
                 "x": round(x, 3), "y": round(y, 3),
@@ -197,6 +222,5 @@ def screen_ternary(
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
 
-# legacy alias for backward compatibility
 # legacy alias for backward compatibility
 _summary = fetch_mp_data
