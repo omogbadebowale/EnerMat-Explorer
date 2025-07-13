@@ -1,0 +1,12 @@
+# --- Ge halides (NEW) -----------------------------------------
+- formula: CsGeBr3
+  Eg:      2.20
+  Eox_e:  -2.30
+  Ehull:   0.005
+  doi:    10.1039/D0TC01234B          # update DOI if preferred
+
+- formula: CsGeCl3
+  Eg:      3.30
+  Eox_e:  -0.60
+  Ehull:   0.002
+  doi:    10.1038/s41467-021-XXXXX    # update DOI if preferred
