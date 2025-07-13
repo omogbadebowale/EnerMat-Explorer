@@ -1,0 +1,6 @@
+# ---- Ge mixing -------------------------------------------
+b_site_mixing: true           # allow Sn ↔ Ge
+ge_frac_range: [0.10, 0.30]   # 10–30 % Ge explored
+
+bowing:
+  Sn-Ge: 0.30                 # eV  (literature)
