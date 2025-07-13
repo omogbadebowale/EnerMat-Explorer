@@ -72,60 +72,50 @@ def fetch_mp_data(formula: str, fields: list[str]):
             out["band_gap"] = (out["band_gap"] or 0.0) + GAP_OFFSET[hal]
     return out
 
- @lru_cache(maxsize=64)
- def oxidation_energy(formula_sn2: str) -> float:
-     if "Sn" not in formula_sn2:
-         return 0.0
-     try:
-         hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
-     except StopIteration:
-         return 0.0
+@lru_cache(maxsize=64)
+def oxidation_energy(formula_sn2: str) -> float:
+    """Return ΔEₒₓ per Sn for
+    CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)
 
--    def total_energy(formula: str) -> float:
--        doc = fetch_mp_data(formula, ["energy_per_atom"])
--        ...
--        return doc["energy_per_atom"] * comp.num_atoms
-+    def total_formation_energy(formula: str) -> float:
-+        """
-+        Formation energy per formula unit:
-+        ΔH_f = formation_energy_per_atom × n_atoms.
-+        """
-+        doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
-+        if not doc or doc["formation_energy_per_atom"] is None:
-+            raise ValueError(f"Missing formation-energy for {formula}")
-+        comp = Composition(formula)
-+        return doc["formation_energy_per_atom"] * comp.num_atoms
+    Positive ΔEₒₓ ⇒ Sn²⁺ oxidation uphill (good).
+    Returns **0.0** for Pb‑based or Sn‑free formulas.
 
--    # Compute total energies
--    E_reac  = total_energy(formula_sn2)
--    E_prod1 = total_energy(f"Cs2Sn{hal}6")
--    E_prod2 = total_energy("SnO2")
--    try:
--        E_o2 = total_energy("O2")
--    except ValueError:
--        E_o2 = -4.93 * Composition("O2").num_atoms
--
--    # Reaction: CsSnX3 + ½ O₂ → ½ (Cs2SnX6 + SnO2)
--    return 0.5 * (E_prod1 + E_prod2) - (E_reac + 0.5 * E_o2)
-+    # Formation energies (eV)
-+    H_reac  = total_formation_energy(formula_sn2)
-+    H_prod1 = total_formation_energy(f"Cs2Sn{hal}6")
-+    H_prod2 = total_formation_energy("SnO2")
-+
-+    # ΔH_f(O2) = 0 by definition, so it drops out
-+    # ΔE_ox per Sn = ½ [H(prod1) + H(prod2)] – H(reac)
-+    return 0.5 * (H_prod1 + H_prod2) - H_reac
+    Halide (X) is auto‑detected from the formula.
+    Values are cached to avoid excessive MP API calls.
+    """
+    if "Sn" not in formula_sn2:
+        return 0.0  # nothing to oxidise
+
+    try:
+        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
+    except StopIteration:
+        # Non‑halide (rare) – skip oxidation penalty
+        return 0.0
+
+    def e(formula: str) -> float:
+        """Fetch energy_per_atom with minimal error handling."""
+        doc = fetch_mp_data(formula, ["energy_per_atom"])
+        if not doc or doc["energy_per_atom"] is None:
+            raise ValueError(f"Missing MP entry for {formula}")
+        return doc["energy_per_atom"]
+
+    e_reac  = e(formula_sn2)
+    e_prod1 = e(f"Cs2Sn{hal}6")
+    e_prod2 = e("SnO2")
+
+    # O₂: MP stores energy per atom; multiply by 2 for the molecule.
+    try:
+        e_o2 = e("O2") * 2.0
+    except ValueError:
+        # Fallback: fixed PBE value –4.93 eV/atom
+        e_o2 = (-4.93) * 2.0
+
+    return 0.5 * (e_prod1 + e_prod2 + e_o2) - e_reac
+
+score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 
 # ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
 # -----------------------------------------------------------------------------
-# ──────────────────────── helpers ────────────────────────
-
-def score_band_gap(Eg: float, lo: float, hi: float) -> float:
-    """
-    Return 1.0 if the computed band-gap Eg lies between lo and hi (inclusive),
-    else 0.0. Used to hard-filter compositions outside your target window.
-    """
-    return 1.0 if lo <= Eg <= hi else 0.0
 
 def mix_abx3(
     formula_A: str,
