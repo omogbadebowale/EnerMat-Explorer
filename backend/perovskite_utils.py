@@ -1,91 +1,131 @@
-import io, os, datetime, math
-import streamlit as st, pandas as pd, plotly.express as px
-from docx import Document
+"""
+EnerMat backend – v9.6 (2025-07-13)
+• calibrated band-gaps
+• convex-hull stability
+• optical window (strict)
+• Sn-oxidation term  (CsSnX3 + ½ O2 → ½ Cs2SnX6 + ½ SnO2)
+"""
 
-# ── API key present? ────────────────────────────────────────────────
-API = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY","")
-if len(API)!=32:
-    st.error("🛑  Set a valid 32-character MP_API_KEY")
-    st.stop()
+from __future__ import annotations
+import os, math, numpy as np, pandas as pd, streamlit as st
+from dotenv import load_dotenv
+from mp_api.client import MPRester
+from pymatgen.core import Composition
 
-# ── backend helpers ─────────────────────────────────────────────────
-from backend.perovskite_utils import (
-    mix_abx3       as screen_binary,
-    screen_ternary as screen_ternary,
-    END_MEMBERS,
-)
+# ── API key ─────────────────────────────────────────────────────────
+load_dotenv()
+API = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY", "")
+if len(API) != 32:
+    raise RuntimeError("🛑 MP_API_KEY missing or wrong length (32 chars)")
+mpr = MPRester(API)
 
-st.set_page_config("EnerMat Explorer v9.6", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+# ── presets / constants ────────────────────────────────────────────
+END_MEMBERS = ["CsPbBr3", "CsSnBr3", "CsSnCl3", "CsSnI3"]
 
-# ── sidebar ────────────────────────────────────────────────────────
-with st.sidebar:
-    mode = st.radio("Choose screening type",["Binary A–B","Ternary A–B–C"])
-    # end-members
-    preset_A = st.selectbox("Preset A",END_MEMBERS,index=1)
-    preset_B = st.selectbox("Preset B",END_MEMBERS,index=2)
-    custom_A = st.text_input("Custom A (optional)")
-    custom_B = st.text_input("Custom B (optional)")
-    A = custom_A.strip() or preset_A
-    B = custom_B.strip() or preset_B
-    if mode=="Ternary A–B–C":
-        preset_C = st.selectbox("Preset C",END_MEMBERS,index=3)
-        custom_C = st.text_input("Custom C (optional)")
-        C = custom_C.strip() or preset_C
+CAL_GAP   = {"CsSnBr3":1.79,"CsSnCl3":2.83,"CsSnI3":1.30,
+             "CsPbBr3":2.30,"CsPbI3":1.73}
+GAP_SHIFT = {"I":0.90,"Br":0.70,"Cl":0.80}
+IONIC_R   = {"Cs":1.88,"Rb":1.72,"MA":2.17,"FA":2.53,
+             "Pb":1.19,"Sn":1.18,"I":2.20,"Br":1.96,"Cl":1.81}
 
-    rh   = st.slider("Humidity [%]",0,100,50)
-    temp = st.slider("Temperature [°C]",-20,100,25)
-    bg_lo,bg_hi = st.slider("Gap window [eV]",0.5,3.0,(1.0,1.4),0.01)
+# ── helper functions ───────────────────────────────────────────────
+def _find_halide(formula:str) -> str:
+    return next(h for h in ("I","Br","Cl") if h in formula)
 
-    bow  = st.number_input("Bowing eV (neg⇒gap↑)",-1.0,1.0,-0.15,0.05)
-    dx   = st.number_input("x-step",0.01,0.50,0.05,0.01)
-    if mode=="Ternary A–B–C":
-        dy = st.number_input("y-step",0.01,0.50,0.05,0.01)
+def fetch_mp_data(formula:str, fields:list[str]) -> dict|None:
+    """Return dict(field→value) with calibrated gap inserted."""
+    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+    if not docs:
+        return None
+    ent = docs[0]
+    d   = {f:getattr(ent,f,None) for f in fields}
 
-# ── cached wrappers ─────────────────────────────────────────────────
-@st.cache_data(show_spinner="⏳ binary …",max_entries=20)
-def _run_binary(*args,**kw): return screen_binary(*args,**kw)
+    if "band_gap" in fields:
+        if formula in CAL_GAP:
+            d["band_gap"] = CAL_GAP[formula]
+        else:
+            hal = _find_halide(formula)
+            d["band_gap"] = (d["band_gap"] or 0) + GAP_SHIFT[hal]
+    return d
 
-@st.cache_data(show_spinner="⏳ ternary …",max_entries=10)
-def _run_ternary(*args,**kw): return screen_ternary(*args,**kw)
+def _E_formula(formula:str) -> float:
+    d = fetch_mp_data(formula,["energy_per_atom"])
+    if not d: raise RuntimeError(f"no MP entry for {formula}")
+    return d["energy_per_atom"] * Composition(formula).num_atoms
 
-# ── run button ──────────────────────────────────────────────────────
-if st.button("▶ Run screening",type="primary"):
-    if mode=="Binary A–B":
-        df = _run_binary(A,B,rh,temp,(bg_lo,bg_hi),bow,dx)
-    else:
-        df = _run_ternary(A,B,C,rh,temp,(bg_lo,bg_hi),
-                          dict(AB=bow,AC=bow,BC=bow),dx,dy)
-    if df.empty:
-        st.error("No data – check formulas or API")
-        st.stop()
+def oxidation_energy(formula:str) -> float:
+    """
+    ΔE per Sn  for  CsSnX3 + ½O2 → ½(Cs2SnX6 + SnO2)   (eV Sn⁻¹)
+    """
+    hal   = _find_halide(formula)
+    E_re  = _E_formula(f"CsSn{hal}3")
+    E_p1  = _E_formula(f"Cs2Sn{hal}6")
+    E_p2  = _E_formula("SnO2")
+    E_O2  = _E_formula("O2")
+    return 0.5*E_p1 + 0.5*E_p2 - E_re + 0.5*E_O2
 
-    st.subheader("Results")
-    st.dataframe(df,use_container_width=True,height=400)
-    st.caption("Eox = oxidation energy (eV Sn⁻¹)")
+score_gap = lambda Eg,lo,hi: 1.0 if lo<=Eg<=hi else 0.0
 
-    # simple scatter
-    if "x" in df.columns and "Eox" in df.columns:
-        pxfig = px.scatter(df,x="Eox",y="Eg",
-                           color="Ehull",color_continuous_scale="Thermal",
-                           hover_data=df.columns,width=1000,height=600)
-        st.plotly_chart(pxfig,use_container_width=True)
+# ── binary screen ───────────────────────────────────────────────────
+def mix_abx3(formA:str,formB:str,
+             rh:float,temp:float,
+             bg:(float,float),
+             bow:float=0.0,dx:float=0.05,
+             alpha:float=1.0,beta:float=1.0)->pd.DataFrame:
 
-    # downloads
-    csv = df.to_csv(index=False).encode()
-    st.download_button("📥 CSV",csv,"EnerMat_results.csv","text/csv")
+    dA = fetch_mp_data(formA,["band_gap","energy_above_hull"])
+    dB = fetch_mp_data(formB,["band_gap","energy_above_hull"])
+    if not(dA and dB): return pd.DataFrame()
 
-    top = df.iloc[0]
-    doc = Document(); doc.add_heading("EnerMat Report",0)
-    for k,v in [("Date",datetime.date.today()),
-                ("Top formula",top.formula),
-                ("Eg (eV)",top.Eg),
-                ("Ehull (eV/atom)",top.Ehull),
-                ("Eox (eV Sn⁻¹)",top.Eox),
-                ("Score",top.score)]:
-        p=doc.add_paragraph(); p.add_run(f"{k}: ").bold=True; p.add_run(str(v))
-    bio = io.BytesIO(); doc.save(bio); bio.seek(0)
-    st.download_button("📄 DOCX",bio,"EnerMat_report.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-else:
-    st.info("Set parameters → Run screening")
+    comp = Composition(formA)
+    A_site = next(e.symbol for e in comp.elements if e.symbol in IONIC_R)
+    rA,rB,rX = IONIC_R[A_site],IONIC_R["Sn" if "Sn" in formA else "Pb"],IONIC_R[_find_halide(formA)]
+
+    eA,eB   = oxidation_energy(formA),oxidation_energy(formB)
+    lo,hi   = bg; rows=[]
+    for x in np.arange(0,1+1e-6,dx):
+        Eg   = (1-x)*dA["band_gap"]+x*dB["band_gap"]-bow*x*(1-x)
+        Eh   = (1-x)*dA["energy_above_hull"]+x*dB["energy_above_hull"]
+        Eox  = (1-x)*eA + x*eB
+        t    = (rA+rX)/ (math.sqrt(2)*(rB+rX))
+        mu   = rB/rX
+        form = math.exp(-0.5*((t-0.90)/0.07)**2)*math.exp(-0.5*((mu-0.50)/0.07)**2)
+        env  = 1+alpha*rh/100+beta*temp/100
+        score= form*max(0,1-Eh)*score_gap(Eg,lo,hi)*math.exp(Eox/0.2)/env
+        rows.append(dict(x=round(x,3),Eg=round(Eg,3),
+                         Ehull=round(Eh,4),Eox=round(Eox,3),
+                         score=round(score,3),
+                         formula=f"{formA}-{formB} x={x:.2f}"))
+    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+
+# ── ternary screen ──────────────────────────────────────────────────
+def screen_ternary(A:str,B:str,C:str,
+                   rh:float,temp:float,
+                   bg:(float,float),
+                   bows:dict[str,float],
+                   dx:float=0.2,dy:float=0.2)->pd.DataFrame:
+
+    dA=fetch_mp_data(A,["band_gap","energy_above_hull"])
+    dB=fetch_mp_data(B,["band_gap","energy_above_hull"])
+    dC=fetch_mp_data(C,["band_gap","energy_above_hull"])
+    if not(dA and dB and dC): return pd.DataFrame()
+
+    eA,eB,eC = oxidation_energy(A),oxidation_energy(B),oxidation_energy(C)
+    lo,hi    = bg; rows=[]
+    for x in np.arange(0,1+1e-6,dx):
+        for y in np.arange(0,1-x+1e-6,dy):
+            z  = 1-x-y
+            Eg = (z*dA["band_gap"]+x*dB["band_gap"]+y*dC["band_gap"]
+                  - bows["AB"]*x*z - bows["AC"]*y*z - bows["BC"]*x*y)
+            Eh = (z*dA["energy_above_hull"]+x*dB["energy_above_hull"]+y*dC["energy_above_hull"]
+                  + bows["AB"]*x*z + bows["AC"]*y*z + bows["BC"]*x*y)
+            Eox= z*eA + x*eB + y*eC
+            score= math.exp(-max(Eh,0)/0.1)*score_gap(Eg,lo,hi)*math.exp(Eox/0.2)
+            rows.append(dict(x=round(x,2),y=round(y,2),
+                             Eg=round(Eg,3),Ehull=round(Eh,4),
+                             Eox=round(Eox,3),score=round(score,3),
+                             formula=f"{A}-{B}-{C} x={x:.2f} y={y:.2f}"))
+    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+
+# ── public symbols (import *) ───────────────────────────────────────
+__all__ = ["mix_abx3","screen_ternary","END_MEMBERS","fetch_mp_data"]
