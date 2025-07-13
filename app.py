@@ -76,6 +76,16 @@ def _run_binary(*args, **kws):
 @st.cache_data(show_spinner="⏳  Screening …", max_entries=10)
 def _run_ternary(*args, **kws):
     return screen_ternary(*args, **kws)
+# ---- optional Ge slider -----------------------------------
+if st.session_state.get("b_site_mixing", True):
+    z = st.sidebar.slider(
+        "Ge fraction z",
+        min_value=0.0, max_value=0.30,
+        value=0.10, step=0.05,
+        help="B-site Ge²⁺ fraction in CsSn₁₋zGe_z(Br,Cl)₃"
+    )
+else:
+    z = 0.0
 
 # ── Control buttons ─────────────────────────────────────────────────────────
 col_run, col_prev = st.columns([3, 1])
