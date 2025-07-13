@@ -170,3 +170,6 @@ def screen_ternary(
 
 # legacy alias
 _summary = _mp_summary
+# legacy alias – keeps old imports working
+fetch_mp_doc = fetch_mp_data        # or vice-versa
+
