@@ -30,7 +30,7 @@ if len(API_KEY) != 32:
 # 2  Local helpers
 # ──────────────────────────────────────────────────────────────────────────────
 from backend.perovskite_utils import mix_abx3 as screen_binary, screen_ternary
-from materials import load_end_members  # single source of truth
+from src.materials import load_end_members  # single source of truth
 
 END_MEMBERS = list(load_end_members())  # → ["CsSnBr3", "CsSnCl3", …]
 
