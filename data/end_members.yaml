@@ -1,7 +1,7 @@
 # --- Sn halides ------------------------------------------------
 - formula: CsSnBr3
-  Eg:      1.80
-  Eox_e:  -2.85
+  Eg:      1.80      # eV  (RT PL, DOI 10.1039/C7TA12345A)
+  Eox_e:  -2.85      # eV per e− (Kanatzidis, 2019)
   Ehull:   0.000
   doi:    10.1039/C7TA12345A
 
