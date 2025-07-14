@@ -96,7 +96,6 @@ if do_prev:
 # ─── New run ----------------------------------------------------------
 elif do_run:
     # Quick formula validation
-    for fml in (A,B,*(C,) if mode.startswith("Ternary") else ()):
         if fml not in END_MEMBERS:
             st.error(f"❌  Unknown formula: {fml}")
             st.stop()
