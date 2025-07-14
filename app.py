@@ -198,16 +198,28 @@ with tab_dl:
         "EnerMat_results.csv", "text/csv"
     )
 
-    # --- safe extraction ------------------------------------------
-top = df.iloc[0]              # Series
-formula = top["formula"] if "formula" in top else "UNK"
-x_val   = top.get("x", None)
-y_val   = top.get("y", None)
 
-if mode.standalone:
+# --- safe extraction ------------------------------------------
+top = df.iloc[0]                     # 1st candidate row (pd.Series)
+
+# formula column is always present after generate_grid()
+formula = top["formula"]
+
+# Pull whatever fractional coordinates exist in the row
+coords = []
+for col in ("x", "y", "z"):          # keep this tuple in the order you prefer
+    val = top.get(col, None)
+    if val is not None:
+        coords.append(f"{col}={val:.2f}")
+
+coord_txt = ", ".join(coords)
+
+# Human-readable label
+if mode.standalone:                  # single-point run
     label = formula
-else:
-    label = f"{formula} (x={x_val:.2f}, y={y_val:.2f})"
+else:                                # multi-point auto-report
+    label = f"{formula} ({coord_txt})"
+
 # --------------------------------------------------------------
 
 
