@@ -145,11 +145,19 @@ with tab_dl:
                        "EnerMat_results.csv", "text/csv")
 
 # ─── ONE robust label builder (no duplicates!) ───────────────────────
-top = df.iloc[0]                             # first (best) row – Series
+top = df.iloc[0]                       # first (best) row – Series
 formula = str(top["formula"])
-coords  = [f"{c}={top[c]:.2f}" for c in ("x","y","z","ge_frac") 
-           if c in top and pd.notna(top[c])]
-label = f"{formula} ({', '.join(coords)})" if coords else formula
+
+coords = [
+    f"{c}={top[c]:.2f}"
+    for c in ("x", "y", "z", "ge_frac")
+    if c in top and pd.notna(top[c])
+]
+coord_txt = ", ".join(coords)          # e.g.  x=0.25, z=0.10
+
+# single-point vs grid
+is_standalone = len(df) == 1
+label = formula if is_standalone else f"{formula} ({coord_txt})"
 
 # ─── TXT + DOCX auto-report ------------------------------------------
 txt = ( "EnerMat auto-report  "
