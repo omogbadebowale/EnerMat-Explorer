@@ -198,30 +198,40 @@ with tab_dl:
         "EnerMat_results.csv", "text/csv"
     )
 
+# ────────────────────────────────────────────────────────────────────
+#  Build a robust label for the top-ranked candidate
+#  (works for binary / ternary / quaternary tables)
+# ────────────────────────────────────────────────────────────────────
+import pandas as pd      # <-- make sure pd is in scope
 
-# --- safe extraction ------------------------------------------
-# -----------------------------------------------------------------
-# Build a robust label for the top-ranked candidate (binary/ternary/quaternary)
-# -----------------------------------------------------------------
-# 1)  FIRST row of the filtered DataFrame  →  always a Series
+# 1) FIRST row of the filtered DataFrame – must be a *Series*
 top = df.iloc[0]
 
-# 2)  Pull formula (always present)
-formula = top["formula"]
+# --- SAFETY NETS ---------------------------------------------------
+if not isinstance(top, pd.Series):
+    raise TypeError(
+        f"[EnerMat] Internal error: expected a pandas.Series, "
+        f"got {type(top)}.  Make sure *no other* code re-assigns "
+        f'“top = …” after this block.'
+    )
 
-# 3)  Collect whatever coordinate columns exist
+# 2) pull the alloy string (always present)
+formula = str(top["formula"])
+
+# 3) collect whatever coordinate columns exist
 coords = []
-for col in ("x", "y", "z"):
-    if col in top and pd.notna(top[col]):           # <- guards
+for col in ("x", "y", "z", "ge_frac"):
+    if col in top and pd.notna(top[col]):
         coords.append(f"{col}={top[col]:.2f}")
 
-coord_txt = ", ".join(coords)                       # e.g.  x=0.25, y=0.15, z=0.10
+coord_txt = ", ".join(coords)     # e.g. "x=0.25, y=0.15, z=0.10"
 
-# 4)  Final label
-if mode.standalone:                                # single-point run
+# 4) final label
+if mode.standalone:               # single-point run
     label = formula
-else:                                              # multi-point / auto-report
+else:                             # multi-point / auto-report
     label = f"{formula} ({coord_txt})"
+# ────────────────────────────────────────────────────────────────────
 
 # --------------------------------------------------------------
     txt = (f"EnerMat auto-report  {datetime.date.today()}\n"
