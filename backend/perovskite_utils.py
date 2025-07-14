@@ -117,6 +117,17 @@ score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
 # ↓↓↓  Binary alloy screen  CsSnI₃ ↔ CsSnBr₃ etc.  ↓↓↓
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------
+from functools import lru_cache
+import pandas as pd
+import numpy as np
+import math
+from pymatgen.core.composition import Composition
+
+# Constants (make sure these are defined globally in your app)
+K_T_EFF = 0.0259  # effective kT in eV
+IONIC_RADII = {"Cs": 1.67, "Sn": 1.18, "I": 2.20, "Br": 1.96, "Cl": 1.81}
+
 def mix_abx3(
     formula_A: str,
     formula_B: str,
@@ -135,19 +146,21 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
-    # choose halide from first end‑member for tolerance‑factor radius
-    hal = next(h for h in ("I", "Br", "Cl") if h in formula_A)
-    rA, rB, rX = (IONIC_RADII[s] for s in ("Cs", "Sn", hal))
+    hal = next((h for h in ("I", "Br", "Cl") if h in formula_A), None)
+    if hal is None:
+        return pd.DataFrame()
+
+    rA, rB, rX = (IONIC_RADII.get(k, 1.5) for k in ("Cs", "Sn", hal))
     dEox_A = oxidation_energy(formula_A)
     dEox_B = oxidation_energy(formula_B)
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
-        Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        Eg = (1 - x) * dA.get("band_gap", 0) + x * dB.get("band_gap", 0) - bowing * x * (1 - x)
+        Eh = (1 - x) * dA.get("energy_above_hull", 0) + x * dB.get("energy_above_hull", 0)
         dEox = (1 - x) * dEox_A + x * dEox_B
-        ox_pen = math.exp(dEox / K_T_EFF)  # ≤1 when dEox < 0
-        stab = math.exp(-Eh / (alpha * 0.0259))
+        ox_pen = math.exp(dEox / K_T_EFF)
+        stab = math.exp(-Eh / (alpha * K_T_EFF))
         tfac = (rA + rX) / (math.sqrt(2) * (rB + rX))
         fit = math.exp(-beta * abs(tfac - 0.95))
         form = score_band_gap(Eg, lo, hi)
@@ -155,7 +168,9 @@ def mix_abx3(
 
         rows.append({
             "x": round(x, 3),
-            "Eg": round(Eg, 3), "Ehull": round(Eh, 4), "Eox": round(dEox, 3),
+            "Eg": round(Eg, 3),
+            "Ehull": round(Eh, 4),
+            "Eox": round(dEox, 3),
             "score": round(score, 3),
             "formula": f"{formula_A}-{formula_B} x={x:.2f}",
         })
@@ -163,29 +178,32 @@ def mix_abx3(
     return (pd.DataFrame(rows)
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
+
+# -----------------------------------------------------------------------------
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
+    """Calculate oxidation energy for Sn(II)-based halides"""
     if "Sn" not in formula_sn2:
         return 0.0
-    try:
-        hal = next(h for h in ("I", "Br", "Cl") if h in formula_sn2)
-    except StopIteration:
+
+    hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
+    if hal is None:
         return 0.0
 
     def formation_energy_fu(formula: str) -> float:
-        # ΔHf per atom × #atoms = eV per formula unit
         doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
         if not doc or doc["formation_energy_per_atom"] is None:
             raise ValueError(f"Missing formation-energy for {formula}")
         comp = Composition(formula)
         return doc["formation_energy_per_atom"] * comp.num_atoms
 
-    H_reac  = formation_energy_fu(formula_sn2)        # CsSnX3
-    H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")      # Cs2SnX6
-    H_prod2 = formation_energy_fu("SnO2")             # SnO2
-
-    # ΔEₒₓ = ½[H(CS2SnX6) + H(SnO2)] – H(CsSnX3)
-    return 0.5 * (H_prod1 + H_prod2) - H_reac
+    try:
+        H_reac = formation_energy_fu(formula_sn2)  # CsSnX3
+        H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")  # Cs2SnX6
+        H_prod2 = formation_energy_fu("SnO2")
+        return 0.5 * (H_prod1 + H_prod2) - H_reac
+    except Exception:
+        return 0.0
 
 # -----------------------------------------------------------------------------
 # ↓↓↓  Ternary compositional screen  ↓↓↓
