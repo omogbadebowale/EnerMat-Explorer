@@ -9,15 +9,15 @@ import streamlit as st
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ─────────────────────────  API key  ──────────────────────────
+# ────────────────────────────────────────────────  API key  ────────────────────────────────────────────
 load_dotenv()
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑 32‑character MP_API_KEY missing in env or secrets")
+    raise RuntimeError("🚩 32‑character MP_API_KEY missing in env or secrets")
 
 mpr = MPRester(API_KEY)
 
-# ────────────────────── reference tables ─────────────────────
+# ─────────────────────────────────────── reference tables ───────────────────────────────────────
 END_MEMBERS = [
     "CsPbBr3", "CsSnBr3", "CsSnCl3", "CsPbI3",
 ]
@@ -144,9 +144,13 @@ def screen_ternary(
     n_mc: int = 200,
 ) -> pd.DataFrame:
 
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull", "Eox_e"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull", "Eox_e"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull", "Eox_e"])
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    oxA = oxidation_energy(A)
+    oxB = oxidation_energy(B)
+    oxC = oxidation_energy(C)
+
     if not (dA and dB and dC):
         return pd.DataFrame()
 
@@ -171,11 +175,7 @@ def screen_ternary(
                 + y * dC.get("energy_above_hull", 0)
             )
 
-            dEox = (
-                z * dA.get("Eox_e", 0)
-                + x * dB.get("Eox_e", 0)
-                + y * dC.get("Eox_e", 0)
-            )
+            dEox = z * oxA + x * oxB + y * oxC
 
             ox_pen = math.exp(dEox / K_T_EFF)
             form = score_band_gap(Eg, lo, hi)
