@@ -189,8 +189,6 @@ def oxidation_energy(formula_sn2: str) -> float:
 
 # -----------------------------------------------------------------------------
 # ↓↓↓  Ternary compositional screen  ↓↓↓
-# -----------------------------------------------------------------------------
-
 def screen_ternary(
     A: str,
     B: str,
@@ -204,30 +202,39 @@ def screen_ternary(
     n_mc: int = 200,
 ) -> pd.DataFrame:
 
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull", "Eox_e"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull", "Eox_e"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull", "Eox_e"])
     if not (dA and dB and dC):
         return pd.DataFrame()
-
-    # oxidation energies for each vertex (infer halide internally)
-    oxA = oxidation_energy(A)
-    oxB = oxidation_energy(B)
-    oxC = oxidation_energy(C)
 
     lo, hi = bg
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
             z = 1 - x - y
+
             Eg = (
-                z * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * z - bows["AC"] * y * z - bows["BC"] * x * y
+                z * dA.get("band_gap", 0)
+                + x * dB.get("band_gap", 0)
+                + y * dC.get("band_gap", 0)
+                - bows["AB"] * x * z
+                - bows["AC"] * y * z
+                - bows["BC"] * x * y
             )
+
             Eh = (
-                z * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+                z * dA.get("energy_above_hull", 0)
+                + x * dB.get("energy_above_hull", 0)
+                + y * dC.get("energy_above_hull", 0)
             )
-            dEox = z*oxA + x*oxB + y*oxC
+
+            dEox = (
+                z * dA.get("Eox_e", 0)
+                + x * dB.get("Eox_e", 0)
+                + y * dC.get("Eox_e", 0)
+            )
+
             ox_pen = math.exp(dEox / K_T_EFF)
             form = score_band_gap(Eg, lo, hi)
             stab = math.exp(-Eh / (0.0259 * 2.0))
@@ -240,9 +247,11 @@ def screen_ternary(
                 "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f}",
             })
 
-    return (pd.DataFrame(rows)
-            .sort_values("score", ascending=False)
-            .reset_index(drop=True))
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
 
 # legacy alias for backward compatibility
 _summary = fetch_mp_data
