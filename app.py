@@ -139,11 +139,7 @@ if do_run:
     if mode.startswith("Binary"):
         df = _run_binary(A, B, rh, temp, (bg_lo, bg_hi), bow, dx, z=z)
     else:
-        df = _run_ternary(
-            A, B, C, rh, temp, (bg_lo, bg_hi),
-            bows={"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy, z=z,
-        )
+        df = _run_ternary(A, B, C, rh, temp, (bg_lo, bg_hi), bow, dx, dy, z)
 
     st.session_state.history.append({"mode": mode, "df": df})
 
