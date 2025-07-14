@@ -200,29 +200,30 @@ with tab_dl:
 
 
 # --- safe extraction ------------------------------------------
-top = df.iloc[0]                     # 1st candidate row (pd.Series)
+# -----------------------------------------------------------------
+# Build a robust label for the top-ranked candidate (binary/ternary/quaternary)
+# -----------------------------------------------------------------
+# 1)  FIRST row of the filtered DataFrame  →  always a Series
+top = df.iloc[0]
 
-# formula column is always present after generate_grid()
+# 2)  Pull formula (always present)
 formula = top["formula"]
 
-# Pull whatever fractional coordinates exist in the row
+# 3)  Collect whatever coordinate columns exist
 coords = []
-for col in ("x", "y", "z"):          # keep this tuple in the order you prefer
-    val = top.get(col, None)
-    if val is not None:
-        coords.append(f"{col}={val:.2f}")
+for col in ("x", "y", "z"):
+    if col in top and pd.notna(top[col]):           # <- guards
+        coords.append(f"{col}={top[col]:.2f}")
 
-coord_txt = ", ".join(coords)
+coord_txt = ", ".join(coords)                       # e.g.  x=0.25, y=0.15, z=0.10
 
-# Human-readable label
-if mode.standalone:                  # single-point run
+# 4)  Final label
+if mode.standalone:                                # single-point run
     label = formula
-else:                                # multi-point auto-report
+else:                                              # multi-point / auto-report
     label = f"{formula} ({coord_txt})"
 
 # --------------------------------------------------------------
-
-
     txt = (f"EnerMat auto-report  {datetime.date.today()}\n"
            f"Top candidate   : {label}\n"
            f"Band-gap [eV]   : {top.Eg}\n"
