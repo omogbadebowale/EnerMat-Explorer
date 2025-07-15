@@ -1,204 +1,144 @@
-# app.py – EnerMat Perovskite Explorer v9.6  (2025‑07‑14, Ge‑ready)
-# -----------------------------------------------------------------------------
-"""Streamlit front‑end for fast alloy screening + auto‑report generation.
-
-* Supports binary (A–B) and ternary (A–B–C) halide perovskites.
-* Optional Sn↔Ge B‑site mixing via slider * z * (0 – 0.30).
-* Uses a single YAML file (data/end_members.yaml) as ground‑truth for all
-  end‑member properties – reproducible & reviewer‑friendly.
-
-Assumes back‑end helpers live in `src/` (see README).
-"""
-
-from __future__ import annotations
-import io, os, datetime, functools, pathlib
-
+# app.py  – EnerMat Perovskite Explorer v9.6  (2025-07-15, Ge-ready)
+# ----------------------------------------------------------------------
+import datetime
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from docx import Document
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 1  Materials‑Project API key (required by the back‑end)
-# ──────────────────────────────────────────────────────────────────────────────
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY", "")
-if len(API_KEY) != 32:
-    st.error("🛑  A valid 32‑character MP_API_KEY must be placed in *Secrets*.")
-    st.stop()
+from backend.perovskite_utils import (           # ← new utils file
+    screen_binary,
+    screen_ternary,
+    END_MEMBERS,
+)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 2  Local helpers
-# ──────────────────────────────────────────────────────────────────────────────
-from backend.perovskite_utils import mix_abx3 as screen_binary, screen_ternary
-from src.materials import load_end_members  # single source of truth
+# ─── page config / banner ─────────────────────────────────────────────
+st.set_page_config("EnerMat Explorer", layout="wide")
+st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-END_MEMBERS = list(load_end_members())  # → ["CsSnBr3", "CsSnCl3", …]
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 3  Streamlit page configuration
-# ──────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="EnerMat Explorer", layout="wide")
-st.title("🔬  EnerMat **Perovskite** Explorer v9.6")
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 4  Session state (simple history stack)
-# ──────────────────────────────────────────────────────────────────────────────
+# ─── session state ----------------------------------------------------
 if "history" not in st.session_state:
-    st.session_state.history: list[dict] = []
+    st.session_state.history = []
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 5  Sidebar – I/O controls
-# ──────────────────────────────────────────────────────────────────────────────
+# ─── sidebar controls ─────────────────────────────────────────────────
 with st.sidebar:
     st.header("Mode")
     mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
-    st.header("End‑members")
-    preset_A = st.selectbox("Preset A", END_MEMBERS, index=0)
-    preset_B = st.selectbox("Preset B", END_MEMBERS, index=1)
-    custom_A = st.text_input("Custom A (optional)").strip()
-    custom_B = st.text_input("Custom B (optional)").strip()
-
+    st.header("End-members")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, 1)
+    custom_A = st.text_input("Custom A (optional)").strip()
+    custom_B = st.text_input("Custom B (optional)").strip()
     A = custom_A or preset_A
     B = custom_B or preset_B
 
     if mode.startswith("Ternary"):
-        preset_C = st.selectbox("Preset C", END_MEMBERS, index=2)
-        custom_C = st.text_input("Custom C (optional)").strip()
+        preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
+        custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
     st.header("Environment")
-    rh   = st.slider("Humidity [%]",      0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
+    rh   = st.slider("Humidity [%]",      0, 100, 50)
+    temp = st.slider("Temperature [°C]",-20, 100, 25)
 
-    st.header("Target band‑gap [eV]")
+    st.header("Target band-gap [eV]")
     bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.40), 0.01)
 
     st.header("Model settings")
-    bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
-    dx  = st.number_input("x‑step", 0.01, 0.50, 0.05, 0.01)
+    bow = st.number_input("Bowing (eV, negative ⇒ gap↑)",
+                          -1.0, 1.0, -0.15, 0.05)
+    dx  = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode.startswith("Ternary"):
-        dy = st.number_input("y‑step", 0.01, 0.50, 0.05, 0.01)
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
-    # Optional Ge slider (only shown when b‑site mixing enabled in config)
-    if st.session_state.get("b_site_mixing", True):
-        z = st.slider("Ge fraction z", 0.00, 0.30, 0.10, 0.05,
-                      help="B‑site Ge²⁺ fraction in CsSn₁₋zGe_z(Br,Cl)₃")
-    else:
-        z = 0.0
+    # B-site Ge slider (optional)
+    z = st.slider("Ge fraction z", 0.00, 0.30, 0.10, 0.05,
+                  help="B-site Ge²⁺ fraction in CsSn₁₋zGe_zX₃")
 
-    if st.button("🗑  Clear history"):
+    if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
 
-    st.caption(
-        f"⚙️ Build SHA : {st.secrets.get('GIT_SHA', 'dev')}   •  "
-        f"🕒 {datetime.datetime.now():%Y‑%m‑%d %H:%M}"
-    )
+    st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 6  Cached wrappers (keep things snappy)
-# ──────────────────────────────────────────────────────────────────────────────
-@st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
-def _run_binary(*args, **kws):
-    return screen_binary(*args, **kws)
+# ─── cached wrappers (small DataFrames, so cache is safe) ─────────────
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
+def _run_binary(*a, **k):   return screen_binary(*a, **k)
 
-@st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
-def _run_ternary(*args, **kws):
-    return screen_ternary(*args, **kws)
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
+def _run_ternary(*a, **k):  return screen_ternary(*a, **k)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 7  Action buttons
-# ──────────────────────────────────────────────────────────────────────────────
-col_run, col_prev = st.columns([3, 1])
-do_run  = col_run.button("▶ Run screening", type="primary")
-do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+# ─── action buttons (top of main page) ────────────────────────────────
+col_run, col_prev = st.columns([3,1])
+do_run  = col_run.button("▶ Run screening", type="primary")
+do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 8  Handle *Previous*
-# ──────────────────────────────────────────────────────────────────────────────
+# ─── retrieve previous result ----------------------------------------
 if do_prev:
-    st.session_state.history.pop()         # discard current state
-    if st.session_state.history:
-        st.success("Showing previous result")
-    else:
-        st.experimental_rerun()
+    st.session_state.history.pop()
+    prev = st.session_state.history[-1]
+    df   = prev["df"]; mode = prev["mode"]
+    st.success("Showing previous result")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 9  Handle *Run screening*
-# ──────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────
-if do_run:
-    # ---- simple formula sanity check -----------------------------------
-    formulas = [A, B] if mode.startswith("Binary") else [A, B, C]
-    for fml in formulas:
+# ─── run a fresh screen ----------------------------------------------
+elif do_run:
+    # 1 – sanity-check end-member formulas
+    for fml in ([A, B] if mode.startswith("Binary") else [A, B, C]):
         if fml not in END_MEMBERS:
             st.error(f"❌ Unknown end-member formula: {fml}")
             st.stop()
 
-    # ---- run the actual screen ----------------------------------------
+    # 2 – dispatch according to mode
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp,
-            (bg_lo, bg_hi), bow, dx, z=z           # ← unchanged
+            (bg_lo, bg_hi), bow, dx, z=z
         )
-    else:                                          # Ternary A–B–C
-        # 7 positional args, then keyword-only extras
+    else:  # Ternary A–B–C
         df = _run_ternary(
-            A, B, C,                              # 1-3 end-members
-            rh, temp,                             # 4-5 environment
-            (bg_lo, bg_hi),                       # 6   gap window
-            {"AB": bow, "AC": bow, "BC": bow},    # 7   bowing dict (positional!)
-            dx=dx, dy=dy, z=z                     # keyword-only
+            A, B, C,                        # 1-3 positional
+            rh, temp,                       # 4-5
+            (bg_lo, bg_hi),                 # 6
+            {"AB": bow, "AC": bow, "BC": bow},  # 7
+            dx=dx, dy=dy                    # keyword-only
         )
 
-    # keep track of latest result
     st.session_state.history.append({"mode": mode, "df": df})
-# ─────────────────────────────────────────────────────────────────────────
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 10  Nothing to show yet → prompt user
-# ──────────────────────────────────────────────────────────────────────────────
-if not st.session_state.history:
-    st.info("Press ▶ Run screening to begin.")
+# ─── nothing yet? show hint & stop ────────────────────────────────────
+elif not st.session_state.history:
+    st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 11  Active DataFrame / mode
-# ──────────────────────────────────────────────────────────────────────────────
-active   = st.session_state.history[-1]
-mode     = active["mode"]
-df: pd.DataFrame = active["df"].copy()
+# ─── current DataFrame & tabs ─────────────────────────────────────────
+df   = st.session_state.history[-1]["df"]
+mode = st.session_state.history[-1]["mode"]
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 12  Tabs: table • plot • download
-# ──────────────────────────────────────────────────────────────────────────────
-_tab_tbl, _tab_plot, _tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
 
-with _tab_tbl:
+with tab_tbl:
     st.dataframe(df, use_container_width=True, height=420)
 
-with _tab_plot:
-    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
-        fig = px.scatter(
-            df, x="Ehull", y="Eg", color="score", color_continuous_scale="Turbo",
-            hover_data=df.columns, height=800,
-        )
-        fig.update_traces(marker=dict(size=9, line=dict(width=1, color="black")))
+with tab_plot:
+    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
+        import plotly.express as px
+        fig = px.scatter(df, x="Ehull", y="Eg", color="score",
+                         color_continuous_scale="Turbo",
+                         hover_data=df.columns, height=780)
+        fig.update_traces(marker_size=9,
+                          marker_line_width=1, marker_line_color="black")
         st.plotly_chart(fig, use_container_width=True)
-    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
-        fig = px.scatter_3d(
-            df, x="x", y="y", z="score", color="score",
-            color_continuous_scale="Turbo", hover_data=df.columns, height=820,
-        )
-        fig.update_traces(marker=dict(size=4))
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+        import plotly.express as px
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Turbo",
+                            hover_data=df.columns, height=820)
         st.plotly_chart(fig, use_container_width=True)
 
-with _tab_dl:
-    st.download_button(
-        "📥 Download CSV", df.to_csv(index=False).encode(),
-        "EnerMat_results.csv", mime="text/csv",
+with tab_dl:
+    st.download_button("📥 Download CSV",
+                       df.to_csv(index=False).encode(),
+                       "EnerMat_results.csv", "text/csv")
+
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
