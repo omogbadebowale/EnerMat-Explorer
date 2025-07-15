@@ -107,7 +107,7 @@ def mix_abx3(
         tfac = (rA + rX) / (math.sqrt(2) * (rB + rX))
         fit = math.exp(-beta * abs(tfac - 0.95))
         form = score_band_gap(Eg, lo, hi)
-        score = form * stab * fit * ox_pen
+        score = 1e3 * form * stab * ox_pen      # rescale for readability
         rows.append({
             "x": round(x, 3), "Eg": round(Eg, 3), "Ehull": round(Eh, 4),
             "Eox": round(dEox, 3), "score": round(score, 3),
@@ -152,7 +152,7 @@ def screen_ternary(
             ox_pen = math.exp(dEox / K_T_EFF)
             stab = math.exp(-Eh / (0.0259 * 2.0))
             form = score_band_gap(Eg, lo, hi)
-            score = form * stab * ox_pen
+            score = 1e3 * form * stab * ox_pen      # rescale for readability
             rows.append({
                 "x": round(x, 3), "y": round(y, 3),
                 "Eg": round(Eg, 3), "Ehull": round(Eh, 4),
