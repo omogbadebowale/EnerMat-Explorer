@@ -149,59 +149,104 @@ def mix_abx3(
             .sort_values("score", ascending=False)
             .reset_index(drop=True))
 
-# ─────────── ternary  (Sn only) ───────────
+# ─────────────── ternary compositional scan (Sn-halides only) ────────────────
 def screen_ternary(
-    A: str, B: str, C: str,
-    rh: float, temp: float,
-    bg: tuple[float, float],
-    *,                               # ← everything after this is keyword-only
-    bows: dict[str, float] | None = None,
+    A: str,
+    B: str,
+    C: str,
+    rh:   float,
+    temp: float,
+    bg:   tuple[float, float],
+    bows: dict[str, float] | None = None,   # {'AB': …, 'AC': …, 'BC': …}
+    *,
     dx: float = 0.10,
     dy: float = 0.10,
-    z:  float = 0.0,                 # (ignored for now; keeps call-site happy)
+    z:  float = 0.0,                        # <reserved for future Ge-mixing>
 ) -> pd.DataFrame:
     """
-    Ternary CsSnX₃ compositional scan.
-    keys(bows) = {'AB', 'AC', 'BC'} with bowing in eV.
+    CsSnX₃ – CsSnY₃ – CsSnZ₃ ternary.
+    Returns a DataFrame with columns: x, y, Eg, Ehull, Eox, score, formula.
+
+    Parameters
+    ----------
+    bows : dict | None
+        Bowing parameters in eV.  If *None* every entry defaults to 0.0.
+    dx , dy : float
+        Grid step for the x / y compositional coordinates.
+    z  : float
+        Currently ignored (kept for API symmetry with binary Ge mixing).
     """
-    if bows is None:                         # fall-back (all zero)
+    # ------------------------------------------------------------------ setup
+    if bows is None:
         bows = {"AB": 0.0, "AC": 0.0, "BC": 0.0}
 
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
     dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
     if not (dA and dB and dC):
-        return pd.DataFrame()
+        return pd.DataFrame()          # MP lookup failed → empty frame
 
-    oxA, oxB, oxC = oxidation_energy(A), oxidation_energy(B), oxidation_energy(C)
-    lo, hi = bg
-    rows = []
+    oxA, oxB, oxC = map(oxidation_energy, (A, B, C))
+    lo, hi        = bg
+    rows          = []
 
+    # ----------------------------------------------------------------  grid
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
-            z = 1 - x - y
-            Eg = (z*dA["band_gap"] + x*dB["band_gap"] + y*dC["band_gap"]
-                  - bows["AB"]*x*z - bows["AC"]*y*z - bows["BC"]*x*y)
-            Eh = z*dA["energy_above_hull"] + x*dB["energy_above_hull"] + y*dC["energy_above_hull"]
-            dEox = z*oxA + x*oxB + y*oxC
-            raw = (score_band_gap(Eg, lo, hi)
-                   * math.exp(-Eh/0.0518)
-                   * math.exp(dEox/K_T_EFF))
-            rows.append({"x":round(x,3),"y":round(y,3),
-                         "Eg":round(Eg,3),"Ehull":round(Eh,4),"Eox":round(dEox,3),
-                         "raw":raw,
-                         "formula":f"{A}-{B}-{C} x={x:.2f} y={y:.2f}"})
+            zc = 1.0 - x - y                           # “z” (= 1–x–y) inside the triangle
 
+            # -------- Eg with three bowing terms
+            Eg = (
+                  zc * dA["band_gap"]
+                + x  * dB["band_gap"]
+                + y  * dC["band_gap"]
+                - bows["AB"] * x  * zc
+                - bows["AC"] * y  * zc
+                - bows["BC"] * x  * y
+            )
+
+            # -------- convex-hull energy
+            Eh = (
+                  zc * dA["energy_above_hull"]
+                + x  * dB["energy_above_hull"]
+                + y  * dC["energy_above_hull"]
+            )
+
+            # -------- Sn-oxidation penalty
+            dEox   = zc*oxA + x*oxB + y*oxC
+            ox_pen = math.exp(dEox / K_T_EFF)
+
+            # -------- raw (unnormalised) score
+            raw = (
+                score_band_gap(Eg, lo, hi)
+                * math.exp(-Eh / 0.0518)     # stability    (≈2 kT window)
+                * ox_pen                     # oxidation
+            )
+
+            rows.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(dEox, 3),
+                "raw": raw,
+                "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f}",
+            })
+
+    # ----------------------------------------------------------------  scale 0 → 1
     if not rows:
         return pd.DataFrame()
-    raw_max = max(r["raw"] for r in rows) or 1.0
+
+    raw_max = max(r["raw"] for r in rows) or 1.0         # guard /0
     for r in rows:
-        r["score"] = round(r["raw"]/raw_max, 3)
+        r["score"] = round(r["raw"] / raw_max, 3)
         del r["raw"]
 
-    return (pd.DataFrame(rows)
-            .sort_values("score", ascending=False)
-            .reset_index(drop=True))
+    return (
+        pd.DataFrame(rows)
+          .sort_values("score", ascending=False)
+          .reset_index(drop=True)
+    )
 
-# legacy alias
+# keep legacy alias for auto-report
 _summary = fetch_mp_data
