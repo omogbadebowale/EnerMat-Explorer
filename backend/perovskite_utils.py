@@ -45,16 +45,18 @@ def fetch_mp_data(fml:str, fields:list[str]):
     return out
 
 @lru_cache(maxsize=64)
-def oxidation_energy(fml:str)->float:
-    if "Sn" not in fml: return 0.0
-    hal = next((h for h in ("I","Br","Cl") if h in fml),None)
-    if not hal: return 0.0
-    def H(g): d=fetch_mp_data(g,["formation_energy_per_atom"]); 
-    if not doc or doc["formation_energy_per_atom"] is None: raise ValueError
-    return d["formation_energy_per_atom"]*Composition(g).num_atoms
-    try:
-        return .5*(H(f"Cs2Sn{hal}6")+H("SnO2"))-H(fml)
-    except Exception: return 0.0
+-    def ΔH(formula: str):
+-        d = fetch_mp_data(formula, ["formation_energy_per_atom"])
+-        if not d or d["formation_energy_per_atom"] is None:
+-            raise ValueError(f"Missing formation-energy for {formula}")
+-        comp = Composition(formula)
+-        return d["formation_energy_per_atom"] * comp.num_atoms
++    def ΔH(formula: str):
++        doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
++        if not doc or doc["formation_energy_per_atom"] is None:
++            raise ValueError(f"Missing formation-energy for {formula}")
++        comp = Composition(formula)
++        return doc["formation_energy_per_atom"] * comp.num_atoms
 
 # ───────────────────────────── binary screen ──────────────────────────────────
 def screen_binary(A,B,rh,temp,bg,bow,dx,*,z:float=0.0):
