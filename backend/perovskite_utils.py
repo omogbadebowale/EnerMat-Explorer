@@ -133,15 +133,14 @@ def mix_abx3(
         raw = score_band_gap(Eg, lo, hi)*stab*fit*ox_pen
         rows.append({
     "x": round(x, 3),
-    "y": round(y, 3),
-    "z": round(z, 3),        # ← NEW: show the CsGeBr₃ (or C-end-member) fraction
+    "z": round(z, 2),          # OK for Ge-scans
+    # --- DO NOT add "y" here ---
     "Eg": round(Eg, 3),
     "Ehull": round(Eh, 4),
     "Eox": round(dEox, 3),
-    "raw": raw,
-    "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f}",
+    "score": round(score, 3),
+    "formula": f"{formula_A}-{formula_B} x={x:.2f} z={z:.2f}",
 })
-
     if not rows:
         return pd.DataFrame()
     raw_max = max(r["raw"] for r in rows) or 1.0
