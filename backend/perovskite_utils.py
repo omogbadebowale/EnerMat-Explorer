@@ -50,7 +50,7 @@ def oxidation_energy(fml:str)->float:
     hal = next((h for h in ("I","Br","Cl") if h in fml),None)
     if not hal: return 0.0
     def H(g): d=fetch_mp_data(g,["formation_energy_per_atom"]); 
-    if not d or d["formation_energy_per_atom"] is None: raise ValueError
+    if not doc or doc["formation_energy_per_atom"] is None: raise ValueError
     return d["formation_energy_per_atom"]*Composition(g).num_atoms
     try:
         return .5*(H(f"Cs2Sn{hal}6")+H("SnO2"))-H(fml)
