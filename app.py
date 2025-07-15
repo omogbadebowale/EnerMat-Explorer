@@ -4,12 +4,14 @@ import datetime
 import streamlit as st
 import pandas as pd
 
-from backend.perovskite_utils import (           # ← new utils file
+# ------------------  FIX  ------------------
+# note: comment moved above the import
+# < new utils file >
+from backend.perovskite_utils import (
     screen_binary,
     screen_ternary,
     END_MEMBERS,
 )
-
 # ─── page config / banner ─────────────────────────────────────────────
 st.set_page_config("EnerMat Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
