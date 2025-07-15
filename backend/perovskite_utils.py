@@ -151,12 +151,19 @@ def mix_abx3(
 
 # ─────────── ternary  (Sn only) ───────────
 def screen_ternary(
-    A: str, B: str, C: str,
-    rh: float, temp: float,
+    A: str,
+    B: str,
+    C: str,
+    rh: float,
+    temp: float,
     bg: tuple[float, float],
     bows: dict[str, float],
-    dx: float = 0.10, dy: float = 0.10,
+    dx: float = 0.10,
+    dy: float = 0.10,
+    *,                      # ← everything after * is keyword-only
+    z: float = 0.0          # ← NEW: so app.py can pass z=
 ) -> pd.DataFrame:
+
 
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
