@@ -8,13 +8,16 @@ import pandas as pd
 import streamlit as st
 import pandas as pd
 
-# ---------------  FIX  -----------------
-from backend.perovskite_utils import (
+# ─── imports ─────────────────────────────────────────────────────────
+import streamlit as st
+import pandas as pd
+
+from backend.perovskite_utils import (      # ← opening paren
     screen_binary,
     screen_ternary,
-    END_MEMBERS,
-)                                      # ← add this “)”
-# ---------------------------------------
+    END_MEMBERS,                            # ← last symbol
+)                                           # ← **this line was missing**
+# ─────────────────────────────────────────────────────────────────────
 
 # ─── page config / banner ─────────────────────────────────────────────
 st.set_page_config("EnerMat Explorer", layout="wide")
