@@ -82,40 +82,66 @@ def mix_abx3(
     dx: float = 0.05,
     alpha: float = 1.0,
     beta: float = 1.0,
-    **kwargs,
+    z: float | None = None,             # ← slider arrives here
 ) -> pd.DataFrame:
-
+    """
+    Binary CsSnX3  (A)  <—>  CsSnX3  (B)
+    Optional B-site mixing:  CsSn(1−z)Ge_zX3
+    """
+    # ---------------------------------------------------------------------
     lo, hi = bg_window
     dA = fetch_mp_data(formula_A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(formula_B, ["band_gap", "energy_above_hull"])
     if not (dA and dB):
         return pd.DataFrame()
-    hal = next((h for h in ("I", "Br", "Cl") if h in formula_A), None)
-    if hal is None:
-        return pd.DataFrame()
+
+    hal = next(h for h in ("I", "Br", "Cl") if h in formula_A)
     rA, rB, rX = (IONIC_RADII.get(k, 1.5) for k in ("Cs", "Sn", hal))
+
+    # --- B-site Ge data (only loaded if z is not None) -------------------
+    if z and z > 0:
+        geA = formula_A.replace("Sn", "Ge")
+        geB = formula_B.replace("Sn", "Ge")
+        dGA = fetch_mp_data(geA, ["band_gap", "energy_above_hull"])
+        dGB = fetch_mp_data(geB, ["band_gap", "energy_above_hull"])
+        if not (dGA and dGB):
+            st.warning("⛔ No Ge end-member data on MP – Ge mixing disabled.")
+            z = 0.0
+    else:
+        z = 0.0  # ensure numeric
+
     dEox_A = oxidation_energy(formula_A)
     dEox_B = oxidation_energy(formula_B)
 
-    rows = []
+    rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
-        Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        dEox = (1 - x) * dEox_A + x * dEox_B
+        # ---------- band gap ------------------------------------------------
+        Eg_sn = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bowing * x * (1 - x)
+        Eg    = (1 - z) * Eg_sn + z * ((1 - x) * dGA["band_gap"] + x * dGB["band_gap"])
+        # ---------- Ehull ---------------------------------------------------
+        Eh_sn = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        Eh    = (1 - z) * Eh_sn + z * ((1 - x) * dGA["energy_above_hull"] + x * dGB["energy_above_hull"])
+        # ---------- oxidation ----------------------------------------------
+        dEox_sn = (1 - x) * dEox_A + x * dEox_B
+        dEox    = (1 - z) * dEox_sn  # assume Ge²⁺ oxidation neutral
+        # ---------- scoring -------------------------------------------------
         ox_pen = math.exp(dEox / K_T_EFF)
-        stab = math.exp(-Eh / (alpha * K_T_EFF))
-        tfac = (rA + rX) / (math.sqrt(2) * (rB + rX))
-        fit = math.exp(-beta * abs(tfac - 0.95))
-        form = score_band_gap(Eg, lo, hi)
-        score = 1e3 * form * stab * ox_pen      # rescale for readability
+        stab   = math.exp(-Eh / (alpha * K_T_EFF))
+        tfac   = (rA + rX) / (math.sqrt(2) * (rB + rX))
+        fit    = math.exp(-beta * abs(tfac - 0.95))
+        form   = score_band_gap(Eg, lo, hi)
+        score  = form * stab * fit * ox_pen
+        # ---------- row -----------------------------------------------------
         rows.append({
-            "x": round(x, 3), "Eg": round(Eg, 3), "Ehull": round(Eh, 4),
-            "Eox": round(dEox, 3), "score": round(score, 3),
-            "formula": f"{formula_A}-{formula_B} x={x:.2f}"
+            "x": round(x, 3), "z": round(z, 3),
+            "Eg": round(Eg, 3), "Ehull": round(Eh, 4), "Eox": round(dEox, 3),
+            "score": round(score, 3),
+            "formula": f"CsSn(1-{z:.2f})Ge{z:.2f}I{3*(1-x):.2f}Br{3*x:.2f}",
         })
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
+    return (pd.DataFrame(rows)
+            .sort_values("score", ascending=False)
+            .reset_index(drop=True))
 # ─────────────────────────────── Ternary Screen ───────────────────────────────
 def screen_ternary(
     A: str,
