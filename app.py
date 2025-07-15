@@ -127,23 +127,35 @@ if do_prev:
 # ──────────────────────────────────────────────────────────────────────────────
 # 9  Handle *Run screening*
 # ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────
 if do_run:
-    # ---- simple formula sanity check -------------------------------------
+    # ---- simple formula sanity check -----------------------------------
     formulas = [A, B] if mode.startswith("Binary") else [A, B, C]
     for fml in formulas:
         if fml not in END_MEMBERS:
-            st.error(f"❌ Unknown end‑member formula: {fml}")
+            st.error(f"❌ Unknown end-member formula: {fml}")
             st.stop()
 
-    # ---- run the actual screen ------------------------------------------
+    # ---- run the actual screen ----------------------------------------
     if mode.startswith("Binary"):
-        df = _run_binary(A, B, rh, temp, (bg_lo, bg_hi), bow, dx, z=z)
-    else:
+        df = _run_binary(
+            A, B, rh, temp,
+            (bg_lo, bg_hi), bow, dx, z=z           # ← unchanged
+        )
+    else:                                          # Ternary A–B–C
+        # 7 positional args, then keyword-only extras
         df = _run_ternary(
-    A, B, C, rh, temp, (bg_lo, bg_hi),
-    {"AB": bow, "AC": bow, "BC": bow}, dx, dy, z)
+            A, B, C,                              # 1-3 end-members
+            rh, temp,                             # 4-5 environment
+            (bg_lo, bg_hi),                       # 6   gap window
+            {"AB": bow, "AC": bow, "BC": bow},    # 7   bowing dict (positional!)
+            dx=dx, dy=dy, z=z                     # keyword-only
+        )
 
+    # keep track of latest result
     st.session_state.history.append({"mode": mode, "df": df})
+# ─────────────────────────────────────────────────────────────────────────
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 10  Nothing to show yet → prompt user
