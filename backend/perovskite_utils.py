@@ -147,7 +147,15 @@ def mix_abx3(
             "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
         })
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+    # ── NEW: convert raw → 0-to-1 score ─────────────────────────────
+    raw_max = max(r["raw"] for r in rows) or 1.0          # avoid /0
+    for r in rows:
+        r["score"] = round(r["raw"] / raw_max, 3)
+        del r["raw"]
+
+    return (pd.DataFrame(rows)
+            .sort_values("score", ascending=False)
+            .reset_index(drop=True))
 
 # ───────────────────────── ternary screen (Sn only) ─────────────────────────
 
@@ -182,7 +190,15 @@ def screen_ternary(
                          "Eg":round(Eg,3),"Ehull":round(Eh,4),"Eox":round(dEox,3),
                          "score":round(score,3),
                          "formula":f"{A}-{B}-{C} x={x:.2f} y={y:.2f}"})
-    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+    # ── normalise ──────────────────────────────────────────────────
+    raw_max = max(r["raw"] for r in rows) or 1.0
+    for r in rows:
+        r["score"] = round(r["raw"] / raw_max, 3)
+        del r["raw"]
+
+    return (pd.DataFrame(rows)
+            .sort_values("score", ascending=False)
+            .reset_index(drop=True))
 
 # keep alias for auto-report
 _summary = fetch_mp_data
