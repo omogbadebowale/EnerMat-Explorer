@@ -11,7 +11,7 @@ import pandas as pd
 # ─── imports ─────────────────────────────────────────────────────────
 import streamlit as st
 import pandas as pd
-from backend.perovskite_utils import ( 
+from backend.perovskite_utils import (
     screen_binary,
     screen_ternary,
     END_MEMBERS,                            # ← last symbol
