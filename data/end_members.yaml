@@ -23,3 +23,9 @@
   Eox_e:  -0.60
   energy_above_hull:   0.002
   doi:    10.1038/s41467-021-XXXXX
+  
+- formula: CsSnI3
+  band_gap: 1.30      # eV (black γ-phase, RT PL)
+  Eox_e:   -1.95      # eV per e⁻  (literature)
+  energy_above_hull: 0.012
+  doi: 10.1039/C9EE00000A
