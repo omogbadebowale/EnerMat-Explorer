@@ -154,9 +154,18 @@ def screen_ternary(
     A: str, B: str, C: str,
     rh: float, temp: float,
     bg: tuple[float, float],
-    bows: dict[str, float],
-    dx: float = 0.10, dy: float = 0.10,
+    *,                               # ← everything after this is keyword-only
+    bows: dict[str, float] | None = None,
+    dx: float = 0.10,
+    dy: float = 0.10,
+    z:  float = 0.0,                 # (ignored for now; keeps call-site happy)
 ) -> pd.DataFrame:
+    """
+    Ternary CsSnX₃ compositional scan.
+    keys(bows) = {'AB', 'AC', 'BC'} with bowing in eV.
+    """
+    if bows is None:                         # fall-back (all zero)
+        bows = {"AB": 0.0, "AC": 0.0, "BC": 0.0}
 
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
