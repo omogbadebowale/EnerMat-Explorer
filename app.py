@@ -141,7 +141,7 @@ with tab_plot:
                 cmin=0, cmax=1,
                 colorbar=dict(
                     title="Normalized<br>Score",
-                    titleside="right",
+                    title_side="right",     # <-- changed here
                     tickmode="array",
                     tickvals=[0, 0.5, 1.0]
                 ),
@@ -183,6 +183,7 @@ with tab_plot:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
 
 
     elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
