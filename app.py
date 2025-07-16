@@ -103,8 +103,8 @@ elif do_run:
         rh, temp,                     # 4-5
         (bg_lo, bg_hi),               # 6
         {"AB": bow, "AC": bow, "BC": bow},  # 7
-        dx=dx, dy=dy,
-        z=z                            # ← forward the slider value
+        dx=dx, dy=dy,                 # 8-9
+        z=z                           # ← NEW line, same indent
 )
 
     st.session_state.history.append({"mode": mode, "df": df})
