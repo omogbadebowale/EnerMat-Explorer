@@ -128,62 +128,62 @@ with tab_tbl:
 with tab_plot:
     if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
         # ────────── Publication-grade Ehull vs Eg scatter ──────────
-fig = go.Figure()
+        fig = go.Figure()
 
-# main scatter
-fig.add_trace(go.Scatter(
-    x=df["Ehull"], y=df["Eg"],
-    mode="markers",
-    marker=dict(
-        size=8 + 12 * df["score"],        # emphasize top hits
-        color=df["score"],
-        colorscale="Viridis",             # smoother perceptual map
-        cmin=0, cmax=1,
-        colorbar=dict(
-            title="Normalized<br>Score",
-            titleside="right",
-            tickmode="array",
-            tickvals=[0, 0.5, 1.0]
-        ),
-        line=dict(width=0.5, color="black"),
-    ),
-    hovertemplate=(
-        "<b>%{customdata[6]}</b><br>"
-        "Eg=%{y:.3f} eV<br>"
-        "Ehull=%{x:.4f} eV/at<br>"
-        "Score=%{marker.color:.3f}<extra></extra>"
-    ),
-    customdata=df.to_numpy(),  # pass full row for hover
-))
+        # main scatter
+        fig.add_trace(go.Scatter(
+            x=df["Ehull"], y=df["Eg"],
+            mode="markers",
+            marker=dict(
+                size=8 + 12 * df["score"],
+                color=df["score"],
+                colorscale="Viridis",
+                cmin=0, cmax=1,
+                colorbar=dict(
+                    title="Normalized<br>Score",
+                    titleside="right",
+                    tickmode="array",
+                    tickvals=[0, 0.5, 1.0]
+                ),
+                line=dict(width=0.5, color="black"),
+            ),
+            hovertemplate=(
+                "<b>%{customdata[6]}</b><br>"
+                "Eg=%{y:.3f} eV<br>"
+                "Ehull=%{x:.4f} eV/at<br>"
+                "Score=%{marker.color:.3f}<extra></extra>"
+            ),
+            customdata=df.to_numpy(),
+        ))
 
-# add target‐window rectangle
-lo, hi = bg_lo, bg_hi
-fig.add_shape(type="rect",
-    x0=0, x1=0.05,           # Ehull window (example)
-    y0=lo, y1=hi,
-    line=dict(color="LightSeaGreen", width=2, dash="dash"),
-    fillcolor="LightSeaGreen", opacity=0.1,
-)
+        # add target-window rectangle
+        lo, hi = bg_lo, bg_hi
+        fig.add_shape(type="rect",
+            x0=0, x1=0.05,
+            y0=lo, y1=hi,
+            line=dict(color="LightSeaGreen", width=2, dash="dash"),
+            fillcolor="LightSeaGreen", opacity=0.1,
+        )
 
-# layout polish
-fig.update_layout(
-    title="EnerMat Binary Screen: Stability vs Band-Gap",
-    xaxis=dict(
-        title="Ehull (eV/atom)",
-        zeroline=True, zerolinewidth=1, zerolinecolor="lightgrey",
-        showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
-    ),
-    yaxis=dict(
-        title="Band-Gap Eg (eV)",
-        showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
-    ),
-    template="simple_white",
-    font=dict(size=14),
-    margin=dict(l=60, r=20, t=60, b=60),
-    height=700,
-)
+        fig.update_layout(
+            title="EnerMat Binary Screen: Stability vs Band-Gap",
+            xaxis=dict(
+                title="Ehull (eV/atom)",
+                zeroline=True, zerolinewidth=1, zerolinecolor="lightgrey",
+                showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
+            ),
+            yaxis=dict(
+                title="Band-Gap Eg (eV)",
+                showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
+            ),
+            template="simple_white",
+            font=dict(size=14),
+            margin=dict(l=60, r=20, t=60, b=60),
+            height=700,
+        )
 
-st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
+
 
     elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
