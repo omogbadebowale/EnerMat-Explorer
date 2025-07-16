@@ -8,11 +8,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from docx import Document
-from backend.perovskite_utils import (
+from backend.perovskite_utils(
+    init_mprester,
     screen_binary,
     screen_ternary,
     END_MEMBERS,
 )
+
+init_mprester(st.secrets["MP_API_KEY"])
+
 # ╭─────────────────────  PAGE CONFIG / TITLE  ─────────────────────╮
 st.set_page_config("EnerMat Explorer", layout="wide")
 st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
