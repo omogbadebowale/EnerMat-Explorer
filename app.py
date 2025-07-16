@@ -84,7 +84,7 @@ if do_prev:
     df   = prev["df"]; mode = prev["mode"]
     st.success("Showing previous result")
 
-# ╭─────────────────────  RUN NEW SCREEN  ──────────────────────────╮
+# ────────────── RUN NEW SCREEN ──────────────
 elif do_run:
     # sanity-check end-member formulas
     for fml in ([A, B] if mode.startswith("Binary") else [A, B, C]):
@@ -92,20 +92,21 @@ elif do_run:
             st.error(f"❌ Unknown end-member: {fml}")
             st.stop()
 
-    # dispatch
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp,
             (bg_lo, bg_hi), bow, dx, z=z
         )
-   df = _run_ternary(
-        A, B, C,                       # 1-3
-        rh, temp,                     # 4-5
-        (bg_lo, bg_hi),               # 6
-        {"AB": bow, "AC": bow, "BC": bow},  # 7
-        dx=dx, dy=dy,                 # 8-9
-        z=z                           # ← NEW line, same indent
-)
+
+    else:  # ───────── TERNARY branch ─────────
+        df = _run_ternary(
+            A, B, C,                       # 1-3
+            rh, temp,                      # 4-5
+            (bg_lo, bg_hi),                # 6
+            {"AB": bow, "AC": bow, "BC": bow},  # 7
+            dx=dx, dy=dy,                  # 8-9
+            z=z                            # 10 ← pass slider
+        )
 
     st.session_state.history.append({"mode": mode, "df": df})
 
