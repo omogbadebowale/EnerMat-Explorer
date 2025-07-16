@@ -98,14 +98,14 @@ elif do_run:
             A, B, rh, temp,
             (bg_lo, bg_hi), bow, dx, z=z
         )
-    else:
-        df = _run_ternary(
-            A, B, C,                       # 1-3
-            rh, temp,                     # 4-5
-            (bg_lo, bg_hi),               # 6
-            {"AB": bow, "AC": bow, "BC": bow},  # 7
-            dx=dx, dy=dy                  # kwargs
-        )
+   df = _run_ternary(
+        A, B, C,                       # 1-3
+        rh, temp,                     # 4-5
+        (bg_lo, bg_hi),               # 6
+        {"AB": bow, "AC": bow, "BC": bow},  # 7
+        dx=dx, dy=dy,
+        z=z                            # ← forward the slider value
+)
 
     st.session_state.history.append({"mode": mode, "df": df})
 
