@@ -165,22 +165,56 @@ with tab_plot:
             fillcolor="LightSeaGreen", opacity=0.1,
         )
 
-        fig.update_layout(
-            title="EnerMat Binary Screen: Stability vs Band-Gap",
-            xaxis=dict(
-                title="Ehull (eV/atom)",
-                zeroline=True, zerolinewidth=1, zerolinecolor="lightgrey",
-                showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
-            ),
-            yaxis=dict(
-                title="Band-Gap Eg (eV)",
-                showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
-            ),
-            template="simple_white",
-            font=dict(size=14),
-            margin=dict(l=60, r=20, t=60, b=60),
-            height=700,
-        )
+       -   fig.update_layout(
+-       title="EnerMat Binary Screen: Stability vs Band-Gap",
+-       xaxis=dict(
+-           title="Ehull (eV/atom)",
+-           zeroline=True, zerolinewidth=1, zerolinecolor="lightgrey",
+-           showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
+-       ),
+-       yaxis=dict(
+-           title="Band-Gap Eg (eV)",
+-           showgrid=True, gridwidth=0.5, gridcolor="lightgrey",
+-       ),
+-       template="simple_white",
+-       font=dict(size=14),
+-       margin=dict(l=60, r=20, t=60, b=60),
+-       height=700,
+-   )
++   fig.update_layout(
++       title="EnerMat Binary Screen",
++       title_font_size=18,
++       xaxis=dict(
++           title="Ehull (eV/atom)",
++           title_font_size=16,
++           tickfont_size=14,
++           zeroline=True, zerolinewidth=0.8, zerolinecolor="lightgrey",
++           showgrid=True, gridwidth=0.3, gridcolor="lightgrey",
++           mirror=True,  # draw axis lines on all sides
++           linecolor="black", linewidth=1
++       ),
++       yaxis=dict(
++           title="Band-Gap Eg (eV)",
++           title_font_size=16,
++           tickfont_size=14,
++           showgrid=True, gridwidth=0.3, gridcolor="lightgrey",
++           mirror=True,
++           linecolor="black", linewidth=1
++       ),
++       coloraxis_colorbar=dict(
++           title="Score",
++           title_font_size=14,
++           tickfont_size=12,
++           len=0.5,
++           y=0.5
++       ),
++       template="simple_white",
++       font=dict(family="Arial, sans-serif"),
++       margin=dict(l=50, r=30, t=50, b=50),
++       height=500,  # much more compact
++       width=650
++   )
+ 
 
         st.plotly_chart(fig, use_container_width=True)
 
