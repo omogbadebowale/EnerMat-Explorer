@@ -21,14 +21,25 @@ if not API_KEY or len(API_KEY) != 32:
 mpr = MPRester(API_KEY)
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3"]
+END_MEMBERS = [
+    # Sn / Ge branch (unchanged)
+    "CsSnI3", "CsSnBr3", "CsSnCl3",
+    "CsGeBr3", "CsGeCl3",
+    # ▶ NEW  Pb-based benchmarks
+    "CsPbI3", "CsPbBr3", "CsPbCl3",
+]
 
 CALIBRATED_GAPS = {
+    # Sn / Ge branch (unchanged)
     "CsSnBr3": 1.79,
     "CsSnCl3": 2.83,
     "CsSnI3":  1.00,
     "CsGeBr3": 2.20,
     "CsGeCl3": 3.30,
+    # ▶ NEW  Pb branch – literature optical gaps (eV)
+    "CsPbI3": 1.73,
+    "CsPbBr3": 2.35,
+    "CsPbCl3": 3.10,
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
