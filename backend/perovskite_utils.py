@@ -1,4 +1,4 @@
-# backend/perovskite_utils.py
+# backend/perovskite_utils.py 
 # EnerMat utilities  v9.6  (2025-07-15, Ge-ready)
 
 from __future__ import annotations
@@ -123,11 +123,15 @@ def mix_abx3(A, B, rh, temp, bg, bow, dx,
         return pd.DataFrame()
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"] = round(r.pop("raw") / m, 3)
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        r["score"] = round(r["raw"] / m, 3)
+        del r["raw"]
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
 
-
-# ─────────── ternary screen ─────────── (Sn ⇄ Ge ready)
+# ───────────────────── ternary screen  (Sn ⇄ Ge ready) ──────────────────────
 def screen_ternary(
     A: str,
     B: str,
@@ -139,68 +143,170 @@ def screen_ternary(
     *,
     dx: float = 0.10,
     dy: float = 0.10,
-    z: float = 0.0,
+    z: float = 0.0,          # ← NEW keyword – Ge fraction on the B-site
 ) -> pd.DataFrame:
-    # [existing ternary code unchanged]
-    # …
-    pass  # your existing implementation
+    """Score the ternary CsSnX₃ win–lose triangle with optional Ge-fraction *z*.
 
+    A + B + C are the three vertex formulas (Sn–halide perovskites).
+    If z>0, each Sn vertex gets an implicit Ge analogue (CsGeX₃) and
+    the electronic/stability terms are linearly interpolated:
+        Eg   = (1-z)·Eg_Sn   + z·Eg_Ge
+        Eh   = (1-z)·Eh_Sn   + z·Eh_Ge
+    Oxidation energy is kept for the Sn branch only (Ge²⁺↔Ge⁴⁺ is negligible).
+    """
+    # --- fetch Sn branch ----------------------------------------------------
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    if not (dA and dB and dC):
+        return pd.DataFrame()
 
-# ─────────── NEW: Quad-mix PEA/FA-Sn/Ge + I/Br ───────────
-def screen_pea_fa_sn_ge_halide(
-    rh: float,
-    temp: float,
-    bg: tuple[float,float],
-    bow_halide: float,
-    dx: float = 0.05,
-    dz: float = 0.05,
-) -> pd.DataFrame:
-    """
-    Scores PEA0.15FA0.85Sn1−zGez(I1−nBrn)3 over (n,z) grid;
-    returns columns [n, z, Eg, Ehull, Eox, score].
-    """
+    # --- optional Ge branch -------------------------------------------------
+    if z > 0:
+        A_Ge = A.replace("Sn", "Ge")
+        B_Ge = B.replace("Sn", "Ge")
+        C_Ge = C.replace("Sn", "Ge")
+        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
+        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
+        dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
+    else:
+        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC    # dummy aliases
+
+    # --- oxidation (Sn only) ------------------------------------------------
+    oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
     lo, hi = bg
+    rows: list[dict] = []
 
-    # endmembers for Sn/Ge binary at each halide
-    sn_i = "FASnI3"
-    sn_b = "FASnBr3"
-    ge_i = "FAGeI3"
-    ge_b = "FAGeBr3"
-
-    # precompute halide curves
-    df_sn = mix_abx3(sn_i, sn_b, rh, temp, bg, bow_halide, dx, z=0)
-    df_ge = mix_abx3(ge_i, ge_b, rh, temp, bg, bow_halide, dx, z=0)
-
-    ox_sn = oxidation_energy(sn_i)
-    ox_ge = oxidation_energy(ge_i)
-
-    rows = []
-    for idx, r_sn in df_sn.iterrows():
-        n = r_sn["x"]
-        r_ge = df_ge.iloc[idx]
-        for z_val in np.arange(0.0, 1.0+1e-9, dz):
-            Eg   = (1-z_val)*r_sn["Eg"]   + z_val*r_ge["Eg"]
-            Eh   = (1-z_val)*r_sn["Ehull"]+ z_val*r_ge["Ehull"]
-            Eox  = (1-z_val)*ox_sn        + z_val*ox_ge
-            raw  = (
-                score_band_gap(Eg, lo, hi)
-                * math.exp(-Eh/0.0259)
-                * math.exp(Eox/K_T_EFF)
+    # --- composition grid ---------------------------------------------------
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
+            w = 1.0 - x - y                     # w == zSn in literature, but we keep z for Ge
+            # ---------- band gap -------------
+            Eg_Sn = (
+                w * dA["band_gap"]
+              + x * dB["band_gap"]
+              + y * dC["band_gap"]
+              - bows["AB"] * x * w
+              - bows["AC"] * y * w
+              - bows["BC"] * x * y
             )
-            rows.append({
-                "n": round(n,3),
-                "z": round(z_val,3),
-                "Eg": round(Eg,3),
-                "Ehull": round(Eh,4),
-                "Eox": round(Eox,3),
-                "raw": raw
-            })
+            Eg_Ge = (
+                w * dA_Ge["band_gap"]
+              + x * dB_Ge["band_gap"]
+              + y * dC_Ge["band_gap"]
+              - bows["AB"] * x * w
+              - bows["AC"] * y * w
+              - bows["BC"] * x * y
+            )
+            Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
+
+            # ---------- Ehull ---------------
+            Eh_Sn = (
+                w * dA["energy_above_hull"]
+              + x * dB["energy_above_hull"]
+              + y * dC["energy_above_hull"]
+            )
+            Eh_Ge = (
+                w * dA_Ge["energy_above_hull"]
+              + x * dB_Ge["energy_above_hull"]
+              + y * dC_Ge["energy_above_hull"]
+            )
+            Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
+
+            # ---------- oxidation -----------
+            dEox = w * oxA + x * oxB + y * oxC    # keep Sn only
+
+            # ---------- score ---------------
+            raw = (
+                score_band_gap(Eg, lo, hi)
+                * math.exp(-Eh / 0.0518)
+                * math.exp(dEox / K_T_EFF)
+            )
+            rows.append(
+                {
+                    "x": round(x, 3),
+                    "y": round(y, 3),
+                    "z": round(z, 2),
+                    "Eg": round(Eg, 3),
+                    "Ehull": round(Eh, 4),
+                    "Eox": round(dEox, 3),
+                    "raw": raw,
+                    "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
+                }
+            )
 
     if not rows:
         return pd.DataFrame()
 
+    raw_max = max(r["raw"] for r in rows) or 1.0
+    for r in rows:
+        r["score"] = round(r["raw"] / raw_max, 3)
+        del r["raw"]
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
+
+# ─────────── PEA/FA-Sn-Ge-halide screen ───────────
+def screen_pea_fa_sn_ge_halide(
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow_halide: float,
+    *,
+    dx: float = 0.05,
+    dz: float = 0.05,
+) -> pd.DataFrame:
+    """
+    Score mixed-cation (PEA₀.₁₅FA₀.₈₅) Sn–Ge halide perovskites PEA₀.₁₅FA₀.₈₅Sn(1-z)Gez(I₁₋nBrₙ)₃.
+    """
+    lo, hi = bg
+    # fetch data for endpoints
+    end = {
+        "SnI": fetch_mp_data("FASnI3", ["band_gap", "energy_above_hull"]) or {},
+        "SnBr": fetch_mp_data("FASnBr3", ["band_gap", "energy_above_hull"]) or {},
+        "GeI": fetch_mp_data("FAGeI3", ["band_gap", "energy_above_hull"]) or {},
+        "GeBr": fetch_mp_data("FAGeBr3", ["band_gap", "energy_above_hull"]) or {},
+    }
+    ox = {
+        "SnI": oxidation_energy("FASnI3"),
+        "SnBr": oxidation_energy("FASnBr3"),
+        "GeI": oxidation_energy("FAGeI3"),
+        "GeBr": oxidation_energy("FAGeBr3"),
+    }
+
+    rows = []
+    for z in np.arange(0.0, 1.0 + 1e-9, dz):
+        for n in np.arange(0.0, 1.0 + 1e-9, dx):
+            # weighted Sn halide
+            Eg_Sn = (1 - n) * end["SnI"]["band_gap"] + n * end["SnBr"]["band_gap"] - bow_halide * n * (1 - n)
+            Eh_Sn = (1 - n) * end["SnI"]["energy_above_hull"] + n * end["SnBr"]["energy_above_hull"]
+            Eg_Ge = (1 - n) * end["GeI"]["band_gap"] + n * end["GeBr"]["band_gap"] - bow_halide * n * (1 - n)
+            Eh_Ge = (1 - n) * end["GeI"]["energy_above_hull"] + n * end["GeBr"]["energy_above_hull"]
+            Eg = (1 - z) * Eg_Sn + z * Eg_Ge
+            Eh = (1 - z) * Eh_Sn + z * Eh_Ge
+            dEox = (1 - z) * ((1 - n) * ox["SnI"] + n * ox["SnBr"]) + z * ((1 - n) * ox["GeI"] + n * ox["GeBr"])  # mixed oxidation
+            raw = score_band_gap(Eg, lo, hi) * math.exp(-Eh / 0.0259) * math.exp(dEox / K_T_EFF)
+            rows.append({
+                "n": round(n, 3),
+                "z": round(z, 3),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(dEox, 3),
+                "raw": raw,
+                "formula": f"PEA0.15FA0.85Sn{1 - z:.2f}Ge{z:.2f}I{1 - n:.2f}Br{n:.2f}",
+            })
+    if not rows:
+        return pd.DataFrame()
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"] = round(r.pop("raw")/m,3)
+        r["score"] = round(r["raw"] / m, 3)
+        del r["raw"]
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
