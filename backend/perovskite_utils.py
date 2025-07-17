@@ -278,6 +278,9 @@ def screen_ternary(
             sbg = _score_band_gap(Eg, lo, hi, center, sigma)
             raw = sbg * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
 
+            # Shockley–Queisser PCE limit
+            pce = sq_efficiency(Eg)
+
             rows.append({
                 "x": round(x, 3),
                 "y": round(y, 3),
@@ -285,6 +288,7 @@ def screen_ternary(
                 "Eg": round(Eg, 3),
                 "Ehull": round(Eh, 4),
                 "Eox": round(dEox, 3),
+                "PCE_max (%)": round(pce * 100, 1),
                 "raw": raw,
                 "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
             })
