@@ -1,6 +1,7 @@
-***File: backend/perovskite_utils.py***
-```python
-# EnerMat utilities  v9.6  (2025-07-17, Ge-ready + PCE + Passivation)
+# backend/perovskite_utils.py
+"""
+EnerMat utilities  v9.6  (2025-07-17, Ge-ready + PCE + Passivation)
+"""
 from __future__ import annotations
 import math, os
 from functools import lru_cache
@@ -12,18 +13,17 @@ import streamlit as st
 from mp_api.client import MPRester
 from pymatgen.core import Composition
 
-# ─────────── Shockley–Queisser helper ───────────
+# Shockley–Queisser helper
 from backend.sq import sq_efficiency
 
-# ─────────── API key ───────────
+# API key
 load_dotenv()
 API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
 if not API_KEY or len(API_KEY) != 32:
     raise RuntimeError("🛑 32-character MP_API_KEY missing")
-
 mpr = MPRester(API_KEY)
 
-# ─────────── application-based band-gap targets ───────────
+# Application-based band-gap targets
 APPLICATION_CONFIG = {
     "single":   {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
     "tandem":   {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
@@ -31,32 +31,32 @@ APPLICATION_CONFIG = {
     "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
 }
 
-# ─────────── reference data ───────────
+# Reference data
 END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3"]
 CALIBRATED_GAPS = {"CsSnBr3":1.79, "CsSnCl3":2.83, "CsSnI3":1.00, "CsGeBr3":2.20, "CsGeCl3":3.30}
 GAP_OFFSET    = {"I":+0.52, "Br":+0.88, "Cl":+1.10}
 IONIC_RADII   = {"Cs":1.88, "Sn":1.18, "Ge":0.73, "I":2.20, "Br":1.96, "Cl":1.81}
-K_T_EFF       = 0.20  # soft‐penalty "kT" (eV)
+K_T_EFF       = 0.20   # soft‐penalty "kT" (eV)
 K_T           = 0.0259 # thermal energy at 300K
 
-# ─────────── additive passivation bonuses ───────────
+# Additive passivation bonuses
 ADDITIVE_PENALTIES = {
     "none":   0.0,
-    "SnF2":   +0.50,
-    "NH4SCN": +0.35,
-    "PEABr":  +0.40,
+    "SnF2":   0.50,
+    "NH4SCN": 0.35,
+    "PEABr":  0.40,
 }
 
-# ─────────── band-gap scoring ───────────
+# Band-gap scoring helper
 def _score_band_gap(Eg: float, lo: float, hi: float, center: float|None, sigma: float|None) -> float:
     if Eg < lo or Eg > hi:
         return 0.0
     if center is None or sigma is None:
         return 1.0
     return math.exp(-((Eg - center)**2) / (2*sigma*sigma))
-score_band_gap = _score_band_gap  # alias
+score_band_gap = _score_band_gap
 
-# ─────────── data fetch & helpers ───────────
+# Fetch from Materials Project
 def fetch_mp_data(formula: str, fields: list[str]):
     docs = mpr.summary.search(formula=formula, fields=tuple(fields))
     if not docs:
@@ -71,7 +71,7 @@ def fetch_mp_data(formula: str, fields: list[str]):
             out["band_gap"] = (out.get("band_gap",0.0) or 0.0) + GAP_OFFSET[hal]
     return out
 
-@lru_cache(maxsize=64)
+# Sn(II) oxidation penalty
 def oxidation_energy(formula_sn2: str) -> float:
     if "Sn" not in formula_sn2:
         return 0.0
@@ -89,7 +89,7 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5*(H_prod1 + H_prod2) - H_reac
 
-# ─────────── binary screen ───────────
+# Binary screening
 def screen_binary(
     A: str, B: str, rh: float, temp: float,
     bg: tuple[float,float], bow: float, dx: float,
@@ -153,4 +153,3 @@ def mix_abx3(
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows: r["score"] = round(r.pop("raw")/m, 3)
     return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
-```
