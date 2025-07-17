@@ -1,5 +1,5 @@
-# backend/perovskite_utils.py 
-# EnerMat utilities  v9.6  (2025-07-15, Ge-ready)
+# backend/perovskite_utils.py  
+# EnerMat utilities  v9.6  (2025-07-15, Ge-ready)  
 
 from __future__ import annotations
 import math, os
@@ -20,12 +20,16 @@ if not API_KEY or len(API_KEY) != 32:
 
 mpr = MPRester(API_KEY)
 
+# ─────────── application-based band-gap targets ───────────
+APPLICATION_CONFIG = {
+    "single": {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
+    "tandem": {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
+    "indoor": {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
+    "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
+}
+
 # ─────────── reference data ───────────
-# Include CsGeI3 for full Sn↔Ge halide mixing
-END_MEMBERS = [
-    "CsSnI3", "CsSnBr3", "CsSnCl3",
-    "CsGeI3", "CsGeBr3", "CsGeCl3"
-]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3"]
 
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.79,
@@ -33,9 +37,6 @@ CALIBRATED_GAPS = {
     "CsSnI3":  1.00,
     "CsGeBr3": 2.20,
     "CsGeCl3": 3.30,
-    # If desired, you can calibrate CsGeI3 explicitly here;
-    # otherwise it will use the raw MP bandgap + GAP_OFFSET
-    # "CsGeI3": <value>
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
@@ -43,7 +44,25 @@ IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
                "I": 2.20, "Br": 1.96, "Cl": 1.81}
 
 K_T_EFF = 0.20          # soft-penalty “kT” (eV)
-score_band_gap = lambda Eg, lo, hi: 1.0 if lo <= Eg <= hi else 0.0
+
+# ─────────── scoring helpers ───────────
+def _score_band_gap(Eg: float,
+                    lo: float, hi: float,
+                    center: float | None,
+                    sigma: float | None) -> float:
+    """
+    If center/sigma provided, apply Gaussian weighting within [lo,hi],
+    else flat 1 in [lo,hi], 0 outside.
+    """
+    if Eg < lo or Eg > hi:
+        return 0.0
+    if center is None or sigma is None:
+        return 1.0
+    # Gaussian score, normalized peak=1
+    return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
+
+# legacy alias for backward compatibility
+score_band_gap = _score_band_gap
 
 # ─────────── helpers ───────────
 def fetch_mp_data(formula: str, fields: list[str]):
@@ -58,14 +77,13 @@ def fetch_mp_data(formula: str, fields: list[str]):
             out["band_gap"] = CALIBRATED_GAPS[formula]
         else:
             hal = next(h for h in ("I", "Br", "Cl") if h in formula)
-            out["band_gap"] = (out["band_gap"] or 0.0) + GAP_OFFSET[hal]
+            out["band_gap"] = (out.get("band_gap", 0.0) or 0.0) + GAP_OFFSET[hal]
     return out
 
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
-    """ΔEₒₓ per Sn for   CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂).
-       Positive ⇒ Sn(II) oxidation is uphill (good)."""
+    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½(Cs₂SnX₆ + SnO₂) (eV)."""
     if "Sn" not in formula_sn2:
         return 0.0
     hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
@@ -74,7 +92,7 @@ def oxidation_energy(formula_sn2: str) -> float:
 
     def formation_energy_fu(formula: str) -> float:
         doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
-        if not doc or doc["formation_energy_per_atom"] is None:
+        if not doc or doc.get("formation_energy_per_atom") is None:
             raise ValueError(f"Missing formation-energy for {formula}")
         comp = Composition(formula)
         return doc["formation_energy_per_atom"] * comp.num_atoms
@@ -86,16 +104,51 @@ def oxidation_energy(formula_sn2: str) -> float:
 
 
 # ─────────── binary screen ───────────
-def screen_binary(A, B, rh, temp, bg, bow, dx, *, z: float = 0.0):
-    return mix_abx3(A, B, rh, temp, bg, bow, dx, z=z)
+def screen_binary(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    application: str | None = None,
+) -> pd.DataFrame:
+    """
+    Screen A–B mix; optional 'application' selects Gaussian band-gap weighting.
+    """
+    lo, hi = bg
+    center = sigma = None
+    if application in APPLICATION_CONFIG:
+        cfg = APPLICATION_CONFIG[application]
+        lo, hi = cfg["range"]
+        center, sigma = cfg["center"], cfg["sigma"]
+
+    return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx, z=z,
+                    center=center, sigma=sigma)
 
 
-def mix_abx3(A, B, rh, temp, bg, bow, dx,
-             z: float = 0.0, alpha: float = 1.0, beta: float = 1.0) -> pd.DataFrame:
+def mix_abx3(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    alpha: float = 1.0,
+    beta: float = 1.0,
+    center: float | None = None,
+    sigma: float | None = None,
+) -> pd.DataFrame:
     lo, hi = bg
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    if not (dA and dB):
+    if not dA or not dB:
         return pd.DataFrame()
 
     hal = next(h for h in ("I", "Br", "Cl") if h in A)
@@ -107,8 +160,10 @@ def mix_abx3(A, B, rh, temp, bg, bow, dx,
         Eg = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
         Eh = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
         dEox = (1 - x) * oxA + x * oxB
+        # band-gap score: gaussian if center/sigma provided, else flat
+        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
         raw = (
-            score_band_gap(Eg, lo, hi)
+            sbg
             * math.exp(-Eh / (alpha * 0.0259))
             * math.exp(dEox / K_T_EFF)
             * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
@@ -127,9 +182,13 @@ def mix_abx3(A, B, rh, temp, bg, bow, dx,
         return pd.DataFrame()
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"] = round(r["raw"] / m, 3)
-        del r["raw"]
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        r["score"] = round(r.pop("raw") / m, 3)
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
 
 
 # ───────────────────── ternary screen  (Sn ⇄ Ge ready) ──────────────────────
@@ -145,24 +204,27 @@ def screen_ternary(
     dx: float = 0.10,
     dy: float = 0.10,
     z: float = 0.0,
+    application: str | None = None,
 ) -> pd.DataFrame:
-    """Score the ternary CsSnX₃ win–lose triangle with optional Ge-fraction *z*.
-
-    A + B + C are the three vertex formulas (Sn–halide perovskites).
-    If z>0, each Sn vertex gets an implicit Ge analogue (CsGeX₃) and
-    the electronic/stability terms are linearly interpolated:
-        Eg   = (1-z)·Eg_Sn   + z·Eg_Ge
-        Eh   = (1-z)·Eh_Sn   + z·Eh_Ge
-    Oxidation energy is kept for the Sn branch only (Ge²⁺↔Ge⁴⁺ is negligible).
     """
-    # --- fetch Sn branch ----------------------------------------------------
+    Score the ternary CsSnX₃ win–lose triangle with optional Ge-fraction *z*.
+    Application selects Gaussian band-gap weighting.
+    """
+    lo, hi = bg
+    center = sigma = None
+    if application in APPLICATION_CONFIG:
+        cfg = APPLICATION_CONFIG[application]
+        lo, hi = cfg["range"]
+        center, sigma = cfg["center"], cfg["sigma"]
+
+    # fetch data
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
     dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # --- optional Ge branch -------------------------------------------------
+    # optional Ge branch
     if z > 0:
         A_Ge = A.replace("Sn", "Ge")
         B_Ge = B.replace("Sn", "Ge")
@@ -171,10 +233,9 @@ def screen_ternary(
         dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
         dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
     else:
-        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC    # dummy aliases
+        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC
 
     oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
-    lo, hi = bg
     rows: list[dict] = []
 
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
@@ -199,15 +260,24 @@ def screen_ternary(
             Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
 
             dEox = w * oxA + x * oxB + y * oxC
-            raw = (
-                score_band_gap(Eg, lo, hi) * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
-            )
-            rows.append({"x": round(x,3), "y": round(y,3), "z": round(z,2), "Eg": round(Eg,3), "Ehull": round(Eh,4), "Eox": round(dEox,3), "raw": raw, "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}"})
+            sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+            raw = sbg * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
+
+            rows.append({
+                "x": round(x,3),
+                "y": round(y,3),
+                "z": round(z,2),
+                "Eg": round(Eg,3),
+                "Ehull": round(Eh,4),
+                "Eox": round(dEox,3),
+                "raw": raw,
+                "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
+            })
 
     if not rows:
         return pd.DataFrame()
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"] = round(r.pop("raw")/m,3)
+        r["score"] = round(r.pop("raw") / m,3)
 
-    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
