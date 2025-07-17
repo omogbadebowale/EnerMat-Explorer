@@ -1,20 +1,21 @@
-# backend/perovskite_utils.py  
-# EnerMat utilities  v9.6  (2025-07-17, Ge-ready + PCE)
-from backend.sq import sq_efficiency
-from __future__ import annotations
-import math, os
-from functools import lru_cache
+--- backend/perovskite_utils.py
+@@
+- from backend.sq import sq_efficiency
+- from __future__ import annotations
++ from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
-import streamlit as st
-from mp_api.client import MPRester
-from pymatgen.core import Composition
+  import math, os
+  from functools import lru_cache
+  import numpy as np
+  import pandas as pd
+  from dotenv import load_dotenv
+  import streamlit as st
+  from mp_api.client import MPRester
+  from pymatgen.core import Composition
 
-# ─────────── Shockley–Queisser helper ───────────
-# (Make sure you have backend/sq.py with `sq_efficiency(Eg: float) -> float`)
-from backend.sq import sq_efficiency
++ # ─────────── Shockley–Queisser helper ───────────
++ # (Make sure you have backend/sq.py next to this file.)
++ from .sq import sq_efficiency
 
 # ─────────── API key ───────────
 load_dotenv()
