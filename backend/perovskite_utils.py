@@ -1,21 +1,18 @@
---- backend/perovskite_utils.py
-@@
-- from backend.sq import sq_efficiency
-- from __future__ import annotations
-+ from __future__ import annotations
+from __future__ import annotations
+import math
+import os
+from functools import lru_cache
 
-  import math, os
-  from functools import lru_cache
-  import numpy as np
-  import pandas as pd
-  from dotenv import load_dotenv
-  import streamlit as st
-  from mp_api.client import MPRester
-  from pymatgen.core import Composition
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
+import streamlit as st
+from mp_api.client import MPRester
+from pymatgen.core import Composition
 
-+ # ─────────── Shockley–Queisser helper ───────────
-+ # (Make sure you have backend/sq.py next to this file.)
-+ from .sq import sq_efficiency
+# ─────────── Shockley–Queisser helper ───────────
+# Make sure you have backend/sq.py with `def sq_efficiency(Eg: float) -> float: ...`
+from backend.sq import sq_efficiency
 
 # ─────────── API key ───────────
 load_dotenv()
@@ -48,21 +45,23 @@ GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
 IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
                "I": 2.20, "Br": 1.96, "Cl": 1.81}
 
-K_T_EFF = 0.20          # soft-penalty “kT” (eV)
+K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
 # ─────────── band-gap scoring ───────────
-def _score_band_gap(Eg: float,
-                    lo: float, hi: float,
-                    center: float | None,
-                    sigma: float | None) -> float:
+def _score_band_gap(
+    Eg: float,
+    lo: float, hi: float,
+    center: float | None,
+    sigma: float | None
+) -> float:
     if Eg < lo or Eg > hi:
         return 0.0
     if center is None or sigma is None:
         return 1.0
+    # Gaussian weighting
     return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
 
-# alias
-score_band_gap = _score_band_gap
+score_band_gap = _score_band_gap  # alias
 
 # ─────────── helpers ───────────
 def fetch_mp_data(formula: str, fields: list[str]):
@@ -80,9 +79,9 @@ def fetch_mp_data(formula: str, fields: list[str]):
             out["band_gap"] = (out.get("band_gap", 0.0) or 0.0) + GAP_OFFSET[hal]
     return out
 
-
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
+    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)."""
     if "Sn" not in formula_sn2:
         return 0.0
     hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
@@ -100,7 +99,6 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
-
 
 # ─────────── binary screen ───────────
 def screen_binary(
@@ -125,7 +123,6 @@ def screen_binary(
     return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
                     z=z, center=center, sigma=sigma)
 
-
 def mix_abx3(
     A: str,
     B: str,
@@ -144,7 +141,7 @@ def mix_abx3(
     lo, hi = bg
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    if not dA or not dB:
+    if not (dA and dB):
         return pd.DataFrame()
 
     # optional Ge branch (binary)
@@ -163,27 +160,23 @@ def mix_abx3(
     rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
     oxA, oxB = oxidation_energy(A), oxidation_energy(B)
 
-    rows = []
+    rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Sn-only branch
+        # Sn branch
         Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
         Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
         dEox_Sn = (1 - x) * oxA + x * oxB
-
-        # Ge-only branch
+        # Ge branch
         Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
         Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
         dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
 
-        # interpolate by z
+        # interpolate
         Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
         Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
         dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
 
-        # band-gap score
         sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-
-        # raw stability‐score
         raw = (
             sbg
             * math.exp(-Eh / (alpha * 0.0259))
@@ -191,25 +184,22 @@ def mix_abx3(
             * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
         )
 
-        # --- compute Shockley–Queisser PCE limit (%)
+        # Shockley–Queisser PCE limit
         pce = sq_efficiency(Eg)
 
-        # assemble row
-        row = {
-            "x": round(x, 3),
-            "z": round(z, 2),
-            "Eg": round(Eg, 3),
-            "Ehull": round(Eh, 4),
-            "Eox": round(dEox, 3),
-            "raw": raw,
-            "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
+        rows.append({
+            "x":           round(x, 3),
+            "z":           round(z, 2),
+            "Eg":          round(Eg, 3),
+            "Ehull":       round(Eh, 4),
+            "Eox":         round(dEox, 3),
+            "raw":         raw,
+            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
             "PCE_max (%)": round(pce * 100, 1),
-        }
-        rows.append(row)
+        })
 
     if not rows:
         return pd.DataFrame()
-
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
         r["score"] = round(r.pop("raw") / m, 3)
@@ -220,8 +210,7 @@ def mix_abx3(
         .reset_index(drop=True)
     )
 
-
-# ─────────── ternary screen  (unchanged) ───────────
+# ─────────── ternary screen ───────────
 def screen_ternary(
     A: str,
     B: str,
@@ -249,6 +238,7 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
+    # Ge-branch setup
     if z > 0:
         A_Ge = A.replace("Sn", "Ge")
         B_Ge = B.replace("Sn", "Ge")
@@ -261,14 +251,15 @@ def screen_ternary(
 
     oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
     rows: list[dict] = []
-
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
             w = 1.0 - x - y
+            # Sn gap
             Eg_Sn = (
                 w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
                 - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
             )
+            # Ge gap
             Eg_Ge = (
                 w * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] + y * dC_Ge["band_gap"]
                 - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
@@ -288,12 +279,12 @@ def screen_ternary(
             raw = sbg * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
 
             rows.append({
-                "x": round(x,3),
-                "y": round(y,3),
-                "z": round(z,2),
-                "Eg": round(Eg,3),
-                "Ehull": round(Eh,4),
-                "Eox": round(dEox,3),
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "z": round(z, 2),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(dEox, 3),
                 "raw": raw,
                 "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
             })
@@ -302,53 +293,6 @@ def screen_ternary(
         return pd.DataFrame()
     m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"] = round(r.pop("raw") / m,3)
+        r["score"] = round(r.pop("raw") / m, 3)
 
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
-# ───────────────────── ternary screen ──────────────────────
-def screen_ternary(
-    A:str,B:str,C:str,rh:float,temp:float,
-    bg:tuple[float,float],bows:dict[str,float],
-    *,dx:float=0.10,dy:float=0.10,z:float=0.0,application:str|None=None
-) -> pd.DataFrame:
-    lo,hi = bg; center=sigma=None
-    if application in APPLICATION_CONFIG:
-        cfg=APPLICATION_CONFIG[application]
-        lo,hi=cfg["range"]; center,sigma=cfg["center"],cfg["sigma"]
-    dA=fetch_mp_data(A,["band_gap","energy_above_hull"])
-    dB=fetch_mp_data(B,["band_gap","energy_above_hull"])
-    dC=fetch_mp_data(C,["band_gap","energy_above_hull"])
-    if not (dA and dB and dC): return pd.DataFrame()
-    # optional Ge branch
-    if z>0:
-        A_Ge=A.replace("Sn","Ge"); B_Ge=B.replace("Sn","Ge"); C_Ge=C.replace("Sn","Ge")
-        dA_Ge=fetch_mp_data(A_Ge,["band_gap","energy_above_hull"]) or dA
-        dB_Ge=fetch_mp_data(B_Ge,["band_gap","energy_above_hull"]) or dB
-        dC_Ge=fetch_mp_data(C_Ge,["band_gap","energy_above_hull"]) or dC
-    else:
-        dA_Ge,dB_Ge,dC_Ge=dA,dB,dC
-    oxA,oxB,oxC=(oxidation_energy(f) for f in (A,B,C))
-    rows=[]
-    for x in np.arange(0.0,1.0+1e-9,dx):
-        for y in np.arange(0.0,1.0-x+1e-9,dy):
-            w=1.0-x-y
-            # Sn band-gap
-            Eg_Sn=(w*dA["band_gap"]+x*dB["band_gap"]+y*dC["band_gap"]
-                   -bows["AB"]*x*w-bows["AC"]*y*w-bows["BC"]*x*y)
-            Eg_Ge=(w*dA_Ge["band_gap"]+x*dB_Ge["band_gap"]+y*dC_Ge["band_gap"]
-                   -bows["AB"]*x*w-bows["AC"]*y*w-bows["BC"]*x*y)
-            Eg=(1-z)*Eg_Sn+z*Eg_Ge
-            # hull
-            Eh_Sn=(w*dA["energy_above_hull"]+x*dB["energy_above_hull"]+y*dC["energy_above_hull"]) 
-            Eh_Ge=(w*dA_Ge["energy_above_hull"]+x*dB_Ge["energy_above_hull"]+y*dC_Ge["energy_above_hull"]) 
-            Eh=(1-z)*Eh_Sn+z*Eh_Ge
-            # oxidation
-            dEox=w*oxA+x*oxB+y*oxC
-            sbg=_score_band_gap(Eg,lo,hi,center,sigma)
-            raw=(sbg*math.exp(-Eh/0.0518)*math.exp(dEox/K_T_EFF))
-            rows.append({"x":round(x,3),"y":round(y,3),"z":round(z,2),"Eg":round(Eg,3),"Ehull":round(Eh,4),"Eox":round(dEox,3),"raw":raw,"formula":f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}"})
-    if not rows: return pd.DataFrame()
-    m=max(r["raw"] for r in rows) or 1.0
-    for r in rows: r["score"]=round(r.pop("raw")/m,3)
-    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
