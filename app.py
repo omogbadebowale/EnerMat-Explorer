@@ -1,7 +1,3 @@
----
-
-***File: app.py***
-```python
 import datetime, io
 
 import streamlit as st
