@@ -1,4 +1,4 @@
-# backend/perovskite_utils.py  
+# backend/perovskite_utils.py
 # EnerMat utilities  v9.6  (2025-07-15, Ge-ready + stability penalties)
 
 from __future__ import annotations
@@ -75,10 +75,6 @@ def _score_band_gap(
     center: float | None,
     sigma: float | None
 ) -> float:
-    """
-    If center/sigma provided, apply Gaussian weighting within [lo,hi],
-    else flat 1 in [lo,hi], 0 outside.
-    """
     if Eg < lo or Eg > hi:
         return 0.0
     if center is None or sigma is None:
@@ -169,13 +165,77 @@ def mix_abx3(
         Eg   = (1-z)*Eg_Sn   + z*Eg_Ge
         Eh   = (1-z)*Eh_Sn   + z*Eh_Ge
         dEox = (1-z)*dEox_Sn + z*dEox_Ge
-        # configurational entropy
+        # entropy penalty
         if 0<x<1:
             S_conf = -k_B*T_REF*(x*math.log(x)+(1-x)*math.log(1-x))
         else:
             S_conf = 0.0
-        Eh_eff = Eh + S_conf
-        # water adsorption
+        # stability penalties
         E_ads = (1-x)*WATER_ADSORPTION.get(A,0.0) + x*WATER_ADSORPTION.get(B,0.0)
-        # surface energy
-        gamma_eff = (1-x)*SURFACE_ENERGY.get(A,0.0) + x*SURFACE_EN
+        gamma_eff = (1-x)*SURFACE_ENERGY.get(A,0.0) + x*SURFACE_ENERGY.get(B,0.0)
+        Eh_eff = Eh + S_conf + E_ads + gamma_eff
+        # score
+        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+        raw = (
+            sbg
+            * math.exp(-Eh_eff/(alpha*0.0259))
+            * math.exp(dEox/K_T_EFF)
+            * math.exp(-beta*abs((rA+rX)/(math.sqrt(2)*(rB+rX)) - 0.95))
+        )
+        rows.append({
+            "x": round(x,3), "z": round(z,2),
+            "Eg": round(Eg,3), "Ehull": round(Eh_eff,4),
+            "Eox": round(dEox,3), "raw": raw,
+            "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
+        })
+    if not rows: return pd.DataFrame()
+    m = max(r["raw"] for r in rows) or 1.0
+    for r in rows: r["score"] = round(r.pop("raw")/m,3)
+    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
+
+# ───────────────────── ternary screen ──────────────────────
+def screen_ternary(
+    A:str,B:str,C:str,rh:float,temp:float,
+    bg:tuple[float,float],bows:dict[str,float],
+    *,dx:float=0.10,dy:float=0.10,z:float=0.0,application:str|None=None
+) -> pd.DataFrame:
+    lo,hi = bg; center=sigma=None
+    if application in APPLICATION_CONFIG:
+        cfg=APPLICATION_CONFIG[application]
+        lo,hi=cfg["range"]; center,sigma=cfg["center"],cfg["sigma"]
+    dA=fetch_mp_data(A,["band_gap","energy_above_hull"])
+    dB=fetch_mp_data(B,["band_gap","energy_above_hull"])
+    dC=fetch_mp_data(C,["band_gap","energy_above_hull"])
+    if not (dA and dB and dC): return pd.DataFrame()
+    # optional Ge branch
+    if z>0:
+        A_Ge=A.replace("Sn","Ge"); B_Ge=B.replace("Sn","Ge"); C_Ge=C.replace("Sn","Ge")
+        dA_Ge=fetch_mp_data(A_Ge,["band_gap","energy_above_hull"]) or dA
+        dB_Ge=fetch_mp_data(B_Ge,["band_gap","energy_above_hull"]) or dB
+        dC_Ge=fetch_mp_data(C_Ge,["band_gap","energy_above_hull"]) or dC
+    else:
+        dA_Ge,dB_Ge,dC_Ge=dA,dB,dC
+    oxA,oxB,oxC=(oxidation_energy(f) for f in (A,B,C))
+    rows=[]
+    for x in np.arange(0.0,1.0+1e-9,dx):
+        for y in np.arange(0.0,1.0-x+1e-9,dy):
+            w=1.0-x-y
+            # Sn band-gap
+            Eg_Sn=(w*dA["band_gap"]+x*dB["band_gap"]+y*dC["band_gap"]
+                   -bows["AB"]*x*w-bows["AC"]*y*w-bows["BC"]*x*y)
+            Eg_Ge=(w*dA_Ge["band_gap"]+x*dB_Ge["band_gap"]+y*dC_Ge["band_gap"]
+                   -bows["AB"]*x*w-bows["AC"]*y*w-bows["BC"]*x*y)
+            Eg=(1-z)*Eg_Sn+z*Eg_Ge
+            # hull
+            Eh_Sn=(w*dA["energy_above_hull"]+x*dB["energy_above_hull"]+y*dC["energy_above_hull"]) 
+            Eh_Ge=(w*dA_Ge["energy_above_hull"]+x*dB_Ge["energy_above_hull"]+y*dC_Ge["energy_above_hull"]) 
+            Eh=(1-z)*Eh_Sn+z*Eh_Ge
+            # oxidation
+            dEox=w*oxA+x*oxB+y*oxC
+            sbg=_score_band_gap(Eg,lo,hi,center,sigma)
+            raw=(sbg*math.exp(-Eh/0.0518)*math.exp(dEox/K_T_EFF))
+            rows.append({"x":round(x,3),"y":round(y,3),"z":round(z,2),"Eg":round(Eg,3),"Ehull":round(Eh,4),"Eox":round(dEox,3),"raw":raw,"formula":f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}"})
+    if not rows: return pd.DataFrame()
+    m=max(r["raw"] for r in rows) or 1.0
+    for r in rows: r["score"]=round(r.pop("raw")/m,3)
+    return pd.DataFrame(rows).sort_values("score",ascending=False).reset_index(drop=True)
