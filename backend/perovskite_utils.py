@@ -1,6 +1,6 @@
 # backend/perovskite_utils.py  
 # EnerMat utilities  v9.6  (2025-07-17, Ge-ready + PCE)
-
+from backend.sq import sq_efficiency
 from __future__ import annotations
 import math, os
 from functools import lru_cache
