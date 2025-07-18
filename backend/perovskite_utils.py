@@ -31,7 +31,7 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbBr3", "CsPbCl3", "CsPbI3"]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3"]
 
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.79,
@@ -39,13 +39,10 @@ CALIBRATED_GAPS = {
     "CsSnI3":  1.00,
     "CsGeBr3": 2.20,
     "CsGeCl3": 3.30,
-    "CsPbBr3": 1.60,  # Default values for Pb-based materials
-    "CsPbCl3": 2.10,  # Default values for Pb-based materials
-    "CsPbI3":  1.30,  # Default values for Pb-based materials
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10}
-IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73, "Pb": 1.31, 
+IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
                "I": 2.20, "Br": 1.96, "Cl": 1.81}
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
@@ -75,7 +72,6 @@ def fetch_mp_data(formula: str, fields: list[str]):
     out = {f: getattr(ent, f, None) for f in fields}
 
     if "band_gap" in fields:
-        # Check for Pb-based materials and use the calibrated gaps if not found
         if formula in CALIBRATED_GAPS:
             out["band_gap"] = CALIBRATED_GAPS[formula]
         else:
@@ -213,3 +209,94 @@ def mix_abx3(
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
+
+# ─────────── ternary screen ───────────
+def screen_ternary(
+    A: str,
+    B: str,
+    C: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bows: dict[str, float],
+    *,
+    dx: float = 0.10,
+    dy: float = 0.10,
+    z: float = 0.0,
+    application: str | None = None,
+) -> pd.DataFrame:
+    lo, hi = bg
+    center = sigma = None
+    if application in APPLICATION_CONFIG:
+        cfg = APPLICATION_CONFIG[application]
+        lo, hi = cfg["range"]
+        center, sigma = cfg["center"], cfg["sigma"]
+
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
+    if not (dA and dB and dC):
+        return pd.DataFrame()
+
+    # Ge-branch setup
+    if z > 0:
+        A_Ge = A.replace("Sn", "Ge")
+        B_Ge = B.replace("Sn", "Ge")
+        C_Ge = C.replace("Sn", "Ge")
+        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
+        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
+        dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
+    else:
+        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC
+
+    oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
+            w = 1.0 - x - y
+            # Sn gap
+            Eg_Sn = (
+                w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
+                - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
+            )
+            # Ge gap
+            Eg_Ge = (
+                w * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] + y * dC_Ge["band_gap"]
+                - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
+            )
+            Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
+
+            Eh_Sn = (
+                w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+            )
+            Eh_Ge = (
+                w * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"] + y * dC_Ge["energy_above_hull"]
+            )
+            Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
+
+            dEox = w * oxA + x * oxB + y * oxC
+            sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+            raw = sbg * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
+
+            # Shockley–Queisser PCE limit
+            pce = sq_efficiency(Eg)
+
+            rows.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "z": round(z, 2),
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
+                "Eox": round(dEox, 3),
+                "PCE_max (%)": round(pce * 100, 1),
+                "raw": raw,
+                "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
+            })
+
+    if not rows:
+        return pd.DataFrame()
+    m = max(r["raw"] for r in rows) or 1.0
+    for r in rows:
+        r["score"] = round(r.pop("raw") / m, 3)
+
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
