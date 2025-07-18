@@ -31,7 +31,7 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3"]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3"]
 
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.79,
