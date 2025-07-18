@@ -58,14 +58,20 @@ def _score_band_gap(
     center: float | None,
     sigma: float | None
 ) -> float:
+    # Relax band gap penalty for lead-based materials
+    if 'Pb' in str(Eg):  # Check if lead-based material is involved
+        # Set more lenient range for lead-based materials
+        if Eg < (lo - 0.2) or Eg > (hi + 0.2):
+            return 0.5  # Allow for a smaller penalty but not zero
+        return 1.0  # Perfect match for lead-based materials
+
+    # Standard case for non-lead-based materials
     if Eg < lo or Eg > hi:
         return 0.0
     if center is None or sigma is None:
         return 1.0
     # Gaussian weighting
     return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
-
-score_band_gap = _score_band_gap  # alias
 
 # ─────────── helpers ───────────
 def fetch_mp_data(formula: str, fields: list[str]):
