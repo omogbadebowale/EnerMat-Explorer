@@ -42,7 +42,6 @@ CALIBRATED_GAPS = {
     "CsPbI3": 1.73,
     "CsPbBr3": 2.30,
     "CsPbCl3": 2.32,
-
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10, "Pb": 1.31, }
