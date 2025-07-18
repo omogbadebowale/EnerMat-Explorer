@@ -39,7 +39,7 @@ CALIBRATED_GAPS = {
     "CsSnI3":  1.00,
     "CsGeBr3": 2.20,
     "CsGeCl3": 3.30,
-    "CsPbI3": 1.46,
+    "CsPbI3": 1.73,
     "CsPbBr3": 2.30,
     "CsPbCl3": 2.32,
 
