@@ -56,7 +56,7 @@ CALIBRATED_GAPS = {
     "CsNiCl3": 2.75,  # Example value for Nickel doping, check literature
     "CsZnBr3": 2.50,  # Example value for Zinc doping, check literature
     "CsZnCl3": 2.55,  # Example value for Zinc doping, check literature
-    "Si": 1.1: 0.00,
+    "Si": 1.1,
 }
 
 GAP_OFFSET = {
@@ -71,6 +71,7 @@ GAP_OFFSET = {
     "Ba": 0.80,   # Barium-specific offset (check literature)
     "Ni": 0.85,   # Nickel-specific offset (check literature)
     "Zn": 0.90,   # Zinc-specific offset (check literature)
+    "Si": 0.00,
 }
 
 IONIC_RADII = {
