@@ -1,7 +1,8 @@
-from __future__ import annotations
+from __future__ import annotations 
 import math
 import os
 from functools import lru_cache
+
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -44,7 +45,8 @@ CALIBRATED_GAPS = {
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10, "Pb": 1.31, }
-IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73, "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
+IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
+               "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
@@ -100,148 +102,6 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
-
-# ─────────── doping integration ───────────
-def apply_doping(A: str, doping_element: str, z: float) -> str:
-    if doping_element == "Ge":
-        return A.replace("Sn", "Ge") if "Sn" in A else A
-    elif doping_element == "Sb":
-        return A.replace("Sn", "Sb") if "Sn" in A else A
-    elif doping_element == "Cu":
-        return A.replace("Sn", "Cu") if "Sn" in A else A
-    elif doping_element == "Mg":
-        return A.replace("Sn", "Mg") if "Sn" in A else A
-    elif doping_element == "Ca":
-        return A.replace("Sn", "Ca") if "Sn" in A else A
-    elif doping_element == "Ba":
-        return A.replace("Sn", "Ba") if "Sn" in A else A
-    elif doping_element == "Ni":
-        return A.replace("Sn", "Ni") if "Sn" in A else A
-    elif doping_element == "Zn":
-        return A.replace("Sn", "Zn") if "Sn" in A else A
-    else:
-        return A  # no doping applied
-
-# ─────────── binary screen ───────────
-def screen_binary(
-    A: str,
-    B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bow: float,
-    dx: float,
-    *,
-    z: float = 0.0,
-    doping_element: str = "None",
-    application: str | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
-
-    # Apply doping
-    A_doped = apply_doping(A, doping_element, z)
-    B_doped = apply_doping(B, doping_element, z)
-
-    return mix_abx3(A_doped, B_doped, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma)
-
-def mix_abx3(
-    A: str,
-    B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bow: float,
-    dx: float,
-    *,
-    z: float = 0.0,
-    alpha: float = 1.0,
-    beta: float = 1.0,
-    doping_element: str = "None",
-    center: float | None = None,
-    sigma: float | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    A_doped = apply_doping(A, doping_element, z)
-    B_doped = apply_doping(B, doping_element, z)
-
-    dA = fetch_mp_data(A_doped, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B_doped, ["band_gap", "energy_above_hull"])
-    
-    if not (dA and dB):
-        return pd.DataFrame(), "No valid results found for the selected combination."
-
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Continue existing logic here...
-        pass
-
-    return pd.DataFrame(rows), "Results processed successfully."
-
-
-# ─────────── ternary screen ───────────
-def screen_ternary(
-    A: str,
-    B: str,
-    C: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    *,
-    dx: float = 0.10,
-    dy: float = 0.10,
-    z: float = 0.0,
-    doping_element: str = "None",
-    application: str | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
-
-    # Apply doping
-    A_doped = apply_doping(A, doping_element, z)
-    B_doped = apply_doping(B, doping_element, z)
-    C_doped = apply_doping(C, doping_element, z)
-
-    dA = fetch_mp_data(A_doped, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B_doped, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C_doped, ["band_gap", "energy_above_hull"])
-
-    if not (dA and dB and dC):
-        return pd.DataFrame(), "No valid results found for the selected combination."
-
-    oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
-            # Continue ternary logic...
-            pass
-
-    return pd.DataFrame(rows), "Results processed successfully."
-# ─────────── helpers ───────────
-def fetch_mp_data(formula: str, fields: list[str]):
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
-    if not docs:
-        return None
-    ent = docs[0]
-    out = {f: getattr(ent, f, None) for f in fields}
-
-    if "band_gap" in fields:
-        if formula in CALIBRATED_GAPS:
-            out["band_gap"] = CALIBRATED_GAPS[formula]
-        else:
-            hal = next(h for h in ("I", "Br", "Cl") if h in formula)
-            out["band_gap"] = (out.get("band_gap", 0.0) or 0.0) + GAP_OFFSET[hal]
-    return out
 
 # ─────────── binary screen ───────────
 def screen_binary(
@@ -353,4 +213,3 @@ def mix_abx3(
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
-
