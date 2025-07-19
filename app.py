@@ -125,10 +125,11 @@ elif not st.session_state.history:
     st.stop()
 
 # ─────────── DISPLAY RESULTS ───────────
+# ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
 
 with tab_tbl:
     st.dataframe(df, use_container_width=True, height=440)
@@ -139,56 +140,25 @@ with tab_plot:
         fig.add_trace(go.Scatter(
             x=df["Ehull"], y=df["Eg"], mode="markers",
             marker=dict(
-                size=8 + 12 * df["score"], color=df["score"],
-                colorscale="Viridis", cmin=0, cmax=1,  # You can change "Viridis" to "Cividis", "Plasma", or "Inferno"
-                colorbar=dict(title="Score", tickvals=[0, 0.25, 0.5, 0.75, 1], ticks="outside"),
-                line=dict(width=1)
+                size=10 + 10 * df["score"], color=df["score"],
+                colorscale="Viridis", cmin=0, cmax=1,
+                colorbar=dict(title="Score", tickvals=[0, 0.5, 1], ticktext=["Low", "Medium", "High"])
             ),
             hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
             customdata=df.to_numpy()
         ))
-        fig.add_shape(
-            type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-            line=dict(color="LightSeaGreen", dash="dash"),
-            fillcolor="LightSeaGreen", opacity=0.1
-        )
         fig.update_layout(
-            title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)",
-            template="simple_white", font_size=16, height=500,
-            margin=dict(t=50, b=50, l=50, r=50),  # Adjust margins to prevent clipping
-            plot_bgcolor='white',  # Clean white background
-            showlegend=True,
-            legend=dict(
-                x=1, y=0.5,   # Positioning legend closer to plot
-                xanchor='left', yanchor='middle',  # Anchor legend position
-                title="Score", font=dict(size=12),  # Font size for the legend
-                traceorder="normal",  # Optional: Order of trace items
-                bgcolor="rgba(255, 255, 255, 0.6)",  # Background color for legend for better visibility
-                bordercolor="Black", borderwidth=1  # Optional: border around the legend
-            )
+            title="EnerMat Binary Screen",
+            xaxis_title="Ehull (eV/atom)",
+            yaxis_title="Eg (eV)",
+            template="plotly_dark",  # You can choose a different template, like "plotly", "ggplot2", etc.
+            font_size=14,
+            height=500,
+            margin=dict(t=20, r=20, b=20, l=20),  # Adjust margins to make the plot less crowded
+            coloraxis_showscale=True
         )
-        fig.update_xaxes(tickfont=dict(size=14))  # Larger tick font
-        fig.update_yaxes(tickfont=dict(size=14))  # Larger tick font
         st.plotly_chart(fig, use_container_width=True)
-
-    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
-        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
-                            color_continuous_scale="Viridis",  # You can change the scale here too
-                            labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
-        fig.update_layout(
-            title="EnerMat Ternary Screen", margin=dict(t=50, b=50, l=50, r=50),
-            font_size=16, plot_bgcolor='white',
-            showlegend=True,
-            legend=dict(
-                x=1, y=0.5,
-                xanchor='left', yanchor='middle',
-                title="Score", font=dict(size=12),
-                traceorder="normal", bgcolor="rgba(255, 255, 255, 0.6)",
-                bordercolor="Black", borderwidth=1
-            )
-        )
-        fig.update_traces(marker=dict(size=6, line=dict(width=1)))  # Sharp markers
-        st.plotly_chart(fig, use_container_width=True)
+    # Add other conditions here if you are plotting ternary plots or other visualizations
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
