@@ -89,7 +89,6 @@ def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
 # ─────────── RUNNING SCREEN ───────────
-# ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
