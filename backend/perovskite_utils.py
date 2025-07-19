@@ -227,3 +227,130 @@ def screen_ternary(
             pass
 
     return pd.DataFrame(rows), "Results processed successfully."
+# ─────────── helpers ───────────
+def fetch_mp_data(formula: str, fields: list[str]):
+    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
+    if not docs:
+        return None
+    ent = docs[0]
+    out = {f: getattr(ent, f, None) for f in fields}
+
+    if "band_gap" in fields:
+        if formula in CALIBRATED_GAPS:
+            out["band_gap"] = CALIBRATED_GAPS[formula]
+        else:
+            hal = next(h for h in ("I", "Br", "Cl") if h in formula)
+            out["band_gap"] = (out.get("band_gap", 0.0) or 0.0) + GAP_OFFSET[hal]
+    return out
+
+# ─────────── binary screen ───────────
+def screen_binary(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    doping_element: str = "Ge",  # Add doping element as argument
+    application: str | None = None,
+) -> pd.DataFrame:
+    lo, hi = bg
+    center = sigma = None
+    if application in APPLICATION_CONFIG:
+        cfg = APPLICATION_CONFIG[application]
+        lo, hi = cfg["range"]
+        center, sigma = cfg["center"], cfg["sigma"]
+
+    return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
+                    z=z, doping_element=doping_element, center=center, sigma=sigma)
+
+def mix_abx3(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    doping_element: str = "Ge",  # Add doping element as argument
+    alpha: float = 1.0,
+    beta: float = 1.0,
+    center: float | None = None,
+    sigma: float | None = None,
+) -> pd.DataFrame:
+    lo, hi = bg
+    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
+    if not (dA and dB):
+        return pd.DataFrame()
+
+    # Handle doping element (adjust composition based on doping element)
+    if doping_element == "Ge":
+        A_Doping = A.replace("Sn", "Ge")
+        B_Doping = B.replace("Sn", "Ge")
+    else:
+        A_Doping = A
+        B_Doping = B
+
+    dA_Doping = fetch_mp_data(A_Doping, ["band_gap", "energy_above_hull"]) or dA
+    dB_Doping = fetch_mp_data(B_Doping, ["band_gap", "energy_above_hull"]) or dB
+
+    oxA_Doping = oxidation_energy(A_Doping)
+    oxB_Doping = oxidation_energy(B_Doping)
+
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        # Sn branch
+        Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
+        Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        dEox_Sn = (1 - x) * oxA + x * oxB
+
+        # Doping element branch (like Ge, Sb, etc.)
+        Eg_Doping = (1 - x) * dA_Doping["band_gap"] + x * dB_Doping["band_gap"] - bow * x * (1 - x)
+        Eh_Doping = (1 - x) * dA_Doping["energy_above_hull"] + x * dB_Doping["energy_above_hull"]
+        dEox_Doping = (1 - x) * oxA_Doping + x * oxB_Doping
+
+        # Interpolate based on doping element
+        Eg = (1.0 - z) * Eg_Sn + z * Eg_Doping
+        Eh = (1.0 - z) * Eh_Sn + z * Eh_Doping
+        dEox = (1.0 - z) * dEox_Sn + z * dEox_Doping
+
+        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+        raw = (
+            sbg
+            * math.exp(-Eh / (alpha * 0.0259))
+            * math.exp(dEox / K_T_EFF)
+            * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
+        )
+
+        # Shockley–Queisser PCE limit
+        pce = sq_efficiency(Eg)
+
+        rows.append({
+            "x":           round(x, 3),
+            "z":           round(z, 2),
+            "Eg":          round(Eg, 3),
+            "Ehull":       round(Eh, 4),
+            "Eox":         round(dEox, 3),
+            "raw":         raw,
+            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
+            "PCE_max (%)": round(pce * 100, 1),
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    m = max(r["raw"] for r in rows) or 1.0
+    for r in rows:
+        r["score"] = round(r.pop("raw") / m, 3)
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
+
