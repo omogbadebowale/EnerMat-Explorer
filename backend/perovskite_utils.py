@@ -73,19 +73,22 @@ GAP_OFFSET = {
 }
 
 IONIC_RADII = {
-    "Cs": 1.88,  # Cesium ionic radius (common value)
-    "Sn": 1.18,  # Tin ionic radius (standard for Sn2+)
-    "Ge": 0.73,  # Germanium ionic radius (standard for Ge2+)
-    "Pb": 1.31,  # Lead ionic radius (standard for Pb2+)
-    "Sb": 0.76,  # Antimony ionic radius (approximate)
-    "Cu": 0.60,  # Copper ionic radius (approximate for Cu2+)
-    "Mg": 0.72,  # Magnesium ionic radius (approximate for Mg2+)
-    "Ca": 1.00,  # Calcium ionic radius (approximate for Ca2+)
-    "Ba": 1.35,  # Barium ionic radius (approximate for Ba2+)
-    "Ni": 0.69,  # Nickel ionic radius (approximate for Ni2+)
-    "Zn": 0.74,  # Zinc ionic radius (approximate for Zn2+)
+    IONIC_RADII = {
+    "Cs": 1.88,
+    "Sn": 1.18,
+    "Ge": 0.73,
+    "I": 2.20,  # Iodine Ion radius
+    "Br": 1.96,
+    "Cl": 1.81,
+    "Pb": 1.31,
+    "Sb": 0.76,  # If Sb is used in calculations
+    "Cu": 0.77,  # If Cu is used in calculations
+    "Mg": 0.72,  # If Mg is used in calculations
+    "Ca": 0.99,  # If Ca is used in calculations
+    "Ba": 1.61,  # If Ba is used in calculations
+    "Ni": 0.69,  # If Ni is used in calculations
+    "Zn": 0.74   # If Zn is used in calculations
 }
-
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
