@@ -89,6 +89,7 @@ def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
 # ─────────── RUNNING SCREEN ───────────
+# ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
@@ -124,7 +125,7 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────── DISPLAY RESULTS ───────────
+
 # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
@@ -135,33 +136,32 @@ with tab_tbl:
     st.dataframe(df, use_container_width=True, height=440)
 
 with tab_plot:
-    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
+    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df["Ehull"], y=df["Eg"], mode="markers",
             marker=dict(
-                size=10 + 10 * df["score"], color=df["score"],
+                size=8+12*df["score"], color=df["score"],
                 colorscale="Viridis", cmin=0, cmax=1,
-                colorbar=dict(title="Score", tickvals=[0, 0.5, 1], ticktext=["Low", "Medium", "High"])
+                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
             ),
             hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
             customdata=df.to_numpy()
         ))
-        fig.update_layout(
-            title="EnerMat Binary Screen",
-            xaxis_title="Ehull (eV/atom)",
-            yaxis_title="Eg (eV)",
-            template="plotly_dark",  # You can choose a different template, like "plotly", "ggplot2", etc.
-            font_size=14,
-            height=500,
-            margin=dict(t=20, r=20, b=20, l=20),  # Adjust margins to make the plot less crowded
-            coloraxis_showscale=True
-        )
+        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+                      line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
+        fig.update_layout(title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)", template="simple_white", font_size=14, height=500)
         st.plotly_chart(fig, use_container_width=True)
-    # Add other conditions here if you are plotting ternary plots or other visualizations
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",
+                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
@@ -206,3 +206,4 @@ buf.seek(0)
 st.download_button("📝 Download DOCX", buf,
                    "EnerMat_report.docx",
                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+# ─────────────────────────────────────────────────────────────────────────────
