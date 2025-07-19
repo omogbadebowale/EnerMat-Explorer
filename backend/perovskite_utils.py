@@ -106,6 +106,7 @@ def oxidation_energy(formula_sn2: str) -> float:
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
 # ─────────── binary screen ───────────
+# ─────────── Binary mixture (AB) ───────────
 def screen_binary(
     A: str,
     B: str,
@@ -149,7 +150,7 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
-    # optional Ge branch (binary)
+    # Ge branch (binary)
     if z > 0:
         A_Ge = A.replace("Sn", "Ge")
         B_Ge = B.replace("Sn", "Ge")
@@ -214,7 +215,6 @@ def mix_abx3(
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
-
 # ─────────── ternary screen ───────────
 def screen_ternary(
     A: str,
