@@ -107,28 +107,6 @@ def oxidation_energy(formula_sn2: str) -> float:
 
 # ─────────── binary screen ───────────
 # ─────────── Binary mixture (AB) ───────────
-def screen_binary(
-    A: str,
-    B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bow: float,
-    dx: float,
-    *,
-    z: float = 0.0,
-    application: str | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
-
-    return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma)
-
 def mix_abx3(
     A: str,
     B: str,
@@ -162,24 +140,36 @@ def mix_abx3(
         dA_Ge, dB_Ge = dA, dB
         oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
 
-    hal = next(h for h in ("I", "Br", "Cl") if h in A)
-    rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
-    oxA, oxB = oxidation_energy(A), oxidation_energy(B)
+    # Check for halogen presence in A (and skip if not found)
+    hal = None
+    for h in ("I", "Br", "Cl"):
+        if h in A:
+            hal = h
+            break
+
+    if not hal:
+        # Handle cases without halogen (e.g., Si-based materials)
+        rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", "I"))  # Default to Iodine (or another element)
+        oxA, oxB = oxidation_energy(A), oxidation_energy(B)
+    else:
+        # For halogen-containing compounds
+        rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
+        oxA, oxB = oxidation_energy(A), oxidation_energy(B)
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         # Sn branch
-        Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
-        Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        Eg_Sn = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
+        Eh_Sn = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
         dEox_Sn = (1 - x) * oxA + x * oxB
         # Ge branch
-        Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
-        Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
+        Eg_Ge = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
+        Eh_Ge = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
         dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
 
         # interpolate
-        Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
-        Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
+        Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
+        Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
         dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
 
         sbg = _score_band_gap(Eg, lo, hi, center, sigma)
@@ -215,6 +205,7 @@ def mix_abx3(
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
+
 # ─────────── ternary screen ───────────
 def screen_ternary(
     A: str,
