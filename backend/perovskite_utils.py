@@ -195,6 +195,7 @@ def screen_ternary(
     dy: float = 0.10,
     z: float = 0.0,
     application: str | None = None,
+    doping_element: str = "Ge",  # Added doping element here
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
@@ -209,16 +210,11 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # Ge-branch setup
-    if z > 0:
-        A_Ge = A.replace("Sn", "Ge")
-        B_Ge = B.replace("Sn", "Ge")
-        C_Ge = C.replace("Sn", "Ge")
-        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
-        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
-        dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
-    else:
-        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC
+    # Apply doping element logic if z > 0
+    if doping_element != "Ge":
+        A = A.replace("Sn", doping_element)
+        B = B.replace("Sn", doping_element)
+        C = C.replace("Sn", doping_element)
 
     oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
     rows: list[dict] = []
@@ -232,7 +228,7 @@ def screen_ternary(
             )
             # Ge gap
             Eg_Ge = (
-                w * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] + y * dC_Ge["band_gap"]
+                w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
                 - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
             )
             Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
@@ -241,7 +237,7 @@ def screen_ternary(
                 w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
             )
             Eh_Ge = (
-                w * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"] + y * dC_Ge["energy_above_hull"]
+                w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
             )
             Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
 
@@ -271,3 +267,4 @@ def screen_ternary(
         r["score"] = round(r.pop("raw") / m, 3)
 
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+
