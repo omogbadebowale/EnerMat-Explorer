@@ -95,6 +95,7 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
+
 # ─────────── binary screen ───────────
 def screen_binary(
     A: str,
