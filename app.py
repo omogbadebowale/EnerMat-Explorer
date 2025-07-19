@@ -89,6 +89,7 @@ def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
 # ─────────── RUNNING SCREEN ───────────
+# ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
@@ -107,6 +108,7 @@ elif do_run:
             st.stop()
 
     if mode.startswith("Binary"):
+        # Pass doping_element to _run_binary
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
             z=z, application=application, doping_element=doping_element
@@ -122,6 +124,7 @@ elif do_run:
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
+
 
 # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
