@@ -73,7 +73,6 @@ GAP_OFFSET = {
 }
 
 IONIC_RADII = {
-    IONIC_RADII = {
     "Cs": 1.88,
     "Sn": 1.18,
     "Ge": 0.73,
@@ -89,6 +88,7 @@ IONIC_RADII = {
     "Ni": 0.69,  # If Ni is used in calculations
     "Zn": 0.74   # If Zn is used in calculations
 }
+
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
