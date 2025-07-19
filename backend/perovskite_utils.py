@@ -56,7 +56,7 @@ CALIBRATED_GAPS = {
     "CsNiCl3": 2.75,  # Example value for Nickel doping, check literature
     "CsZnBr3": 2.50,  # Example value for Zinc doping, check literature
     "CsZnCl3": 2.55,  # Example value for Zinc doping, check literature
-    "Si": 1.1,
+    "Si": 1.1: 0.00,
 }
 
 GAP_OFFSET = {
