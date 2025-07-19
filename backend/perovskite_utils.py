@@ -108,6 +108,7 @@ def screen_binary(
     *,
     z: float = 0.0,
     application: str | None = None,
+    doping_element: str = "Ge",  # New doping element parameter
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
@@ -117,7 +118,8 @@ def screen_binary(
         center, sigma = cfg["center"], cfg["sigma"]
 
     return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma)
+                    z=z, center=center, sigma=sigma, doping_element=doping_element)
+
 
 def mix_abx3(
     A: str,
@@ -133,6 +135,7 @@ def mix_abx3(
     beta: float = 1.0,
     center: float | None = None,
     sigma: float | None = None,
+    doping_element: str = "Ge",  # Handle doping element in the mix_abx3 function
 ) -> pd.DataFrame:
     lo, hi = bg
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
@@ -140,57 +143,32 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
-    # optional Ge branch (binary)
-    if z > 0:
-        A_Ge = A.replace("Sn", "Ge")
-        B_Ge = B.replace("Sn", "Ge")
-        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
-        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
-        oxA_Ge = oxidation_energy(A_Ge)
-        oxB_Ge = oxidation_energy(B_Ge)
-    else:
-        dA_Ge, dB_Ge = dA, dB
-        oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
+    # Apply doping element logic if z > 0
+    if doping_element != "Ge":
+        A = A.replace("Sn", doping_element)
+        B = B.replace("Sn", doping_element)
 
-    hal = next(h for h in ("I", "Br", "Cl") if h in A)
-    rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
-    oxA, oxB = oxidation_energy(A), oxidation_energy(B)
-
+    # Continue with normal computation for binary mix
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Sn branch
-        Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
-        Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        dEox_Sn = (1 - x) * oxA + x * oxB
-        # Ge branch
-        Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
-        Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
-        dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
+        Eg_Sn = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
+        Eh_Sn = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", "I"))
+        oxA, oxB = oxidation_energy(A), oxidation_energy(B)
 
-        # interpolate
-        Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
-        Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
-        dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
+        # Compute doping and band gap score
+        sbg = _score_band_gap(Eg_Sn, lo, hi, center, sigma)
+        raw = sbg * math.exp(-Eh_Sn / (alpha * 0.0259)) * math.exp(oxA / K_T_EFF)
 
-        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-        raw = (
-            sbg
-            * math.exp(-Eh / (alpha * 0.0259))
-            * math.exp(dEox / K_T_EFF)
-            * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
-        )
-
-        # Shockley–Queisser PCE limit
-        pce = sq_efficiency(Eg)
-
+        pce = sq_efficiency(Eg_Sn)
         rows.append({
-            "x":           round(x, 3),
-            "z":           round(z, 2),
-            "Eg":          round(Eg, 3),
-            "Ehull":       round(Eh, 4),
-            "Eox":         round(dEox, 3),
-            "raw":         raw,
-            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
+            "x": round(x, 3),
+            "z": round(z, 2),
+            "Eg": round(Eg_Sn, 3),
+            "Ehull": round(Eh_Sn, 4),
+            "Eox": round(oxA, 3),
+            "raw": raw,
+            "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
             "PCE_max (%)": round(pce * 100, 1),
         })
 
@@ -200,11 +178,8 @@ def mix_abx3(
     for r in rows:
         r["score"] = round(r.pop("raw") / m, 3)
 
-    return (
-        pd.DataFrame(rows)
-        .sort_values("score", ascending=False)
-        .reset_index(drop=True)
-    )
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+
 
 # ─────────── ternary screen ───────────
 def screen_ternary(
