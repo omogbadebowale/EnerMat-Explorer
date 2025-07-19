@@ -30,10 +30,11 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3"]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3", "CsSbBr3", "CsSbCl3", "CsCuBr3", "CsCuCl3", "CsMgBr3", "CsMgCl3"
+              "CsCaBr3", "CsCaCl3", "CsBaBr3", "CsBaCl3", "CsNiBr3", "CsNiCl3", "CsZnBr3", "CsZnCl3"]
 
 CALIBRATED_GAPS = {
-    "CsSnBr3": 1.30,
+     "CsSnBr3": 1.30,
     "CsSnCl3": 2.40,
     "CsSnI3": 1.00,
     "CsGeBr3": 2.20,
@@ -41,10 +42,50 @@ CALIBRATED_GAPS = {
     "CsPbI3": 1.73,
     "CsPbBr3": 2.30,
     "CsPbCl3": 2.32,
+    "CsSbBr3": 2.05,  # Example value for Antimony doping, check literature
+    "CsSbCl3": 2.15,  # Example value for Antimony doping, check literature
+    "CsCuBr3": 2.40,  # Example value for Copper doping, check literature
+    "CsCuCl3": 2.45,  # Example value for Copper doping, check literature
+    "CsMgBr3": 2.55,  # Example value for Magnesium doping, check literature
+    "CsMgCl3": 2.60,  # Example value for Magnesium doping, check literature
+    "CsCaBr3": 2.50,  # Example value for Calcium doping, check literature
+    "CsCaCl3": 2.55,  # Example value for Calcium doping, check literature
+    "CsBaBr3": 2.45,  # Example value for Barium doping, check literature
+    "CsBaCl3": 2.50,  # Example value for Barium doping, check literature
+    "CsNiBr3": 2.70,  # Example value for Nickel doping, check literature
+    "CsNiCl3": 2.75,  # Example value for Nickel doping, check literature
+    "CsZnBr3": 2.50,  # Example value for Zinc doping, check literature
+    "CsZnCl3": 2.55,  # Example value for Zinc doping, check literature
 }
 
-GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10, "Pb": 1.31}
-IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73, "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31}
+GAP_OFFSET = {
+    "I": +0.52,   # Iodine offset, typically consistent
+    "Br": +0.88,  # Bromine offset, typically consistent
+    "Cl": +1.10,  # Chlorine offset, typically consistent
+    "Pb": 1.31,   # Lead-specific offset (perovskites involving Pb)
+    "Sb": 0.60,   # Antimony-specific offset (check literature)
+    "Cu": 0.65,   # Copper-specific offset (check literature)
+    "Mg": 0.70,   # Magnesium-specific offset (check literature)
+    "Ca": 0.75,   # Calcium-specific offset (check literature)
+    "Ba": 0.80,   # Barium-specific offset (check literature)
+    "Ni": 0.85,   # Nickel-specific offset (check literature)
+    "Zn": 0.90,   # Zinc-specific offset (check literature)
+}
+
+IONIC_RADII = {
+    "Cs": 1.88,  # Cesium ionic radius (common value)
+    "Sn": 1.18,  # Tin ionic radius (standard for Sn2+)
+    "Ge": 0.73,  # Germanium ionic radius (standard for Ge2+)
+    "Pb": 1.31,  # Lead ionic radius (standard for Pb2+)
+    "Sb": 0.76,  # Antimony ionic radius (approximate)
+    "Cu": 0.60,  # Copper ionic radius (approximate for Cu2+)
+    "Mg": 0.72,  # Magnesium ionic radius (approximate for Mg2+)
+    "Ca": 1.00,  # Calcium ionic radius (approximate for Ca2+)
+    "Ba": 1.35,  # Barium ionic radius (approximate for Ba2+)
+    "Ni": 0.69,  # Nickel ionic radius (approximate for Ni2+)
+    "Zn": 0.74,  # Zinc ionic radius (approximate for Zn2+)
+}
+
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
