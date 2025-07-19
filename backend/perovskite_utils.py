@@ -31,7 +31,7 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3"]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3", "Si"]
 
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.30,
@@ -42,12 +42,13 @@ CALIBRATED_GAPS = {
     "CsPbI3": 1.73,
     "CsPbBr3": 2.30,
     "CsPbCl3": 2.32,
+    "Si": 1.1  
 
 }
 
 GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10, "Pb": 1.31, }
 IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
-               "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
+               "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, "Si": 1.17 }
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
