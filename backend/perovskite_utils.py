@@ -1,4 +1,4 @@
-from __future__ import annotations 
+from __future__ import annotations
 import math
 import os
 from functools import lru_cache
@@ -176,4 +176,55 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
-    # rest of the calculations...
+    # Continue with your calculations...
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        # Continue existing logic here...
+        pass
+
+    return pd.DataFrame(rows)  # Complete the dataframe logic
+
+
+# ─────────── ternary screen ───────────
+def screen_ternary(
+    A: str,
+    B: str,
+    C: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bows: dict[str, float],
+    *,
+    dx: float = 0.10,
+    dy: float = 0.10,
+    z: float = 0.0,
+    doping_element: str = "None",
+    application: str | None = None,
+) -> pd.DataFrame:
+    lo, hi = bg
+    center = sigma = None
+    if application in APPLICATION_CONFIG:
+        cfg = APPLICATION_CONFIG[application]
+        lo, hi = cfg["range"]
+        center, sigma = cfg["center"], cfg["sigma"]
+
+    # Apply doping
+    A_doped = apply_doping(A, doping_element, z)
+    B_doped = apply_doping(B, doping_element, z)
+    C_doped = apply_doping(C, doping_element, z)
+
+    dA = fetch_mp_data(A_doped, ["band_gap", "energy_above_hull"])
+    dB = fetch_mp_data(B_doped, ["band_gap", "energy_above_hull"])
+    dC = fetch_mp_data(C_doped, ["band_gap", "energy_above_hull"])
+
+    if not (dA and dB and dC):
+        return pd.DataFrame()
+
+    oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
+    rows: list[dict] = []
+    for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
+            # Continue ternary logic...
+            pass
+
+    return pd.DataFrame(rows)  # Complete the dataframe logic
