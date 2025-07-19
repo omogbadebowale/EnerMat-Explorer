@@ -40,6 +40,16 @@ with st.sidebar:
         custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
+    st.header("Doping Element")
+    doping_element = st.selectbox(
+        "Select Doping Element",
+        ["None", "Ge", "Sb", "Cu", "Mg", "Ca", "Ba", "Ni", "Zn"]
+    )
+    z = st.slider(
+        f"{doping_element} fraction (z)", 0.00, 0.30, 0.10, 0.05,
+        help=f"{doping_element} doping fraction"
+    )
+
     st.header("Application")
     application = st.selectbox(
         "Select application",
@@ -63,11 +73,6 @@ with st.sidebar:
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode.startswith("Ternary"):
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
-
-    z = st.slider(
-        "Ge fraction z", 0.00, 0.30, 0.10, 0.05,
-        help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
-    )
 
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
@@ -105,13 +110,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application
+            z=z, doping_element=doping_element, application=application
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application
+            dx=dx, dy=dy, z=z, doping_element=doping_element, application=application
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
