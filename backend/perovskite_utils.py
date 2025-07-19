@@ -174,15 +174,14 @@ def mix_abx3(
     dB = fetch_mp_data(B_doped, ["band_gap", "energy_above_hull"])
     
     if not (dA and dB):
-        return pd.DataFrame()
+        return pd.DataFrame(), "No valid results found for the selected combination."
 
-    # Continue with your calculations...
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         # Continue existing logic here...
         pass
 
-    return pd.DataFrame(rows)  # Complete the dataframe logic
+    return pd.DataFrame(rows), "Results processed successfully."
 
 
 # ─────────── ternary screen ───────────
@@ -218,7 +217,7 @@ def screen_ternary(
     dC = fetch_mp_data(C_doped, ["band_gap", "energy_above_hull"])
 
     if not (dA and dB and dC):
-        return pd.DataFrame()
+        return pd.DataFrame(), "No valid results found for the selected combination."
 
     oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
     rows: list[dict] = []
@@ -227,4 +226,4 @@ def screen_ternary(
             # Continue ternary logic...
             pass
 
-    return pd.DataFrame(rows)  # Complete the dataframe logic
+    return pd.DataFrame(rows), "Results processed successfully."
