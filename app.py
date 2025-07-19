@@ -41,7 +41,10 @@ with st.sidebar:
         C = custom_C or preset_C
 
     st.header("Doping Element")
-    doping_element = st.selectbox("Select Doping Element", ["Ge", "Sb", "Cu", "Mg", "Ca", "Ba", "Ni", "Zn"])
+    doping_element = st.selectbox(
+        "Select Doping Element",
+        ["Ge", "Sb", "Cu", "Mg", "Ca", "Ba", "Ni", "Zn"]
+    )
 
     st.header("Ge fraction (z)")
     z = st.slider("Ge fraction z", 0.00, 0.30, 0.10, 0.05)
@@ -104,36 +107,21 @@ elif do_run:
             st.stop()
 
     if mode.startswith("Binary"):
-        df, message = _run_binary(
+        df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, doping_element=doping_element, application=application
+            z=z, application=application, doping_element=doping_element
         )
     else:
-        df, message = _run_ternary(
+        df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, doping_element=doping_element, application=application
+            dx=dx, dy=dy, z=z, application=application, doping_element=doping_element
         )
-    
-    if df.empty:
-        st.warning(message)  # Show the message returned from the function
-        st.stop()
-
     st.session_state.history.append({"mode":mode, "df":df})
 
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
-
-# ─────────── DISPLAY RESULTS ───────────
-df = st.session_state.history[-1]["df"]
-mode = st.session_state.history[-1]["mode"]
-
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
-
-with tab_tbl:
-    st.dataframe(df, use_container_width=True, height=440)
-
 
 # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
@@ -169,6 +157,9 @@ with tab_plot:
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
