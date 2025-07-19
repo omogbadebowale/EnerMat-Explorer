@@ -11,6 +11,7 @@ from mp_api.client import MPRester
 from pymatgen.core import Composition
 
 # ─────────── Shockley–Queisser helper ───────────
+# Make sure you have backend/sq.py with `def sq_efficiency(Eg: float) -> float: ...`
 from backend.sq import sq_efficiency
 
 # ─────────── API key ───────────
@@ -24,79 +25,39 @@ mpr = MPRester(API_KEY)
 # ─────────── application-based band-gap targets ───────────
 APPLICATION_CONFIG = {
     "single": {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
-    "tandem": {"range": (1.50, 2.00), "center": 1.75, "sigma": 0.10},
+    "tandem": {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
     "indoor": {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
     "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3", "CsSbBr3", "CsSbCl3", "CsCuBr3", "CsCuCl3", "CsMgBr3", "CsMgCl3"
-              "CsCaBr3", "CsCaCl3", "CsBaBr3", "CsBaCl3", "CsNiBr3", "CsNiCl3", "CsZnBr3", "CsZnCl3", "Si"]
+END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3"]
 
 CALIBRATED_GAPS = {
-     "CsSnBr3": 1.30,
+    "CsSnBr3": 1.30,
     "CsSnCl3": 2.40,
-    "CsSnI3": 1.00,
+    "CsSnI3":  1.00,
     "CsGeBr3": 2.20,
     "CsGeCl3": 2.7,
     "CsPbI3": 1.73,
     "CsPbBr3": 2.30,
     "CsPbCl3": 2.32,
-    "CsSbBr3": 2.05,  # Example value for Antimony doping, check literature
-    "CsSbCl3": 2.15,  # Example value for Antimony doping, check literature
-    "CsCuBr3": 2.40,  # Example value for Copper doping, check literature
-    "CsCuCl3": 2.45,  # Example value for Copper doping, check literature
-    "CsMgBr3": 2.55,  # Example value for Magnesium doping, check literature
-    "CsMgCl3": 2.60,  # Example value for Magnesium doping, check literature
-    "CsCaBr3": 2.50,  # Example value for Calcium doping, check literature
-    "CsCaCl3": 2.55,  # Example value for Calcium doping, check literature
-    "CsBaBr3": 2.45,  # Example value for Barium doping, check literature
-    "CsBaCl3": 2.50,  # Example value for Barium doping, check literature
-    "CsNiBr3": 2.70,  # Example value for Nickel doping, check literature
-    "CsNiCl3": 2.75,  # Example value for Nickel doping, check literature
-    "CsZnBr3": 2.50,  # Example value for Zinc doping, check literature
-    "CsZnCl3": 2.55,  # Example value for Zinc doping, check literature
-    "Si": 1.1,
+
 }
 
-GAP_OFFSET = {
-    "I": +0.52,   # Iodine offset, typically consistent
-    "Br": +0.88,  # Bromine offset, typically consistent
-    "Cl": +1.10,  # Chlorine offset, typically consistent
-    "Pb": 1.31,   # Lead-specific offset (perovskites involving Pb)
-    "Sb": 0.60,   # Antimony-specific offset (check literature)
-    "Cu": 0.65,   # Copper-specific offset (check literature)
-    "Mg": 0.70,   # Magnesium-specific offset (check literature)
-    "Ca": 0.75,   # Calcium-specific offset (check literature)
-    "Ba": 0.80,   # Barium-specific offset (check literature)
-    "Ni": 0.85,   # Nickel-specific offset (check literature)
-    "Zn": 0.90,   # Zinc-specific offset (check literature)
-    "Si": 0.00,
-}
-
-IONIC_RADII = {
-    "Cs": 1.88,
-    "Sn": 1.18,
-    "Ge": 0.73,
-    "I": 2.20,  # Iodine Ion radius
-    "Br": 1.96,
-    "Cl": 1.81,
-    "Pb": 1.31,
-    "Sb": 0.76,  # If Sb is used in calculations
-    "Cu": 0.77,  # If Cu is used in calculations
-    "Mg": 0.72,  # If Mg is used in calculations
-    "Ca": 0.99,  # If Ca is used in calculations
-    "Ba": 1.61,  # If Ba is used in calculations
-    "Ni": 0.69,  # If Ni is used in calculations
-    "Zn": 0.74,   # If Zn is used in calculations
-    "Si": 1.17, 
-}
-
+GAP_OFFSET = {"I": +0.52, "Br": +0.88, "Cl": +1.10, "Pb": 1.31, }
+IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
+               "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
 # ─────────── band-gap scoring ───────────
-def _score_band_gap(Eg: float, lo: float, hi: float, center: float | None, sigma: float | None) -> float:
+def _score_band_gap(
+    Eg: float,
+    lo: float, hi: float,
+    center: float | None,
+    sigma: float | None
+) -> float:
     if Eg < lo or Eg > hi:
         return 0.0
     if center is None or sigma is None:
@@ -124,6 +85,7 @@ def fetch_mp_data(formula: str, fields: list[str]):
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
+    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)."""
     if "Sn" not in formula_sn2:
         return 0.0
     hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
@@ -142,7 +104,6 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
-
 # ─────────── binary screen ───────────
 def screen_binary(
     A: str,
@@ -155,7 +116,6 @@ def screen_binary(
     *,
     z: float = 0.0,
     application: str | None = None,
-    doping_element: str = "Ge",  # New doping element parameter
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
@@ -165,8 +125,7 @@ def screen_binary(
         center, sigma = cfg["center"], cfg["sigma"]
 
     return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma, doping_element=doping_element)
-
+                    z=z, center=center, sigma=sigma)
 
 def mix_abx3(
     A: str,
@@ -182,7 +141,6 @@ def mix_abx3(
     beta: float = 1.0,
     center: float | None = None,
     sigma: float | None = None,
-    doping_element: str = "Ge",  # Handle doping element in the mix_abx3 function
 ) -> pd.DataFrame:
     lo, hi = bg
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
@@ -190,32 +148,57 @@ def mix_abx3(
     if not (dA and dB):
         return pd.DataFrame()
 
-    # Apply doping element logic if z > 0
-    if doping_element != "Ge":
-        A = A.replace("Sn", doping_element)
-        B = B.replace("Sn", doping_element)
+    # optional Ge branch (binary)
+    if z > 0:
+        A_Ge = A.replace("Sn", "Ge")
+        B_Ge = B.replace("Sn", "Ge")
+        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
+        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
+        oxA_Ge = oxidation_energy(A_Ge)
+        oxB_Ge = oxidation_energy(B_Ge)
+    else:
+        dA_Ge, dB_Ge = dA, dB
+        oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
 
-    # Continue with normal computation for binary mix
+    hal = next(h for h in ("I", "Br", "Cl") if h in A)
+    rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
+    oxA, oxB = oxidation_energy(A), oxidation_energy(B)
+
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        Eg_Sn = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
-        Eh_Sn = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", "I"))
-        oxA, oxB = oxidation_energy(A), oxidation_energy(B)
+        # Sn branch
+        Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
+        Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
+        dEox_Sn = (1 - x) * oxA + x * oxB
+        # Ge branch
+        Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
+        Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
+        dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
 
-        # Compute doping and band gap score
-        sbg = _score_band_gap(Eg_Sn, lo, hi, center, sigma)
-        raw = sbg * math.exp(-Eh_Sn / (alpha * 0.0259)) * math.exp(oxA / K_T_EFF)
+        # interpolate
+        Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
+        Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
+        dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
 
-        pce = sq_efficiency(Eg_Sn)
+        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+        raw = (
+            sbg
+            * math.exp(-Eh / (alpha * 0.0259))
+            * math.exp(dEox / K_T_EFF)
+            * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
+        )
+
+        # Shockley–Queisser PCE limit
+        pce = sq_efficiency(Eg)
+
         rows.append({
-            "x": round(x, 3),
-            "z": round(z, 2),
-            "Eg": round(Eg_Sn, 3),
-            "Ehull": round(Eh_Sn, 4),
-            "Eox": round(oxA, 3),
-            "raw": raw,
-            "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
+            "x":           round(x, 3),
+            "z":           round(z, 2),
+            "Eg":          round(Eg, 3),
+            "Ehull":       round(Eh, 4),
+            "Eox":         round(dEox, 3),
+            "raw":         raw,
+            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
             "PCE_max (%)": round(pce * 100, 1),
         })
 
@@ -225,8 +208,11 @@ def mix_abx3(
     for r in rows:
         r["score"] = round(r.pop("raw") / m, 3)
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
+    return (
+        pd.DataFrame(rows)
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
 
 # ─────────── ternary screen ───────────
 def screen_ternary(
@@ -242,7 +228,6 @@ def screen_ternary(
     dy: float = 0.10,
     z: float = 0.0,
     application: str | None = None,
-    doping_element: str = "Ge",  # Added doping element here
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
@@ -257,11 +242,16 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # Apply doping element logic if z > 0
-    if doping_element != "Ge":
-        A = A.replace("Sn", doping_element)
-        B = B.replace("Sn", doping_element)
-        C = C.replace("Sn", doping_element)
+    # Ge-branch setup
+    if z > 0:
+        A_Ge = A.replace("Sn", "Ge")
+        B_Ge = B.replace("Sn", "Ge")
+        C_Ge = C.replace("Sn", "Ge")
+        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
+        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
+        dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
+    else:
+        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC
 
     oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
     rows: list[dict] = []
@@ -275,7 +265,7 @@ def screen_ternary(
             )
             # Ge gap
             Eg_Ge = (
-                w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
+                w * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] + y * dC_Ge["band_gap"]
                 - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
             )
             Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
@@ -284,7 +274,7 @@ def screen_ternary(
                 w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
             )
             Eh_Ge = (
-                w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
+                w * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"] + y * dC_Ge["energy_above_hull"]
             )
             Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
 
@@ -314,4 +304,3 @@ def screen_ternary(
         r["score"] = round(r.pop("raw") / m, 3)
 
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
-
