@@ -31,7 +31,7 @@ APPLICATION_CONFIG = {
 
 # ─────────── reference data ───────────
 END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3", "CsSbBr3", "CsSbCl3", "CsCuBr3", "CsCuCl3", "CsMgBr3", "CsMgCl3"
-              "CsCaBr3", "CsCaCl3", "CsBaBr3", "CsBaCl3", "CsNiBr3", "CsNiCl3", "CsZnBr3", "CsZnCl3"]
+              "CsCaBr3", "CsCaCl3", "CsBaBr3", "CsBaCl3", "CsNiBr3", "CsNiCl3", "CsZnBr3", "CsZnCl3", "Si"]
 
 CALIBRATED_GAPS = {
      "CsSnBr3": 1.30,
@@ -56,6 +56,7 @@ CALIBRATED_GAPS = {
     "CsNiCl3": 2.75,  # Example value for Nickel doping, check literature
     "CsZnBr3": 2.50,  # Example value for Zinc doping, check literature
     "CsZnCl3": 2.55,  # Example value for Zinc doping, check literature
+    "Si": 1.1,
 }
 
 GAP_OFFSET = {
@@ -86,7 +87,8 @@ IONIC_RADII = {
     "Ca": 0.99,  # If Ca is used in calculations
     "Ba": 1.61,  # If Ba is used in calculations
     "Ni": 0.69,  # If Ni is used in calculations
-    "Zn": 0.74   # If Zn is used in calculations
+    "Zn": 0.74,   # If Zn is used in calculations
+    "Si": 1.17, 
 }
 
 
