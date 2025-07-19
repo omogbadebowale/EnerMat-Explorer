@@ -108,7 +108,6 @@ elif do_run:
             st.stop()
 
     if mode.startswith("Binary"):
-        # Pass doping_element to _run_binary
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
             z=z, application=application, doping_element=doping_element
@@ -116,10 +115,11 @@ elif do_run:
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
-            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
+            (bg_lo, bg_hi), {"AB":bow, "AC":bow, "BC":bow},
             dx=dx, dy=dy, z=z, application=application, doping_element=doping_element
         )
     st.session_state.history.append({"mode":mode, "df":df})
+
 
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
