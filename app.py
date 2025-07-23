@@ -119,12 +119,21 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 # ─────────── DISPLAY RESULTS ───────────
-    # ─────────── DISPLAY RESULTS ─── Plot ───────────
+
+    # Create the four result tabs
+    tab_table, tab_plot, tab_dl, tab_report = st.tabs(
+        ["Table", "Plot", "Download", "Report"]
+    )
+
+    # ─────────── Table ───────────
+    with tab_table:
+        st.subheader("Screening Results Table")
+        st.dataframe(result_df, use_container_width=True)
+
+    # ─────────── Plot ───────────
     with tab_plot:
         st.subheader("Band-gap vs. Stability Plot")
-
-        # assume `df` is your result DataFrame with columns "Ehull", "Eg", "score"
-        df = result_df
+        df = result_df  # your DataFrame from screen_binary
 
         # Base scatter plot
         fig = px.scatter(
@@ -138,7 +147,7 @@ elif not st.session_state.history:
             labels={"Ehull": "Ehull (eV/atom)", "Eg": "Eg (eV)", "score": "Score"},
         )
 
-        # single-junction target window
+        # single-junction window
         lo, hi = APPLICATION_CONFIG["single"]["range"]
         fig.add_shape(
             type="rect",
@@ -147,10 +156,10 @@ elif not st.session_state.history:
             line=dict(color="LightSeaGreen", dash="dash"),
             fillcolor="LightSeaGreen",
             opacity=0.1,
-            layer="below"
+            layer="below",
         )
 
-        # tandem-junction target window
+        # tandem-junction window
         lo_t, hi_t = APPLICATION_CONFIG["tandem"]["range"]
         fig.add_shape(
             type="rect",
@@ -159,10 +168,10 @@ elif not st.session_state.history:
             line=dict(color="DarkOrange", dash="dash"),
             fillcolor="DarkOrange",
             opacity=0.1,
-            layer="below"
+            layer="below",
         )
 
-        # Publication-style layout tweaks
+        # Publication-style layout
         fig.update_layout(
             font=dict(family="Arial, Helvetica, sans-serif", size=16, color="black"),
             title_font=dict(family="Arial, Helvetica, sans-serif", size=20, color="black"),
@@ -171,10 +180,9 @@ elif not st.session_state.history:
                 title="Score",
                 titleside="right",
                 tickfont=dict(size=14),
-                titlefont=dict(size=16)
-            )
+                titlefont=dict(size=16),
+            ),
         )
-
         fig.update_xaxes(
             title_text="Ehull (eV/atom)",
             title_font=dict(size=18),
@@ -182,7 +190,7 @@ elif not st.session_state.history:
             showgrid=True,
             gridwidth=0.5,
             gridcolor="lightgray",
-            zeroline=False
+            zeroline=False,
         )
         fig.update_yaxes(
             title_text="Eg (eV)",
@@ -191,15 +199,14 @@ elif not st.session_state.history:
             showgrid=True,
             gridwidth=0.5,
             gridcolor="lightgray",
-            zeroline=False
+            zeroline=False,
         )
-
         fig.update_traces(
             marker=dict(
                 line=dict(width=0.8, color="black"),
                 sizemode="area",
                 sizeref=2. * df["score"].max() / (40. ** 2),
-                opacity=0.9
+                opacity=0.9,
             )
         )
 
@@ -210,8 +217,22 @@ elif not st.session_state.history:
             config={"toImageButtonOptions": {"format": "svg"}}
         )
 
-with tab_dl:
-    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+    # ─────────── Download ───────────
+    with tab_dl:
+        st.subheader("Download Results")
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name="EnerMat_results.csv",
+            mime="text/csv",
+        )
+
+    # ─────────── Report ───────────
+    with tab_report:
+        st.subheader("Auto-Generated Report")
+        st.markdown(generate_report(result_df))
+
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
