@@ -34,18 +34,18 @@ APPLICATION_CONFIG = {
 END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3"]
 
 CALIBRATED_GAPS = {
-    "CsSnBr3": 1.80,
-    "CsSnCl3": 2.70,
+    "CsSnBr3": 1.75,
+    "CsSnCl3": 2.98,
     "CsSnI3":  1.30,
-    "CsGeBr3": 2.20,
-    "CsGeCl3": 2.8,
-    "CsPbI3": 1.73,
-    "CsPbBr3": 2.30,
-    "CsPbCl3": 2.32,
+    "CsGeBr3": 2.32,
+    "CsGeCl3": 3.67,
+    "CsPbI3": 1.68,
+    "CsPbBr3": 2.36,
+    "CsPbCl3": 3.03,
 
 }
 
-GAP_OFFSET = {"I": +0.52, "Br": +0.78, "Cl": +1.10, "Pb": 1.31, }
+GAP_OFFSET = {"I": 1.3-0.45, "Br": 1.75-0.97, "Cl": 2.98-0.98, "Pb": 1.31, }
 IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
                "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
 
