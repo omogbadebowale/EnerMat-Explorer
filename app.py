@@ -65,7 +65,7 @@ with st.sidebar:
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
     z = st.slider(
-        "Ge fraction z", 0.00, 0.90, 0.80, 0.10, 0.05, 1.00
+        "Ge fraction z", 0.00, 0.90, 0.80, 0.10, 0.05, 1.00,
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
 
