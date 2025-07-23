@@ -119,23 +119,25 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 # ─────────── DISPLAY RESULTS ───────────
-
-    # Create the four result tabs
+# ─────────── DISPLAY RESULTS ───────────
+# This must sit *inside* your run‐screening conditional, right after you compute `result_df`.
+if result_df is not None and not result_df.empty:
+    # 1) define the four tabs
     tab_table, tab_plot, tab_dl, tab_report = st.tabs(
         ["Table", "Plot", "Download", "Report"]
     )
 
-    # ─────────── Table ───────────
+    # 2) Table
     with tab_table:
         st.subheader("Screening Results Table")
         st.dataframe(result_df, use_container_width=True)
 
-    # ─────────── Plot ───────────
+    # 3) Plot
     with tab_plot:
         st.subheader("Band-gap vs. Stability Plot")
-        df = result_df  # your DataFrame from screen_binary
+        df = result_df
 
-        # Base scatter plot
+        # Base scatter
         fig = px.scatter(
             df,
             x="Ehull",
@@ -147,7 +149,7 @@ elif not st.session_state.history:
             labels={"Ehull": "Ehull (eV/atom)", "Eg": "Eg (eV)", "score": "Score"},
         )
 
-        # single-junction window
+        # single-junction box
         lo, hi = APPLICATION_CONFIG["single"]["range"]
         fig.add_shape(
             type="rect",
@@ -158,8 +160,7 @@ elif not st.session_state.history:
             opacity=0.1,
             layer="below",
         )
-
-        # tandem-junction window
+        # tandem-junction box
         lo_t, hi_t = APPLICATION_CONFIG["tandem"]["range"]
         fig.add_shape(
             type="rect",
@@ -171,67 +172,50 @@ elif not st.session_state.history:
             layer="below",
         )
 
-        # Publication-style layout
+        # layout tweaks
         fig.update_layout(
-            font=dict(family="Arial, Helvetica, sans-serif", size=16, color="black"),
-            title_font=dict(family="Arial, Helvetica, sans-serif", size=20, color="black"),
+            font=dict(family="Arial, sans-serif", size=16, color="black"),
             margin=dict(l=80, r=40, t=80, b=60),
-            coloraxis_colorbar=dict(
-                title="Score",
-                titleside="right",
-                tickfont=dict(size=14),
-                titlefont=dict(size=16),
-            ),
+            coloraxis_colorbar=dict(title="Score", titleside="right", tickfont=dict(size=14)),
         )
         fig.update_xaxes(
-            title_text="Ehull (eV/atom)",
-            title_font=dict(size=18),
-            tickfont=dict(size=14),
-            showgrid=True,
-            gridwidth=0.5,
-            gridcolor="lightgray",
-            zeroline=False,
+            title_text="Ehull (eV/atom)", title_font=dict(size=18),
+            tickfont=dict(size=14), showgrid=True, gridwidth=0.5, gridcolor="lightgray", zeroline=False
         )
         fig.update_yaxes(
-            title_text="Eg (eV)",
-            title_font=dict(size=18),
-            tickfont=dict(size=14),
-            showgrid=True,
-            gridwidth=0.5,
-            gridcolor="lightgray",
-            zeroline=False,
+            title_text="Eg (eV)", title_font=dict(size=18),
+            tickfont=dict(size=14), showgrid=True, gridwidth=0.5, gridcolor="lightgray", zeroline=False
         )
         fig.update_traces(
-            marker=dict(
-                line=dict(width=0.8, color="black"),
-                sizemode="area",
-                sizeref=2. * df["score"].max() / (40. ** 2),
-                opacity=0.9,
-            )
+            marker=dict(line=dict(width=0.8, color="black"),
+                        sizemode="area",
+                        sizeref=2. * df["score"].max() / (40. ** 2),
+                        opacity=0.9)
         )
 
-        # Render as SVG for crisp export
         st.plotly_chart(
             fig,
             use_container_width=True,
-            config={"toImageButtonOptions": {"format": "svg"}}
+            config={"toImageButtonOptions": {"format": "svg"}},
         )
 
-    # ─────────── Download ───────────
+    # 4) Download CSV
     with tab_dl:
-        st.subheader("Download Results")
-        csv = df.to_csv(index=False).encode("utf-8")
+        st.subheader("Download Results as CSV")
+        csv_bytes = df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="📥 Download CSV",
-            data=csv,
+            data=csv_bytes,
             file_name="EnerMat_results.csv",
             mime="text/csv",
         )
 
-    # ─────────── Report ───────────
+    # 5) Auto-Report
     with tab_report:
         st.subheader("Auto-Generated Report")
         st.markdown(generate_report(result_df))
+else:
+    st.info("Click ▶ Run screening to generate results.")
 
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
