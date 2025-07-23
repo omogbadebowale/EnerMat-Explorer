@@ -36,7 +36,7 @@ END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3",
 CALIBRATED_GAPS = {
     "CsSnBr3": 1.75,
     "CsSnCl3": 2.98,
-    "CsSnI3":  1.30,
+    "CsSnI3":  1.00,
     "CsGeBr3": 2.32,
     "CsGeCl3": 3.67,
     "CsPbI3": 1.68,
