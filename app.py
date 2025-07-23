@@ -119,42 +119,99 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 # ─────────── DISPLAY RESULTS ───────────
-df = st.session_state.history[-1]["df"]
-mode = st.session_state.history[-1]["mode"]
+    # ─────────── DISPLAY RESULTS ─── Plot ───────────
+    with tab_plot:
+        st.subheader("Band-gap vs. Stability Plot")
 
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
+        # assume `df` is your result DataFrame with columns "Ehull", "Eg", "score"
+        df = result_df
 
-with tab_tbl:
-    st.dataframe(df, use_container_width=True, height=440)
+        # Base scatter plot
+        fig = px.scatter(
+            df,
+            x="Ehull",
+            y="Eg",
+            size="score",
+            color="score",
+            color_continuous_scale="viridis",
+            hover_data=["formula", "Ehull", "Eg", "score"],
+            labels={"Ehull": "Ehull (eV/atom)", "Eg": "Eg (eV)", "score": "Score"},
+        )
 
-with tab_plot:
-    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df["Ehull"], y=df["Eg"], mode="markers",
+        # single-junction target window
+        lo, hi = APPLICATION_CONFIG["single"]["range"]
+        fig.add_shape(
+            type="rect",
+            x0=0, x1=df["Ehull"].max(),
+            y0=lo, y1=hi,
+            line=dict(color="LightSeaGreen", dash="dash"),
+            fillcolor="LightSeaGreen",
+            opacity=0.1,
+            layer="below"
+        )
+
+        # tandem-junction target window
+        lo_t, hi_t = APPLICATION_CONFIG["tandem"]["range"]
+        fig.add_shape(
+            type="rect",
+            x0=0, x1=df["Ehull"].max(),
+            y0=lo_t, y1=hi_t,
+            line=dict(color="DarkOrange", dash="dash"),
+            fillcolor="DarkOrange",
+            opacity=0.1,
+            layer="below"
+        )
+
+        # Publication-style layout tweaks
+        fig.update_layout(
+            font=dict(family="Arial, Helvetica, sans-serif", size=16, color="black"),
+            title_font=dict(family="Arial, Helvetica, sans-serif", size=20, color="black"),
+            margin=dict(l=80, r=40, t=80, b=60),
+            coloraxis_colorbar=dict(
+                title="Score",
+                titleside="right",
+                tickfont=dict(size=14),
+                titlefont=dict(size=16)
+            )
+        )
+
+        fig.update_xaxes(
+            title_text="Ehull (eV/atom)",
+            title_font=dict(size=18),
+            tickfont=dict(size=14),
+            showgrid=True,
+            gridwidth=0.5,
+            gridcolor="lightgray",
+            zeroline=False
+        )
+        fig.update_yaxes(
+            title_text="Eg (eV)",
+            title_font=dict(size=18),
+            tickfont=dict(size=14),
+            showgrid=True,
+            gridwidth=0.5,
+            gridcolor="lightgray",
+            zeroline=False
+        )
+
+        fig.update_traces(
             marker=dict(
-                size=8+12*df["score"], color=df["score"],
-                colorscale="Viridis", cmin=0, cmax=1,
-                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
-            ),
-            hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
-            customdata=df.to_numpy()
-        ))
-        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-                      line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
-        fig.update_layout(title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)", template="simple_white", font_size=14, height=500)
-        st.plotly_chart(fig, use_container_width=True)
-    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
-        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
-                            color_continuous_scale="Viridis",
-                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
-        st.plotly_chart(fig, use_container_width=True)
+                line=dict(width=0.8, color="black"),
+                sizemode="area",
+                sizeref=2. * df["score"].max() / (40. ** 2),
+                opacity=0.9
+            )
+        )
+
+        # Render as SVG for crisp export
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={"toImageButtonOptions": {"format": "svg"}}
+        )
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
-
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
