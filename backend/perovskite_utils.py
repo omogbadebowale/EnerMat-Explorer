@@ -161,7 +161,10 @@ def mix_abx3(
         oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
 
     hal = next(h for h in ("I", "Br", "Cl") if h in A)
-    rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
+    rA = IONIC_RADII["Cs"]
+    rB = (1 - z) * IONIC_RADII["Sn"] + z * IONIC_RADII["Ge"]
+    rX = IONIC_RADII[hal]
+
     oxA, oxB = oxidation_energy(A), oxidation_energy(B)
 
     rows: list[dict] = []
