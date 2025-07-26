@@ -51,11 +51,6 @@ IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
-# ───────────── physical constants ─────────────
-K_B_EV: float = 8.617_333e-5       # eV K⁻¹
-T_REF: float  = 300.0              # reference temperature (K)
-K_T_EFF: float = K_B_EV * T_REF
-
 # ───────────── surface‑passivation helper ─────────────
 
 def s_oxsurf(eox_sn: float, eox_ge: float, *, T: float = T_REF) -> float:
