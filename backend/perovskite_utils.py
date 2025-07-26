@@ -51,18 +51,6 @@ IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
-# ───────────── surface‑passivation helper ─────────────
-
-def s_oxsurf(eox_sn: float, eox_ge: float) -> float:
-    """
-    Linear, bounded reward for Ge‑first oxidation.
-    1.0  = neutral (Sn oxidises same as Ge)
-    1.5  = ~1 eV extra drive for Ge
-    2.0  = ≥2 eV drive (cap)
-    """
-    boost = max(0.0, eox_sn - eox_ge)   # positive if Ge oxidises first
-    S = 1.0 + 0.5 * boost               # slope: 0.5 per eV
-    return min(2.0, S)
 # ─────────── band-gap scoring ───────────
 def _score_band_gap(
     Eg: float,
@@ -80,7 +68,6 @@ def _score_band_gap(
 score_band_gap = _score_band_gap  # alias
 
 # ─────────── helpers ───────────
-
 def fetch_mp_data(formula: str, fields: list[str]):
     docs = mpr.summary.search(formula=formula, fields=tuple(fields))
     if not docs:
@@ -98,7 +85,7 @@ def fetch_mp_data(formula: str, fields: list[str]):
 
 @lru_cache(maxsize=64)
 def oxidation_energy(formula_sn2: str) -> float:
-    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)."""
+    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)."""
     if "Sn" not in formula_sn2:
         return 0.0
     hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
@@ -117,12 +104,19 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
-# ─────────── binary screen wrappers ───────────
-
-def screen_binary(A: str, B: str, rh: float, temp: float,
-                  bg: tuple[float, float], bow: float, dx: float,
-                  *, z: float = 0.0,
-                  application: str | None = None) -> pd.DataFrame:
+# ─────────── binary screen ───────────
+def screen_binary(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    application: str | None = None,
+) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
     if application in APPLICATION_CONFIG:
@@ -133,20 +127,28 @@ def screen_binary(A: str, B: str, rh: float, temp: float,
     return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
                     z=z, center=center, sigma=sigma)
 
-# ─────────── core binary mix function ───────────
-
-def mix_abx3(A: str, B: str, rh: float, temp: float,
-             bg: tuple[float, float], bow: float, dx: float,
-             *, z: float = 0.0,
-             alpha: float = 1.0, beta: float = 1.0,
-             center: float | None = None, sigma: float | None = None) -> pd.DataFrame:
+def mix_abx3(
+    A: str,
+    B: str,
+    rh: float,
+    temp: float,
+    bg: tuple[float, float],
+    bow: float,
+    dx: float,
+    *,
+    z: float = 0.0,
+    alpha: float = 1.0,
+    beta: float = 1.0,
+    center: float | None = None,
+    sigma: float | None = None,
+) -> pd.DataFrame:
     lo, hi = bg
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
     dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
     if not (dA and dB):
         return pd.DataFrame()
 
-    # optional Ge branch (for z > 0)
+    # optional Ge branch (binary)
     if z > 0:
         A_Ge = A.replace("Sn", "Ge")
         B_Ge = B.replace("Sn", "Ge")
@@ -159,28 +161,27 @@ def mix_abx3(A: str, B: str, rh: float, temp: float,
         oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
 
     hal = next(h for h in ("I", "Br", "Cl") if h in A)
-    rA, rB, rX = (IONIC_RADII[k] for k in ("Cs", "Sn", hal))
+    rA = IONIC_RADII["Cs"]
+    rB = (1 - z) * IONIC_RADII["Sn"] + z * IONIC_RADII["Ge"]
+    rX = IONIC_RADII[hal]
+
     oxA, oxB = oxidation_energy(A), oxidation_energy(B)
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Sn branch properties
+        # Sn branch
         Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
         Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
         dEox_Sn = (1 - x) * oxA + x * oxB
-
-        # Ge branch properties
+        # Ge branch
         Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
         Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
         dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
 
-        # Interpolate Sn↔Ge according to z
+        # interpolate
         Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
         Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
         dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
-
-        # New surface‑passivation factor
-        S_oxsurf = s_oxsurf(dEox_Sn, dEox_Ge)
 
         sbg = _score_band_gap(Eg, lo, hi, center, sigma)
         raw = (
@@ -188,20 +189,19 @@ def mix_abx3(A: str, B: str, rh: float, temp: float,
             * math.exp(-Eh / (alpha * 0.0259))
             * math.exp(dEox / K_T_EFF)
             * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
-            * S_oxsurf
         )
 
+        # Shockley–Queisser PCE limit
         pce = sq_efficiency(Eg)
 
         rows.append({
-            "x": round(x, 3),
-            "z": round(z, 2),
-            "Eg": round(Eg, 3),
-            "Ehull": round(Eh, 4),
-            "Eox": round(dEox, 3),
-            "S_oxsurf": round(S_oxsurf, 2),
-            "raw": raw,
-            "formula": f"{A}-{B} x={x:.2f} z={z:.2f}",
+            "x":           round(x, 3),
+            "z":           round(z, 2),
+            "Eg":          round(Eg, 3),
+            "Ehull":       round(Eh, 4),
+            "Eox":         round(dEox, 3),
+            "raw":         raw,
+            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
             "PCE_max (%)": round(pce * 100, 1),
         })
 
