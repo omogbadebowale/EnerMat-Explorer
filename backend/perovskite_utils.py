@@ -53,14 +53,16 @@ K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
 # ───────────── surface‑passivation helper ─────────────
 
-def s_oxsurf(eox_sn: float, eox_ge: float, *, T: float = T_REF) -> float:
-    """Boltzmann weight that *rewards* alloys where Ge oxidises first.
-
-    If ΔE_ox^Ge < ΔE_ox^Sn (i.e. Ge oxidises more exothermically), the
-    exponent is negative, so S_oxsurf > 1.
+def s_oxsurf(eox_sn: float, eox_ge: float) -> float:
     """
-    return math.exp(-(eox_sn - eox_ge) / (K_B_EV * T))
-
+    Linear, bounded reward for Ge‑first oxidation.
+    1.0  = neutral (Sn oxidises same as Ge)
+    1.5  = ~1 eV extra drive for Ge
+    2.0  = ≥2 eV drive (cap)
+    """
+    boost = max(0.0, eox_sn - eox_ge)   # positive if Ge oxidises first
+    S = 1.0 + 0.5 * boost               # slope: 0.5 per eV
+    return min(2.0, S)
 # ─────────── band-gap scoring ───────────
 def _score_band_gap(
     Eg: float,
