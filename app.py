@@ -114,18 +114,16 @@ do_prev = col_prev.button(
     disabled=not st.session_state.history,
 )
 
-# ─────────── Add a welcome message ───────────
+# ─────────── Welcome blurb ───────────
 st.markdown(
     """
-    <div style='background:#f0f8ff; padding:15px; border-radius:8px;'>
-      <h3 style='margin:0; color:#333;'>👋 Welcome to EnerMat Explorer!</h3>
-      <p style='margin:5px 0 0;'>
-        Select your end‑members, adjust the sliders, and hit ▶ Run screening to find your top perovskite candidates.
-      </p>
-    </div>
+    **👋 Welcome to EnerMat!**  
+    Use the controls on the left to pick your end‑members, environment, and model settings —  
+    then hit ▶ **Run screening** to find your perovskite sweet spot.
     """,
     unsafe_allow_html=True,
 )
+
 
 if do_prev:
     st.session_state.history.pop()
