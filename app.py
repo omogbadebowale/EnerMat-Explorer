@@ -198,6 +198,34 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ─────────── SESSION STATE INITIALIZATION ───────────
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# ─────────── RUNNING SCREEN ───────────
+col_run, col_prev = st.columns([3, 1])
+do_run = col_run.button("▶ Run screening", type="primary")
+
+# disable Previous if history is empty
+prev_disabled = len(st.session_state.history) == 0
+do_prev = col_prev.button("⏪ Previous", disabled=prev_disabled)
+
+if do_prev:
+    # pop last result
+    st.session_state.history.pop()
+    df, mode = st.session_state.history[-1]["df"], st.session_state.history[-1]["mode"]
+    st.success("Showing previous result")
+
+elif do_run:
+    # ... your existing sanity checks ...
+    # run and append
+    df = _run_binary(...)  # or _run_ternary
+    st.session_state.history.append({"mode": mode, "df": df})
+
+elif not st.session_state.history:
+    st.info("Press ▶ Run screening to begin.")
+    st.stop()
+
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button(
