@@ -12,46 +12,36 @@ from backend.perovskite_utils import (
     END_MEMBERS,
 )
 
-# ─────────── STREAMLIT PAGE CONFIG ───────────
-+ st.set_page_config(
-+     page_title="EnerMat Perovskite Explorer v9.6",
-+     page_icon="☀️",    # you can use an emoji here
-+     layout="wide",
-+ )
-
-- st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
-+ st.title("EnerMat Perovskite Explorer v9.6")
-
-+ # ─────────── WELCOME & PROBLEM STATEMENT ───────────
-+ st.markdown(
-+     """
-+     <div style="
-+         background: linear-gradient(135deg,#FFD54F,#FFB74D);
-+         padding:20px;border-radius:12px;margin-bottom:24px;
-+         color:#333;font-family:Arial,sans-serif;
-+     ">
-+       <h2 style="
-+           margin:0 0 8px;font-size:1.8rem;color:#fff;
-+           text-shadow:1px 1px 2px rgba(0,0,0,0.3);
-+       ">☀️ Welcome to EnerMat Perovskite Explorer v9.6</h2>
-+       <p style="margin:0 0 12px;font-size:1rem;line-height:1.5;">
-+         Lead–halide perovskites achieve record solar efficiencies but pose
-+         toxicity and stability challenges. This app lets you rapidly
-+         screen lead‑free Sn–Ge perovskite alloys by exploring their
-+         <strong>Eg</strong> (band gap), <strong>Eₕᵤₗₗ</strong> (phase stability),
-+         <strong>ΔEₒₓ</strong> (oxidation drive) and
-+         <strong>PCEₘₐₓ</strong> (Shockley–Queisser limit) in real time.
-+       </p>
-+       <ul style="margin:0;padding-left:1.2em;font-size:0.95rem;">
-+         <li><strong>Eg</strong>: Direct bandgap (ideal ~1.3 eV for sunlight).</li>
-+         <li><strong>Eₕᵤₗₗ</strong>: Energy above hull (eV/atom), measure of stability.</li>
-+         <li><strong>ΔEₒₓ</strong>: Oxidation enthalpy (eV/Sn), Sn²⁺→Sn⁴⁺ tendency.</li>
-+         <li><strong>PCEₘₐₓ</strong>: Theoretical max efficiency (%).</li>
-+       </ul>
-+     </div>
-+     """,
-+     unsafe_allow_html=True,
-+ )
+# ─────────── WELCOME & PROBLEM STATEMENT ───────────
+st.markdown(
+    """
+    <div style="
+        background: linear-gradient(135deg,#FFD54F,#FFB74D);
+        padding:20px;border-radius:12px;margin-bottom:24px;
+        color:#333;font-family:Arial,sans-serif;
+    ">
+      <h2 style="
+          margin:0 0 8px;font-size:1.8rem;color:#fff;
+          text-shadow:1px 1px 2px rgba(0,0,0,0.3);
+      ">☀️ Welcome to EnerMat Perovskite Explorer v9.6</h2>
+      <p style="margin:0 0 12px;font-size:1rem;line-height:1.5;">
+        Lead–halide perovskites achieve record solar efficiencies but pose
+        toxicity and stability challenges. This app lets you rapidly
+        screen lead‑free Sn–Ge perovskite alloys by exploring their
+        <strong>Eg</strong> (band gap), <strong>Eₕᵤₗₗ</strong> (phase stability),
+        <strong>ΔEₒₓ</strong> (oxidation drive) and
+        <strong>PCEₘₐₓ</strong> (Shockley–Queisser limit) in real time.
+      </p>
+      <ul style="margin:0;padding-left:1.2em;font-size:0.95rem;">
+        <li><strong>Eg</strong>: Direct bandgap (ideal ~1.3 eV for sunlight).</li>
+        <li><strong>Eₕᵤₗₗ</strong>: Energy above hull (eV/atom), measure of stability.</li>
+        <li><strong>ΔEₒₓ</strong>: Oxidation enthalpy (eV/Sn), Sn²⁺→Sn⁴⁺ tendency.</li>
+        <li><strong>PCEₘₐₓ</strong>: Theoretical max efficiency (%).</li>
+      </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 # ─────────── SIDEBAR ───────────
 with st.sidebar:
     st.header("Mode")
