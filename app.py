@@ -142,10 +142,17 @@ st.markdown(
         <li><strong>ΔEₒₓ</strong>: Oxidation enthalpy (eV per Sn), quantifying Sn²⁺→Sn⁴⁺ drive.</li>
         <li><strong>PCEₘₐₓ</strong>: Shockley–Queisser power‑conversion efficiency (%), the detailed‑balance limit.</li>
       </ul>
+      <p>
+        **Materials scientists**, **solar‑cell engineers** and **educators** can use EnerMat to quickly pinpoint promising lead‑free perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
+      </p>
+      <p>
+        **Industry partners** gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while **students** enjoy an interactive platform to explore perovskite design principles hands‑on.
+      </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
 # ─────────── HOW TO USE ───────────
 st.markdown(
     """
