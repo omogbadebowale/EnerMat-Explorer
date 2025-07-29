@@ -13,11 +13,33 @@ from backend.perovskite_utils import (
 )
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
-st.set_page_config("EnerMat Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
-# ─────────── SESSION STATE ───────────
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.set_page_config(
+    page_title="EnerMat Perovskite Explorer",
+    page_icon="assets/perovskite_icon.png",  # if you’ve placed your icon in assets/
+    layout="wide",
+)
+
+# ─────────── CUSTOM HEADER WITH BOXED BACKGROUND ───────────
+st.markdown("""
+<style>
+.header-box {
+    background-color: #007ACC;
+    padding: 12px 20px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+.header-box h1 {
+    color: white !important;
+    font-size: 2.5rem;
+    margin: 0;
+    font-weight: 600;
+}
+</style>
+<div class="header-box">
+  🔬 <h1 style="display:inline">EnerMat Perovskite Explorer v9.6</h1>
+</div>
+""", unsafe_allow_html=True)
+
 
 # ─────────── SIDEBAR ───────────
 with st.sidebar:
