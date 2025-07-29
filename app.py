@@ -14,7 +14,7 @@ from backend.perovskite_utils import (
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
-st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
+st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
 
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
