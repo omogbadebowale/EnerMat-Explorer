@@ -129,7 +129,7 @@ with tab_tbl:
     st.dataframe(df, use_container_width=True, height=440)
 
 with tab_plot:
-    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
+if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df["Ehull"], y=df["Eg"], mode="markers",
@@ -177,7 +177,7 @@ with tab_plot:
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
+elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
