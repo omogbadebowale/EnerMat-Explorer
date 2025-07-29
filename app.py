@@ -141,7 +141,7 @@ with tab_plot:
             hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
             customdata=df.to_numpy()
         ))
-        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+        fig.add_shape(type="rect", x0=0, x1=0.02, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
         fig.update_layout(title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)", template="simple_white", font_size=14, height=500)
         st.plotly_chart(fig, use_container_width=True)
