@@ -157,11 +157,11 @@ with tab_plot:
     height=540,
     margin=dict(l=60, r=60, t=60, b=60),
     coloraxis_colorbar=dict(
-        title="Score",
-        tickfont=dict(size=12),
-        titlefont=dict(size=12)
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
     )
 )
+
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
