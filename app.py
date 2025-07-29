@@ -14,8 +14,8 @@ from backend.perovskite_utils import (
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config(
-    page_title="EnerMat Explorer",
-    page_icon="assets/perovskite_icon.png",  # ← updated path
+    page_title="🔬 EnerMat Perovskite Explorer",
+    page_icon="assets/perovskite_icon.png",  # ← relative path into assets/
     layout="wide",
     initial_sidebar_state="expanded",
 )
