@@ -40,7 +40,7 @@ st.markdown("""
 }
 </style>
 <div class="header-box">
-  🔬 <h1 style="display:inline">EnerMat Perovskite Explorer v9.6</h1>
+  ☀️ <h1 style="display:inline">EnerMat Perovskite Explorer v9.6</h1>
 </div>
 """, unsafe_allow_html=True)
 
