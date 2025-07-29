@@ -127,7 +127,7 @@ st.markdown(
     }
     </style>
     <div class="problem-box">
-      <h2>Problem Statement &amp; Significance</h2>
+      <h2>Context & Value</h2>
       <p>
         Lead–halide perovskites deliver record solar efficiencies but suffer from
         environmental toxicity and rapid degradation under heat, moisture, or oxygen.
