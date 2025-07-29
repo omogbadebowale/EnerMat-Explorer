@@ -110,6 +110,50 @@ def _run_binary(*args, **kwargs):
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
+# right after st.title(...)
+st.markdown(
+    """
+    <div style="
+        background-color:#E3F2FD;
+        padding:20px;
+        border-radius:10px;
+        margin-bottom:20px;
+    ">
+      <h2 style="
+          margin:0;
+          font-family:Arial, sans-serif;
+          color:#0D47A1;
+          font-size:28px;
+        ">
+        🔬 Welcome to EnerMat Perovskite Explorer v9.6
+      </h2>
+      <p style="
+          margin:8px 0 0;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:16px;
+          line-height:1.4;
+        ">
+        EnerMat empowers you to rapidly screen and visualize
+        lead‑free perovskite alloys for solar photovoltaics.  
+        Instantly explore how composition, stability and
+        Shockley–Queisser limits trade off, and identify
+        your optimal “sweet spot” in real time.
+      </p>
+      <ul style="
+          margin:10px 0 0 20px;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:15px;
+        ">
+        <li>Interactive, climate‑aware band‑gap & stability maps</li>
+        <li>Supports binary & ternary halide alloying with Ge substitution</li>
+        <li>Production‑quality export: CSV, TXT, DOCX</li>
+      </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
