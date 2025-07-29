@@ -103,8 +103,16 @@ def _run_ternary(*args, **kwargs):
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
-do_run  = col_run.button("▶ Run screening", type="primary", key="run_btn")
-do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history, key="prev_btn")
+do_run  = col_run.button(
+    "▶ Run screening",
+    key="run_button",
+    type="primary",
+)
+do_prev = col_prev.button(
+    "⏪ Previous",
+    key="prev_button",
+    disabled=not st.session_state.history,
+)
 
 # ─────────── Add a welcome message ───────────
 st.markdown(
