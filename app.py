@@ -19,6 +19,10 @@ st.set_page_config(
     layout="wide",
 )
 
+# ─────────── SESSION STATE ───────────
+if "history" not in st.session_state:
+    st.session_state["history"] = []
+
 # ─────────── CUSTOM HEADER WITH BOXED BACKGROUND ───────────
 st.markdown("""
 <style>
@@ -117,7 +121,7 @@ do_run  = col_run.button(
 do_prev = col_prev.button(
     "⏪ Previous",
     key="prev_button",
-    disabled=not st.session_state.history,
+    disabled=not st.session_state["history"],
 )
 
 # ─────────── Welcome blurb ───────────
@@ -132,7 +136,7 @@ st.markdown(
 
 
 if do_prev:
-    st.session_state.history.pop()
+    st.session_state["history"].pop()
     prev = st.session_state.history[-1]
     df, mode = prev["df"], prev["mode"]
     st.success("Showing previous result")
