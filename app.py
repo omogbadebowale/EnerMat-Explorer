@@ -11,19 +11,6 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-# ─────────── publication‑ready layout defaults ───────────
-PLOT_LAYOUT = dict(
-    template="simple_white",
-    font=dict(family="Arial", size=14, color="black"),
-    width=720, height=540,
-    margin=dict(l=60, r=60, t=60, b=60),
-    coloraxis_colorbar=dict(
-        title=dict(text="Score", font=dict(size=14)),
-        tickfont=dict(size=14),
-        thickness=20, len=0.6,
-        x=1.05, xanchor="left"
-    )
-)
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
@@ -143,44 +130,43 @@ with tab_tbl:
 
 with tab_plot:
     if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
-    fig = go.Figure()
-    # ─────────── your existing trace and rectangle ───────────
-    fig.add_trace(go.Scatter(
-        x=df["Ehull"], y=df["Eg"], mode="markers",
-        marker=dict(
-            size=8 + 12 * df["score"],
-            color=df["score"], colorscale="Viridis", cmin=0, cmax=1,
-            line=dict(color="white", width=1)           # white outline
-        ),
-        hovertemplate=(
-            "<b>%{customdata[6]}</b><br>"
-            "Eg=%{y:.3f} eV<br>"
-            "Ehull=%{x:.4f} eV/at<br>"
-            "Score=%{marker.color:.3f}<extra></extra>"
-        ),
-        customdata=df.to_numpy()
-    ))
-    fig.add_shape(
-        type="rect",
-        x0=0, x1=0.015,            # clamp x‑axis here
-        y0=bg_lo, y1=bg_hi,
-        line=dict(color="LightSeaGreen", dash="dash"),
-        fillcolor="LightSeaGreen", opacity=0.1
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["Ehull"], y=df["Eg"], mode="markers",
+            marker=dict(
+                size=8+12*df["score"], color=df["score"],
+                colorscale="Viridis", cmin=0, cmax=1,
+                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
+            ),
+            hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
+            customdata=df.to_numpy()
+        ))
+        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+                      line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
+        fig.update_layout(
+    title="EnerMat Binary Screen",
+    xaxis_title="Ehull (eV/atom)",
+    yaxis_title="Eg (eV)",
+    template="simple_white",
+    font=dict(
+        family="Arial",
+        size=12,
+        color="black"
+    ),
+    width=720,
+    height=540,
+    margin=dict(l=60, r=60, t=60, b=60),
+    coloraxis_colorbar=dict(
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
     )
-
-    # ─────────── apply publication‑style layout ───────────
-    fig.update_layout(
-        title="EnerMat Binary Screen",
-        xaxis_title="Ehull (eV/atom)",
-        yaxis_title="Eg (eV)",
-        **PLOT_LAYOUT
-    )
-
-    # ─────────── draw full border spines ───────────
-    fig.update_xaxes(showline=True, linewidth=1.2, linecolor="black", mirror=True)
-    fig.update_yaxes(showline=True, linewidth=1.2, linecolor="black", mirror=True)
-
-    st.plotly_chart(fig, use_container_width=True)
+)
+        st.plotly_chart(fig, use_container_width=True)
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",
+                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
