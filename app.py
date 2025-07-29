@@ -15,6 +15,17 @@ from backend.perovskite_utils import (
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
 st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
+st.markdown(
+    """
+    <style>
+      /* Target the sidebar wrapper and give it a colored left border */
+      .css-1d391kg {
+        border-right: 3px solid #0D47A1 !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
