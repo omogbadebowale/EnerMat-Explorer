@@ -125,8 +125,7 @@ st.markdown(
           color:#0D47A1;
           font-size:28px;
         ">
-       Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar
-        Instantly explore composition, stability, and efficiency trade‑offs in real time.
+       Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar Instantly and explore composition, stability, and efficiency trade‑offs in real time.
       </h2>
       <p style="
           margin:8px 0 0;
