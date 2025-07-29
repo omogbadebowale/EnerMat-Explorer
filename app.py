@@ -83,39 +83,7 @@ def _run_binary(*args, **kwargs):
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
-# ─────────── QUICK START BOX ───────────
-st.markdown(
-    """
-    <div style="
-        background-color:#E3F2FD;
-        padding:16px;
-        border-radius:8px;
-        margin-bottom:16px;
-    ">
-      <p style="
-          margin:0 0 8px;
-          font-family:Arial, sans-serif;
-          color:#212121;
-          font-size:15px;
-        ">
-        Use the controls on the left to pick your end‑members, environment, and model settings —  
-        then hit ▶ Run screening to find your perovskite sweet spot.
-      </p>
-      <ul style="
-          margin:0 0 0 16px;
-          padding:0;
-          font-family:Arial, sans-serif;
-          color:#212121;
-          font-size:14px;
-        ">
-        <li>Interactive, climate‑aware band‑gap & stability maps</li>
-        <li>Binary & ternary alloying with Ge substitution</li>
-        <li>Export results as CSV, TXT, DOCX</li>
-      </ul>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+
 # ─────────── PROBLEM STATEMENT / SIGNIFICANCE ───────────
 st.markdown(
     """
@@ -167,7 +135,39 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
+# ─────────── QUICK START BOX ───────────
+st.markdown(
+    """
+    <div style="
+        background-color:#E3F2FD;
+        padding:16px;
+        border-radius:8px;
+        margin-bottom:16px;
+    ">
+      <p style="
+          margin:0 0 8px;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:15px;
+        ">
+        Use the controls on the left to pick your end‑members, environment, and model settings —  
+        then hit ▶ Run screening to find your perovskite sweet spot.
+      </p>
+      <ul style="
+          margin:0 0 0 16px;
+          padding:0;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:14px;
+        ">
+        <li>Interactive, climate‑aware band‑gap & stability maps</li>
+        <li>Binary & ternary alloying with Ge substitution</li>
+        <li>Export results as CSV, TXT, DOCX</li>
+      </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
