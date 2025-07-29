@@ -143,7 +143,24 @@ with tab_plot:
         ))
         fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
-        fig.update_layout(title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)", template="simple_white", font_size=14, height=500)
+        fig.update_layout(
+    title="EnerMat Binary Screen",
+    xaxis_title="Ehull (eV/atom)",
+    yaxis_title="Eg (eV)",
+    template="simple_white",
+    font=dict(
+        family="Arial",
+        size=12,
+        color="black"
+    ),
+    width=720,
+    height=540,
+    margin=dict(l=60, r=60, t=60, b=60),
+    coloraxis_colorbar=dict(
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
+    )
+)
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
