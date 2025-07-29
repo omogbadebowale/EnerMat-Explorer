@@ -179,14 +179,7 @@ st.markdown(
           color:#212121;
           font-size:15px;
         ">
-        <li>Interactive, climate‑aware band‑gap & stability maps</li>
-        <li>Binary & ternary alloying with Ge substitution</li>
-        <li>Export your results as CSV, TXT, or DOCX</li>
-      </ul>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
