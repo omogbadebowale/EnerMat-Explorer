@@ -154,43 +154,34 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ─────────── WELCOME BLURB ───────────
+# ─────────── QUICK START BOX ───────────
 st.markdown(
     """
     <div style="
         background-color:#E3F2FD;
-        padding:20px;
-        border-radius:10px;
-        margin-bottom:20px;
+        padding:16px;
+        border-radius:8px;
+        margin-bottom:16px;
     ">
       <p style="
-          margin:0 0 12px;
+          margin:0 0 8px;
           font-family:Arial, sans-serif;
           color:#212121;
-          font-size:16px;
-          line-height:1.4;
+          font-size:15px;
         ">
         Use the controls on the left to pick your end‑members, environment, and model settings —  
-        then hit ▶️ Run screening to find your perovskite sweet spot.
+        then hit ▶ Run screening to find your perovskite sweet spot.
       </p>
       <ul style="
-          margin:0 0 0 20px;
+          margin:0 0 0 16px;
+          padding:0;
           font-family:Arial, sans-serif;
           color:#212121;
-          font-size:15px;
+          font-size:14px;
         ">
-          Use the controls on the left to pick your end‑members, environment, and model settings —  
-        then hit ▶️ Run screening to find your perovskite sweet spot.
-      </p>
-      <ul style="
-          margin:0 0 0 20px;
-          font-family:Arial, sans-serif;
-          color:#212121;
-          font-size:15px;
-        ">
-        <li>Interactive, climate‑aware band‑gap & stability maps</li>
+        <li>Interactive, climate‑aware band‑gap & stability maps</li>
         <li>Binary & ternary alloying with Ge substitution</li>
-        <li>Export your results as CSV, TXT, or DOCX</li>
+        <li>Export results as CSV, TXT, DOCX</li>
       </ul>
     </div>
     """,
