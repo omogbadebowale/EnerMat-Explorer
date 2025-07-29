@@ -85,11 +85,19 @@ def _run_ternary(*args, **kwargs):
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
-do_run  = col_run.button("▶ Run screening", type="primary")
-do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
-col_run, col_prev = st.columns([3,1])
-do_run  = col_run.button("▶ Run screening", type="primary")
-do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+do_run  = col_run.button("▶ Run screening", type="primary", key="run_btn")
+do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history, key="prev_btn")
+
+# ─────────── Add a welcome callout ───────────
+st.markdown(
+    """
+    <div style='background:#f0f8ff; padding:12px; border-radius:6px;'>
+      <strong>👋 Welcome to EnerMat Explorer!</strong><br>
+      Adjust your settings in the sidebar, then click ▶ Run screening to discover optimal perovskite alloys.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── Add a welcome message ───────────
 st.markdown(
