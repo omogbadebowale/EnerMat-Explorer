@@ -135,6 +135,64 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ─────────── HOW TO USE ───────────
+st.markdown(
+    """
+    <style>
+      .usage-box {
+        background: linear-gradient(135deg, #BBDEFB 0%, #E3F2FD 100%);
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        color: #0D47A1;
+        font-family: Arial, sans-serif;
+      }
+      .usage-box h2 {
+        margin: 0 0 8px;
+        font-size: 1.6rem;
+        text-shadow: 1px 1px 2px rgba(255,255,255,0.6);
+      }
+      .usage-box p {
+        margin: 0 0 12px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+      .usage-box ul {
+        margin: 0;
+        padding-left: 1.2em;
+        font-size: 0.9rem;
+      }
+    </style>
+    <div class="usage-box">
+      <h2>🔧 How to Use EnerMat</h2>
+      <p>
+        Follow these simple steps to identify your optimal lead‑free perovskite:
+      </p>
+      <ul>
+        <li>
+          <strong>Select End‑members</strong> (A & B, and optionally C) from the dropdowns on the left.
+        </li>
+        <li>
+          <strong>Set Environment</strong>: adjust humidity (%) and temperature (°C) sliders.
+        </li>
+        <li>
+          <strong>Tune Model</strong>: choose your target band‑gap window, bowing parameter, composition step‑sizes, and Ge‑fraction.
+        </li>
+        <li>
+          Hit the <code>▶ Run screening</code> button to generate an interactive table & plot of Eg vs. Ehull vs. Score.
+        </li>
+        <li>
+          Use <code>⏪ Previous</code> to step back through prior results, and download CSV/TXT/DOCX via the Download tab.
+        </li>
+      </ul>
+      <p style="font-style:italic; font-size:0.85rem;">
+        Instantly visualize how band‐gap, phase‐stability, oxidation‐resistance, and theoretical efficiency trade off — no DFT runs required!
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ─────────── QUICK START BOX ───────────
 st.markdown(
     """
