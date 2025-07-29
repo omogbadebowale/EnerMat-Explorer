@@ -143,24 +143,51 @@ with tab_plot:
         ))
         fig.add_shape(type="rect", x0=0, x1=0.02, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
-        fig.update_layout(
+       # ─────────── replace your update_layout call with this ───────────
+fig.update_layout(
     title="EnerMat Binary Screen",
-    xaxis_title="Ehull (eV/atom)",
-    yaxis_title="Eg (eV)",
-    template="simple_white",
-    font=dict(
-        family="Arial",
-        size=12,
-        color="black"
+    font=dict(family="Arial", size=16, color="black"),   # ↑ base font
+
+    margin=dict(l=80, r=80, t=80, b=80),                  # ↑ lots of white space
+                                                        #    around the panel
+
+    xaxis=dict(
+        title="Ehull (eV/atom)",
+        showline=True,           # ↑ draw the bottom spine
+        linecolor="black",
+        linewidth=1.5,
+        mirror=True,             # ↑ mirror spine on top
+        ticks="outside",
+        tickfont=dict(size=14),
+        showgrid=False           # ↑ no grid
     ),
-    width=720,
-    height=540,
-    margin=dict(l=60, r=60, t=60, b=60),
+    yaxis=dict(
+        title="Eg (eV)",
+        showline=True,           # ↑ draw the left spine
+        linecolor="black",
+        linewidth=1.5,
+        mirror=True,             # ↑ mirror spine on right
+        ticks="outside",
+        tickfont=dict(size=14),
+        showgrid=False
+    ),
+
     coloraxis_colorbar=dict(
-        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
-        tickfont=dict(size=12)
-    )
+        title=dict(text="Score", font=dict(size=14)),
+        tickfont=dict(size=12),
+        thickness=20,            # ↑ thicker colorbar
+        len=0.6,                 # ↑ shorter so it doesn’t dominate
+        xanchor="left",          # ↑ shift it inside the margin
+        x=1.02                   
+    ),
+
+    width=700,    # ↑ fixed pixel size → reproducible across runs
+    height=550
 )
+
+# And if you still want to clamp the x‑axis to [0,0.015]:
+fig.update_xaxes(range=[0, 0.015])
+
 
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
