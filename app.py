@@ -125,7 +125,8 @@ st.markdown(
           color:#0D47A1;
           font-size:28px;
         ">
-        🔬 Welcome to EnerMat Perovskite Explorer v9.6
+       Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar
+        Instantly explore composition, stability, and efficiency trade‑offs in real time.
       </h2>
       <p style="
           margin:8px 0 0;
