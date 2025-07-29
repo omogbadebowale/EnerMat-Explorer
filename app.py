@@ -147,7 +147,7 @@ st.markdown(
           font-size:15px;
         ">
         <li>Interactive, climate‑aware band‑gap & stability maps</li>
-        <li>Supports binary & ternary halide alloying with Ge substitution</li>
+        <li>Supports binary & ternary halide alloying </li>
         <li>Production‑quality export: CSV, TXT, DOCX</li>
       </ul>
     </div>
