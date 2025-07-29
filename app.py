@@ -87,6 +87,22 @@ def _run_ternary(*args, **kwargs):
 col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+col_run, col_prev = st.columns([3,1])
+do_run  = col_run.button("▶ Run screening", type="primary")
+do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+
+# ─────────── Add a welcome message ───────────
+st.markdown(
+    """
+    <div style='background:#f0f8ff; padding:15px; border-radius:8px;'>
+      <h3 style='margin:0; color:#333;'>👋 Welcome to EnerMat Explorer!</h3>
+      <p style='margin:5px 0 0;'>
+        Select your end‑members, adjust the sliders, and hit ▶ Run screening to find your top perovskite candidates.
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if do_prev:
     st.session_state.history.pop()
