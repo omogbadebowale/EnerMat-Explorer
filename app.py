@@ -68,7 +68,7 @@ with st.sidebar:
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
     # developer credit footer
-    st.caption("Developed by Dr Gbadebo Taofeek Yusuf")
+    st.caption(" EnerMat Perovskite Explorer was Developed by Dr Gbadebo Taofeek Yusuf")
 
 # ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
