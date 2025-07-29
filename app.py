@@ -91,6 +91,11 @@ with st.sidebar:
     )
     # developer credit footer
     st.caption(" EnerMat Perovskite Explorer was Developed by Dr Gbadebo Taofeek Yusuf")
+    if st.button("🗑 Clear history"):
+        st.session_state.history.clear()
+        st.experimental_rerun()
+
+    st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
 
 # ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
@@ -100,6 +105,7 @@ def _run_binary(*args, **kwargs):
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
+
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
