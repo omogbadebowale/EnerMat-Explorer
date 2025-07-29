@@ -67,10 +67,6 @@ with st.sidebar:
         "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
-
-    if st.button("🗑 Clear history"):
-        st.session_state.history.clear()
-        st.experimental_rerun()
     # developer credit footer
     st.caption("Developed by Dr Gbadebo Taofeek Yusuf")
 
