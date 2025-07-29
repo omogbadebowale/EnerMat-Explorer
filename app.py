@@ -44,6 +44,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+st.set_page_config( ... )
+st.title("☀️ EnerMat Perovskite Explorer v9.6")
+
+# ← Paste the problem‑statement block here
+
+# (then) your welcome blurb or Run‑screening button, etc.
 
 # ─────────── SIDEBAR ───────────
 with st.sidebar:
