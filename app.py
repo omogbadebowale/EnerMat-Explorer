@@ -17,9 +17,11 @@ st.markdown(
     """
     <div style="
         background: #FFC107;            /* golden */
-        padding: 16px; border-radius: 8px;
-        margin-bottom: 16px; color: #212121;
-        font-family: 'Arial', sans-serif;
+        padding: 16px; 
+        border-radius: 8px;
+        margin-bottom: 16px; 
+        color: #212121;
+        font-family: Arial, sans-serif;
     ">
       <strong>
         Lead–halide perovskites deliver record solar efficiencies, but
@@ -29,15 +31,40 @@ st.markdown(
         Here you can quickly screen lead‑free Sn–Ge perovskite alloys
         by exploring:
       </p>
-      <ul style="margin:4px 0 0 1.2em; font-size:0.9rem; padding:0;">
-        <li><code>Eg</code> (band gap, ideal ~1.3 eV)</li>
-        <li><code>Eₕᵤₗₗ</code> (energy above hull, stability)</li>
-        <li><code>ΔEₒₓ</code> (Sn²⁺ → Sn⁴⁺ oxidation drive)</li>
-        <li><code>PCEₘₐₓ</code> (Shockley–Queisser limit)</li>
+      <ul style="margin:4px 0 0 1.2em; font-size:0.9rem; padding-left:1em;">
+        <li><code>Eg</code> — band gap (ideal ~1.3 eV)</li>
+        <li><code>Eₕᵤₗₗ</code> — energy above hull (stability)</li>
+        <li><code>ΔEₒₓ</code> — Sn²⁺ → Sn⁴⁺ oxidation drive</li>
+        <li><code>PCEₘₐₓ</code> — Shockley–Queisser limit</li>
       </ul>
     </div>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
+)
+
+# ─────────── APP SIGNIFICANCE ───────────
+st.markdown(
+    """
+    <div style="
+        background: #E3F2FD;           /* light blue */
+        padding: 20px; 
+        border-radius: 8px;
+        margin-bottom: 24px; 
+        color: #0D47A1;
+        font-family: 'Helvetica Neue', sans-serif;
+    ">
+      <h2 style="margin:0 0 8px; font-size:1.4rem;">
+        🔆 Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar Devices
+      </h2>
+      <p style="margin:0; line-height:1.5; font-size:1rem;">
+        EnerMat empowers you to rapidly screen and visualize Sn–Ge perovskite alloys
+        under realistic environmental conditions. Instantly see how composition,
+        stability, and theoretical efficiency trade off, and pinpoint your
+        “sweet‑spot” in real time — all without a single line of manual DFT!
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 # ─────────── APP SIGNIFICANCE ───────────
