@@ -179,7 +179,23 @@ st.markdown(
           color:#212121;
           font-size:15px;
         ">
-
+          Use the controls on the left to pick your end‑members, environment, and model settings —  
+        then hit ▶️ Run screening to find your perovskite sweet spot.
+      </p>
+      <ul style="
+          margin:0 0 0 20px;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:15px;
+        ">
+        <li>Interactive, climate‑aware band‑gap & stability maps</li>
+        <li>Binary & ternary alloying with Ge substitution</li>
+        <li>Export your results as CSV, TXT, or DOCX</li>
+      </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
