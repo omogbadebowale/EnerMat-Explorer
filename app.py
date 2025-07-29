@@ -119,68 +119,93 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────── DISPLAY RESULTS ───────────
-df = st.session_state.history[-1]["df"]
-mode = st.session_state.history[-1]["mode"]
+    # ─────────── DISPLAY RESULTS ───────────
+    df = st.session_state.history[-1]["df"]
+    mode = st.session_state.history[-1]["mode"]
 
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
+    tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
 
-with tab_tbl:
-    st.dataframe(df, use_container_width=True, height=440)
+    with tab_tbl:
+        st.dataframe(df, use_container_width=True, height=440)
 
-with tab_plot:
-if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df["Ehull"], y=df["Eg"], mode="markers",
-        marker=dict(
-            size=8+12*df["score"], color=df["score"],
-            colorscale="Viridis", cmin=0, cmax=1,
-            colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
-        ),
-        hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
-        customdata=df.to_numpy()
-    ))
-    fig.add_shape(
-        type="rect", x0=0, x1=0.015, y0=bg_lo, y1=bg_hi,
-        line=dict(color="LightSeaGreen", dash="dash"),
-        fillcolor="LightSeaGreen", opacity=0.1
-    )
+    with tab_plot:
+        if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df["Ehull"], y=df["Eg"], mode="markers",
+                marker=dict(
+                    size=8 + 12 * df["score"],
+                    color=df["score"],
+                    colorscale="Viridis", cmin=0, cmax=1,
+                    line=dict(width=0.5, color="black")
+                ),
+                hovertemplate=(
+                    "<b>%{customdata[6]}</b><br>"
+                    "Eg=%{y:.3f} eV<br>"
+                    "Ehull=%{x:.4f} eV/at<br>"
+                    "Score=%{marker.color:.3f}<extra></extra>"
+                ),
+                customdata=df.to_numpy()
+            ))
+            fig.add_shape(
+                type="rect",
+                x0=0, x1=0.015, y0=bg_lo, y1=bg_hi,
+                line=dict(color="LightSeaGreen", dash="dash"),
+                fillcolor="LightSeaGreen", opacity=0.1
+            )
 
-    # ─────────── publication‑ready styling ───────────
-    fig.update_layout(
-        title="EnerMat Binary Screen",
-        font=dict(family="Arial", size=16, color="black"),
-        margin=dict(l=80, r=80, t=80, b=80),
+            # ─────────── publication‑ready styling ───────────
+            fig.update_layout(
+                title="EnerMat Binary Screen",
+                font=dict(family="Arial", size=16, color="black"),
+                margin=dict(l=80, r=80, t=80, b=80),
+                xaxis=dict(
+                    title="Ehull (eV/atom)",
+                    showline=True, linecolor="black", linewidth=1.5, mirror=True,
+                    ticks="outside", tickfont=dict(size=14), showgrid=False,
+                    range=[0, 0.015],
+                ),
+                yaxis=dict(
+                    title="Eg (eV)",
+                    showline=True, linecolor="black", linewidth=1.5, mirror=True,
+                    ticks="outside", tickfont=dict(size=14), showgrid=False,
+                ),
+                coloraxis_colorbar=dict(
+                    title=dict(text="Score", font=dict(size=14)),
+                    tickfont=dict(size=12),
+                    thickness=20, len=0.6,
+                    x=1.02, xanchor="left"
+                ),
+                width=700,
+                height=550,
+            )
 
-        xaxis=dict(
-            title="Ehull (eV/atom)",
-            showline=True, linecolor="black", linewidth=1.5, mirror=True,
-            ticks="outside", tickfont=dict(size=14), showgrid=False,
-            range=[0, 0.015],    # ← clamp x-axis here
-        ),
-        yaxis=dict(
-            title="Eg (eV)",
-            showline=True, linecolor="black", linewidth=1.5, mirror=True,
-            ticks="outside", tickfont=dict(size=14), showgrid=False,
-        ),
+            st.plotly_chart(fig, use_container_width=True)
 
-        coloraxis_colorbar=dict(
-            title=dict(text="Score", font=dict(size=14)),
-            tickfont=dict(size=12),
-            thickness=20, len=0.6,
-            x=1.02, xanchor="left"
-        ),
+        elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+            fig = px.scatter_3d(
+                df,
+                x="x", y="y", z="score", color="score",
+                color_continuous_scale="Viridis",
+                labels={"x":"B2 fraction","y":"B3 fraction"},
+                width=700, height=550
+            )
+            fig.update_layout(
+                margin=dict(l=80, r=80, t=80, b=80),
+                scene=dict(
+                    xaxis=dict(title="B2 fraction", tickfont=dict(size=14), title_font=dict(size=16)),
+                    yaxis=dict(title="B3 fraction", tickfont=dict(size=14), title_font=dict(size=16)),
+                    zaxis=dict(title="Score", tickfont=dict(size=14), title_font=dict(size=16)),
+                ),
+                font=dict(family="Arial", size=16),
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-        width=700,
-        height=550,
-    )
+    with tab_dl:
+        st.download_button("📥 Download CSV",
+                           df.to_csv(index=False).encode(),
+                           "EnerMat_results.csv", "text/csv")
 
-    st.plotly_chart(fig, use_container_width=True)
-elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
-
-with tab_dl:
-    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
