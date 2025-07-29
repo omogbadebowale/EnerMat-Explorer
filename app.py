@@ -71,8 +71,8 @@ with st.sidebar:
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
-
-    st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
+    # developer credit footer
+    st.caption("Developed by Dr Gbadebo Taofeek Yusuf")
 
 # ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
