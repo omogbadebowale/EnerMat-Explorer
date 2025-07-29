@@ -13,14 +13,8 @@ from backend.perovskite_utils import (
 )
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
-# app.py
-import streamlit as st
-
-st.set_page_config(
-    page_title="🔬 EnerMat Perovskite Explorer",
-    page_icon="assets/perovskite_icon.png",
-    layout="wide",
-)
+st.set_page_config("EnerMat Explorer", layout="wide")
+st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
     st.session_state.history = []
