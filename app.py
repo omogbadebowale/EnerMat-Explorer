@@ -125,7 +125,7 @@ st.markdown(
           color:#0D47A1;
           font-size:28px;
         ">
-       Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar
+       Harness the Power of Lead‑Free Perovskites for Next‑Gen Solar Devices
       </h2>
       <p style="
           margin:8px 0 0;
