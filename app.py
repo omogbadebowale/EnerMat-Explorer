@@ -143,10 +143,10 @@ st.markdown(
         <li><strong>PCEₘₐₓ</strong>: Shockley–Queisser power‑conversion efficiency (%), the detailed‑balance limit.</li>
       </ul>
       <p>
-        **Materials scientists**, **solar‑cell engineers** and **educators** can use EnerMat to quickly pinpoint promising lead‑free perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
+        The app will help Materials scientists, Solar‑cell engineers and Educators to quickly pinpoint promising lead‑free perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
       </p>
       <p>
-        **Industry partners** gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while **students** enjoy an interactive platform to explore perovskite design principles hands‑on.
+        It will also assist Industry partners gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while students enjoy an interactive platform to explore perovskite design principles hands‑on.
       </p>
     </div>
     """,
