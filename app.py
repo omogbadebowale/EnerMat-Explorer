@@ -154,6 +154,39 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ─────────── WELCOME BLURB ───────────
+st.markdown(
+    """
+    <div style="
+        background-color:#E3F2FD;
+        padding:20px;
+        border-radius:10px;
+        margin-bottom:20px;
+    ">
+      <p style="
+          margin:0 0 12px;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:16px;
+          line-height:1.4;
+        ">
+        Use the controls on the left to pick your end‑members, environment, and model settings —  
+        then hit ▶️ Run screening to find your perovskite sweet spot.
+      </p>
+      <ul style="
+          margin:0 0 0 20px;
+          font-family:Arial, sans-serif;
+          color:#212121;
+          font-size:15px;
+        ">
+        <li>Interactive, climate‑aware band‑gap & stability maps</li>
+        <li>Binary & ternary alloying with Ge substitution</li>
+        <li>Export your results as CSV, TXT, or DOCX</li>
+      </ul>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
@@ -166,16 +199,6 @@ do_prev = col_prev.button(
     "⏪ Previous",
     key="prev_button",
     disabled=not st.session_state["history"],
-)
-
-# ─────────── Welcome blurb ───────────
-st.markdown(
-    """
-    **👋 Welcome to EnerMat!**  
-    Use the controls on the left to pick your end‑members, environment, and model settings —  
-    then hit ▶ **Run screening** to find your perovskite sweet spot.
-    """,
-    unsafe_allow_html=True,
 )
 
 
