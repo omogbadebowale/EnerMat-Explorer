@@ -8,6 +8,7 @@ from plotly import graph_objects as go
 from docx import Document
 from backend.perovskite_utils import (
     screen_binary,
+    screen_ternary,
     END_MEMBERS,
 )
 
@@ -35,7 +36,7 @@ with st.sidebar:
     st.header("Mode")
     mode = st.radio(
         "Choose screening type",
-        ["Binary A–B"]  # Only Binary now
+        ["Binary A–B", "Ternary A–B–C"]
     )
 
     st.header("End-members")
@@ -45,11 +46,10 @@ with st.sidebar:
     custom_B = st.text_input("Custom B (optional)").strip()
     A = custom_A or preset_A
     B = custom_B or preset_B
-
-    st.header("Substitution Element")
-    substitution_element = st.selectbox(
-        "Choose substitution element", ["Ge", "Se", "Te", "Pb"], index=0
-    )
+    if mode.startswith("Ternary"):
+        preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
+        custom_C = st.text_input("Custom C (optional)").strip()
+        C = custom_C or preset_C
 
     st.header("Application")
     application = st.selectbox(
@@ -72,6 +72,8 @@ with st.sidebar:
         -1.0, 1.0, -0.15, 0.05
     )
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+    if mode.startswith("Ternary"):
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
     z = st.slider(
         "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
@@ -88,6 +90,10 @@ with st.sidebar:
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
 def _run_binary(*args, **kwargs):
     return screen_binary(*args, **kwargs)
+
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
+def _run_ternary(*args, **kwargs):
+    return screen_ternary(*args, **kwargs)
 
 # ─────────── PROBLEM STATEMENT / SIGNIFICANCE ───────────
 st.markdown(
@@ -226,7 +232,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application, substitution_element=substitution_element
+            z=z, application=application
+        )
+    else:
+        df = _run_ternary(
+            A, B, C, rh, temp,
+            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
+            dx=dx, dy=dy, z=z, application=application
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
