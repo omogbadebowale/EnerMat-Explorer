@@ -51,11 +51,6 @@ with st.sidebar:
         custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
-    st.header("Substitution Element")
-    substitution_element = st.selectbox(
-        "Choose substitution element", ["Ge", "Se", "Te", "Pb"], index=0
-    )
-
     st.header("Application")
     application = st.selectbox(
         "Select application",
@@ -237,13 +232,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application, substitution_element=substitution_element
+            z=z, application=application
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application, substitution_element=substitution_element
+            dx=dx, dy=dy, z=z, application=application
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
@@ -251,7 +246,7 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────── DISPLAY RESULTS ───────────
+  # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
@@ -276,23 +271,23 @@ with tab_plot:
         fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
         fig.update_layout(
-            title="EnerMat Binary Screen",
-            xaxis_title="Ehull (eV/atom)",
-            yaxis_title="Eg (eV)",
-            template="simple_white",
-            font=dict(
-                family="Arial",
-                size=12,
-                color="black"
-            ),
-            width=720,
-            height=540,
-            margin=dict(l=60, r=60, t=60, b=60),
-            coloraxis_colorbar=dict(
-                title=dict(text="Score", font=dict(size=12)), 
-                tickfont=dict(size=12)
-            )
-        )
+    title="EnerMat Binary Screen",
+    xaxis_title="Ehull (eV/atom)",
+    yaxis_title="Eg (eV)",
+    template="simple_white",
+    font=dict(
+        family="Arial",
+        size=12,
+        color="black"
+    ),
+    width=720,
+    height=540,
+    margin=dict(l=60, r=60, t=60, b=60),
+    coloraxis_colorbar=dict(
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
+    )
+)
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
@@ -302,3 +297,47 @@ with tab_plot:
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
+# ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
+_top = df.iloc[0]
+formula = str(_top["formula"])
+coords  = ", ".join(
+    f"{c}={_top[c]:.2f}"
+    for c in ("x", "y", "z", "ge_frac") if c in _top and pd.notna(_top[c])
+)
+label = formula if len(df) == 1 else f"{formula} ({coords})"
+
+_txt = (
+    "EnerMat auto-report  "
+    f"{datetime.date.today()}\n"
+    f"Top candidate   : {label}\n"
+    f"Band-gap [eV]   : {_top['Eg']}\n"
+    f"Ehull [eV/at.]  : {_top['Ehull']}\n"
+    f"Eox_e [eV/e⁻]   : {_top.get('Eox_e', 'N/A')}\n"
+    f"Score           : {_top['score']}\n"
+)
+
+st.download_button("📄 Download TXT", _txt,
+                   "EnerMat_report.txt", mime="text/plain")
+
+_doc = Document()
+_doc.add_heading("EnerMat Report", level=0)
+_doc.add_paragraph(f"Date : {datetime.date.today()}")
+_doc.add_paragraph(f"Top candidate : {label}")
+
+table = _doc.add_table(rows=1, cols=2)
+table.style = "LightShading-Accent1"
+hdr = table.rows[0].cells
+hdr[0].text, hdr[1].text = "Property", "Value"
+for k in ("Eg", "Ehull", "Eox_e", "score"):
+    if k in _top:
+        row = table.add_row().cells
+        row[0].text, row[1].text = k, str(_top[k])
+
+buf = io.BytesIO()
+_doc.save(buf)
+buf.seek(0)
+st.download_button("📝 Download DOCX", buf,
+                   "EnerMat_report.docx",
+                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+# ─────────────────────────────────────────────────────────────────────────────
