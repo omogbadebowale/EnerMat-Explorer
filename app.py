@@ -51,6 +51,11 @@ with st.sidebar:
         custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
+    st.header("Substitution Element")
+    substitution_element = st.selectbox(
+        "Choose substitution element", ["Ge", "Se", "Te", "Pb"], index=0
+    )
+
     st.header("Application")
     application = st.selectbox(
         "Select application",
@@ -232,13 +237,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application
+            z=z, application=application, substitution_element=substitution_element
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application
+            dx=dx, dy=dy, z=z, application=application, substitution_element=substitution_element
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
@@ -288,6 +293,11 @@ with tab_plot:
                 tickfont=dict(size=12)
             )
         )
+        st.plotly_chart(fig, use_container_width=True)
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",
+                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
