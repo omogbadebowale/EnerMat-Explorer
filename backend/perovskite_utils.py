@@ -29,6 +29,9 @@ APPLICATION_CONFIG = {
     "detector": {"range": (0.80, 3.00), "center": None, "sigma": None},
 }
 
+# ─────────── Constants ───────────
+K_T_EFF = 0.0259  # Effective thermal energy in eV at room temperature (300K)
+
 # ─────────── reference data ───────────
 END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3", 
                "CsSnSe3", "CsSnTe3", "CsGeI3", "CsSnF3", "CsGeF3", "CsPbF3", "CsPb(SCN)3", "CsPb(Br1-xIx)3"]
