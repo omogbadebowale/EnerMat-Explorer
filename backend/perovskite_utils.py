@@ -21,6 +21,14 @@ if not API_KEY or len(API_KEY) != 32:
 
 mpr = MPRester(API_KEY)
 
+# ─────────── application-based band-gap targets ───────────
+APPLICATION_CONFIG = {
+    "single": {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
+    "tandem": {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
+    "indoor": {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
+    "detector": {"range": (0.80, 3.00), "center": None, "sigma": None},
+}
+
 # ─────────── reference data ───────────
 END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3", "CsPbCl3", "CsPbBr3", "CsPbI3", 
                "CsSnSe3", "CsSnTe3", "CsGeI3", "CsSnF3", "CsGeF3", "CsPbF3", "CsPb(SCN)3", "CsPb(Br1-xIx)3"]
