@@ -79,6 +79,21 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
+# ─────────── Band Gap Scoring Function ───────────
+def _score_band_gap(Eg: float, lo: float, hi: float, center: float, sigma: float) -> float:
+    """
+    Compute the band gap score based on the user's selected application and the band-gap value (Eg).
+    The score is normalized between 0 and 1.
+    """
+    if not (lo <= Eg <= hi):
+        return 0.0  # Outside the desired band-gap window
+
+    if center is None or sigma is None:
+        return 1.0  # No Gaussian scoring applied if no center and sigma are provided
+
+    # Gaussian scoring function
+    return math.exp(-0.5 * ((Eg - center) / sigma) ** 2)
+
 # ─────────── binary screen ───────────
 def screen_binary(
     A: str,
