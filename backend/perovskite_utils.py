@@ -126,6 +126,7 @@ def screen_binary(
     dB = fetch_mp_data(B_sub, ["band_gap", "energy_above_hull"])
 
     if not (dA and dB):
+        st.warning(f"No data available for the selected substitution {substitution_element} in {A} or {B}.")
         return pd.DataFrame()
 
     rows: list[dict] = []
@@ -168,77 +169,3 @@ def screen_binary(
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
-
-# ─────────── ternary screen ───────────
-def screen_ternary(
-    A: str,
-    B: str,
-    C: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    *,
-    dx: float = 0.10,
-    dy: float = 0.10,
-    z: float = 0.0,
-    application: str | None = None,
-    substitution_element: str = "Ge",  # New parameter for substitution
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
-
-    # Substitution logic for ternary
-    A_sub = A.replace("Sn", substitution_element)  # Handle substitution
-    B_sub = B.replace("Sn", substitution_element)  # Handle substitution
-    C_sub = C.replace("Sn", substitution_element)  # Handle substitution
-
-    dA = fetch_mp_data(A_sub, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B_sub, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C_sub, ["band_gap", "energy_above_hull"])
-
-    if not (dA and dB and dC):
-        return pd.DataFrame()
-
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
-            w = 1.0 - x - y
-            # Sn gap
-            Eg_Sn = (
-                w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
-            )
-
-            Eh_Sn = (
-                w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-            )
-            sbg = _score_band_gap(Eg_Sn, lo, hi, center, sigma)
-            raw = sbg * math.exp(-Eh_Sn / 0.0518)
-
-            # Shockley–Queisser PCE limit
-            pce = sq_efficiency(Eg_Sn)
-
-            rows.append({
-                "x": round(x, 3),
-                "y": round(y, 3),
-                "z": round(z, 2),
-                "Eg": round(Eg_Sn, 3),
-                "Ehull": round(Eh_Sn, 4),
-                "PCE_max (%)": round(pce * 100, 1),
-                "raw": raw,
-                "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
-            })
-
-    if not rows:
-        return pd.DataFrame()
-
-    m = max(r["raw"] for r in rows) or 1.0
-    for r in rows:
-        r["score"] = round(r.pop("raw") / m, 3)
-
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
