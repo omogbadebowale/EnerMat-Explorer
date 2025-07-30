@@ -84,17 +84,10 @@ def oxidation_energy(formula_sn2: str) -> float:
 
 # ─────────── Band Gap Scoring Function ───────────
 def _score_band_gap(Eg: float, lo: float, hi: float, center: float, sigma: float) -> float:
-    """
-    Compute the band gap score based on the user's selected application and the band-gap value (Eg).
-    The score is normalized between 0 and 1.
-    """
     if not (lo <= Eg <= hi):
         return 0.0  # Outside the desired band-gap window
-
     if center is None or sigma is None:
         return 1.0  # No Gaussian scoring applied if no center and sigma are provided
-
-    # Gaussian scoring function
     return math.exp(-0.5 * ((Eg - center) / sigma) ** 2)
 
 # ─────────── binary screen ───────────
@@ -131,20 +124,13 @@ def screen_binary(
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Sn branch
         Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
         Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        # Calculate oxidation energy
         dEox_Sn = (1 - x) * oxidation_energy(A) + x * oxidation_energy(B)
 
         sbg = _score_band_gap(Eg_Sn, lo, hi, center, sigma)
-        raw = (
-            sbg
-            * math.exp(-Eh_Sn / 0.0259)
-            * math.exp(dEox_Sn / K_T_EFF)
-        )
+        raw = sbg * math.exp(-Eh_Sn / 0.0259) * math.exp(dEox_Sn / K_T_EFF)
 
-        # Shockley–Queisser PCE limit
         pce = sq_efficiency(Eg_Sn)
 
         rows.append({
@@ -164,8 +150,4 @@ def screen_binary(
     for r in rows:
         r["score"] = round(r.pop("raw") / m, 3)
 
-    return (
-        pd.DataFrame(rows)
-        .sort_values("score", ascending=False)
-        .reset_index(drop=True)
-    )
+    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
