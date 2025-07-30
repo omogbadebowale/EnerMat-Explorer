@@ -51,6 +51,11 @@ with st.sidebar:
         custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
+    st.header("Substitution Element")
+    substitution_element = st.selectbox(
+        "Choose substitution element", ["Ge", "Se", "Te", "Pb"], index=0
+    )
+
     st.header("Application")
     application = st.selectbox(
         "Select application",
@@ -232,13 +237,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application
+            z=z, application=application, substitution_element=substitution_element
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application
+            dx=dx, dy=dy, z=z, application=application, substitution_element=substitution_element
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
@@ -246,7 +251,7 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-  # ─────────── DISPLAY RESULTS ───────────
+# ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
@@ -271,23 +276,23 @@ with tab_plot:
         fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
         fig.update_layout(
-    title="EnerMat Binary Screen",
-    xaxis_title="Ehull (eV/atom)",
-    yaxis_title="Eg (eV)",
-    template="simple_white",
-    font=dict(
-        family="Arial",
-        size=12,
-        color="black"
-    ),
-    width=720,
-    height=540,
-    margin=dict(l=60, r=60, t=60, b=60),
-    coloraxis_colorbar=dict(
-        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
-        tickfont=dict(size=12)
-    )
-)
+            title="EnerMat Binary Screen",
+            xaxis_title="Ehull (eV/atom)",
+            yaxis_title="Eg (eV)",
+            template="simple_white",
+            font=dict(
+                family="Arial",
+                size=12,
+                color="black"
+            ),
+            width=720,
+            height=540,
+            margin=dict(l=60, r=60, t=60, b=60),
+            coloraxis_colorbar=dict(
+                title=dict(text="Score", font=dict(size=12)), 
+                tickfont=dict(size=12)
+            )
+        )
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
@@ -297,6 +302,7 @@ with tab_plot:
 
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
 
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
