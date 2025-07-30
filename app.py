@@ -305,6 +305,7 @@ with tab_dl:
 
 
 
+
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
 formula = str(_top["formula"])
