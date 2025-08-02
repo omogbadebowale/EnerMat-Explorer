@@ -11,7 +11,44 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
+# ───────────  NEW: logo header  ───────────
+from pathlib import Path
+import base64
 
+ASSETS_DIR = Path(__file__).with_name("assets")
+svg_path   = ASSETS_DIR / "enermat_logo.svg"
+png_path   = ASSETS_DIR / "enermat_logo.png"
+webp_path  = ASSETS_DIR / "enermat_logo.png.webp"      # allow .webp
+
+if svg_path.exists():
+    logo_bytes = svg_path.read_bytes()
+    mime = "image/svg+xml"
+elif png_path.exists():
+    logo_bytes = png_path.read_bytes()
+    mime = "image/png"
+elif webp_path.exists():
+    logo_bytes = webp_path.read_bytes()
+    mime = "image/webp"
+else:
+    logo_bytes = b""
+    mime = "image/png"
+
+b64_logo = base64.b64encode(logo_bytes).decode()
+
+st.markdown(
+    f"""
+    <div style="display:flex;align-items:center;gap:1rem;
+                margin-bottom:1rem;padding-top:0.2rem">
+        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo" height="56">
+        <div>
+            <h1 style="margin:0">EnerMat&nbsp;Explorer</h1>
+            <small style="opacity:0.75">Lead-free&nbsp;PV discovery tool</small>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+# ───────────────────────────────────────────
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
 st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
