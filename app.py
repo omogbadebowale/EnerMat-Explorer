@@ -110,137 +110,118 @@ def _run_binary(*args, **kwargs):
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
-# ─────────── CONTEXT, VALUE & USAGE ───────────
+# ─────────── OVERVIEW & RESEARCH OPPORTUNITIES ───────────
 st.markdown(
     """
     <style>
-      .em-section {
-        /* cooler, lab-style gradient */
-        background: linear-gradient(135deg, #EEF5FF 0%, #FFFFFF 100%);
+      .overview-box {
+        background-color: #ffffff;       /* white for max contrast */
+        border: 1px solid #dddddd;       /* light grey border */
+        border-radius: 8px;
         padding: 24px;
-        border-radius: 14px;
         margin-bottom: 32px;
+        color: #333333;
         font-family: Arial, sans-serif;
-        color: #12213A;
       }
-      .em-section h2 {
+      .overview-box h2 {
         margin-top: 0;
-        font-size: 1.9rem;
-        color: #0B3D91;    /* deep navy-blue */
-        text-shadow: 0 1px 1px rgba(0,0,0,0.10);
+        color: #005FAD;                  /* deep brand-blue */
+        font-size: 1.8rem;
       }
-      .em-section p {
-        margin: 0.8em 0;
+      .overview-box p {
         font-size: 1rem;
-        line-height: 1.6;
+        line-height: 1.5;
+        margin-bottom: 16px;
       }
-      .em-section ul {
-        margin: 0.8em 0 1.2em 1.2em;
+      .overview-box ul {
+        margin: 0 0 16px 1.2em;
         font-size: 0.95rem;
+        line-height: 1.4;
       }
-      .em-section code {
-        background: rgba(11,61,145,0.08);
-        padding: 2px 4px;
-        border-radius: 4px;
+      .overview-box ul li {
+        margin-bottom: 8px;
       }
     </style>
 
-    <div class="em-section">
-      <h2>Context &amp; Value</h2>
+    <div class="overview-box">
+      <h2>Context &amp; Scientific Justification</h2>
       <p>
-        Lead–halide perovskites deliver record solar efficiencies but suffer
-        from environmental toxicity and rapid degradation under heat,
-        moisture, or oxygen. Tin-based, lead-free analogues offer a safer path,
-        yet optimising their <strong>Eg</strong> (band gap), 
-        <strong>E<sub>hull</sub></strong> (phase stability), 
-        <strong>ΔE<sub>ox</sub></strong> (oxidation resistance) and 
-        <strong>PCE<sub>max</sub></strong> (theoretical efficiency) remains a hurdle.
+        Lead–halide perovskites deliver record solar efficiencies but suffer from environmental toxicity and rapid degradation under heat, moisture, or oxygen.
+        Tin-based, lead-free analogues offer a safer path, yet optimising their key metrics remains a major hurdle:
       </p>
       <ul>
-        <li><strong>Eg</strong>: ideal ≈ 1.3 eV for single-junction PV absorption.</li>
-        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV/atom ⇒ likely synthesizable.</li>
-        <li><strong>ΔE<sub>ox</sub></strong>: positive values resist Sn²⁺ → Sn⁴⁺ oxidation.</li>
-        <li><strong>PCE<sub>max</sub></strong>: Shockley–Queisser theoretical limit (%).</li>
+        <li><strong>Eg</strong> (band gap): ideal ≈ 1.3 eV for single-junction PV absorption.</li>
+        <li><strong>E<sub>hull</sub></strong> (phase stability): &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
+        <li><strong>ΔE<sub>ox</sub></strong> (oxidation resistance): positive values resist Sn²⁺ → Sn⁴⁺.</li>
+        <li><strong>PCE<sub>max</sub></strong> (Shockley–Queisser limit): theoretical upper bound on efficiency.</li>
       </ul>
       <p>
-        <em>EnerMat Explorer</em> empowers researchers, engineers, and educators
-        to pinpoint optimal lead-free perovskite alloys within seconds—slashing
-        costly trial-and-error cycles.
+        <em>EnerMat Explorer</em> translates these metrics into an interactive, high-throughput screening platform:
+        instantly ranking compositions by PCE<sub>max</sub>, phase stability and oxidation resistance—no DFT runs required.
       </p>
 
-      <h2>🔧 How to Use EnerMat</h2>
-      <p>Follow these steps to explore your next-generation perovskite:</p>
+      <h2>Halides Covered &amp; Research Pathways</h2>
       <ul>
-        <li><strong>Select End-members</strong> (A &amp; B, optionally C) from the sidebar.</li>
-        <li><strong>Set Environment</strong>: adjust humidity (%) and temperature (°C) sliders.</li>
-        <li><strong>Tune Model</strong>: choose your band-gap window, bowing parameter, 
-            composition step-sizes, and Ge-fraction.</li>
-        <li>Hit the <code>▶ Run screening</code> button to compute an interactive table 
-            and plot of Eg vs. Ehull vs. Score.</li>
-        <li>Use <code>⏪ Previous</code> to step back through your screening history, 
-            and download CSV/TXT/DOCX via the Download tab.</li>
+        <li><strong>Tin-based perovskites:</strong> CsSnX₃, MASnX₃, FASnX₃ (X = I, Br, Cl).</li>
+        <li><strong>Germanium analogues:</strong> CsGeBr₃, CsGeCl₃.</li>
+        <li><strong>Vacancy-ordered phases:</strong> Cs₂SnI₆.</li>
+        <li><strong>Layered Bi/Sb phases:</strong> Cs₃Bi₂Br₉, Cs₃Sb₂I₉.</li>
+        <li><strong>Double perovskites:</strong> Cs₂AgBiBr₆, Cs₂AgInCl₆.</li>
       </ul>
-      <p style="font-style:italic; color: #0B3D91;">
-        Instantly visualize how band-gap, phase-stability, oxidation-resistance, 
-        and theoretical efficiency trade off—no DFT runs required!
+      <p>
+        <strong>Explore opportunities:</strong><br>
+        • Map how A-site mixing (Cs⁺ vs. MA⁺/FA⁺) shifts Eg & stability.<br>
+        • Screen Bi/Sb phases for moisture and carrier-lifetime enhancements.<br>
+        • Investigate vacancy ordering to boost oxidation resilience.<br>
+        • Tune double-perovskite alloys for next-gen tandem cells.<br>
+        • Visualize humidity/temperature effects on E<sub>hull</sub> in real time.
+      </p>
+      <p>
+        Whether you’re a student learning perovskite design or an engineer scouting new compositions, EnerMat Explorer turns weeks of trial-and-error into seconds of interactive insight.
       </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# ─────────── SCOPE & RESEARCH OPPORTUNITIES ───────────
+
+# ─────────── HOW TO USE ───────────
 st.markdown(
     """
     <style>
-      .scope-box {
-        background: linear-gradient(135deg, #F0F4C3 0%, #E6EE9C 100%);
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-        color: #334D00;
+      .usage-box {
+        background-color: #ffffff;
+        border: 1px solid #dddddd;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 32px;
+        color: #333333;
         font-family: Arial, sans-serif;
       }
-      .scope-box h2 {
-        margin: 0 0 8px;
+      .usage-box h2 {
+        margin-top: 0;
+        color: #005FAD;
         font-size: 1.6rem;
-        color: #827717;
       }
-      .scope-box p, .scope-box ul {
-        margin: 0 0 12px;
+      .usage-box ul {
+        margin: 0 0 16px 1.2em;
         font-size: 0.95rem;
         line-height: 1.4;
       }
-      .scope-box ul {
-        padding-left: 1.2em;
-      }
     </style>
-    <div class="scope-box">
-      <h2>🔍 Halides Covered & Research Pathways</h2>
-      <p>
-        EnerMat Explorer currently supports a broad palette of lead-free perovskite end-members:
-      </p>
+
+    <div class="usage-box">
+      <h2>🔧 How to Use EnerMat Explorer</h2>
       <ul>
-        <li><strong>Tin-based:</strong> CsSnX₃, MASnX₃, FASnX₃ (X = I, Br, Cl)</li>
-        <li><strong>Germanium analogues:</strong> CsGeBr₃, CsGeCl₃</li>
-        <li><strong>Vacancy-ordered:</strong> Cs₂SnI₆</li>
-        <li><strong>Layered Bi/Sb:</strong> Cs₃Bi₂Br₉, Cs₃Sb₂I₉</li>
-        <li><strong>Double perovskites:</strong> Cs₂AgBiBr₆, Cs₂AgInCl₆</li>
+        <li><strong>Select End-members</strong> (A &amp; B, optionally C) from the sidebar dropdowns.</li>
+        <li><strong>Set Environment:</strong> adjust Humidity (%) and Temperature (°C) sliders.</li>
+        <li><strong>Tune Model:</strong> define your Band-gap window, Bowing parameter, x-step (and y-step), and Ge-fraction z.</li>
+        <li>Hit the <code>▶ Run screening</code> button to compute an interactive table and scatter/3D plot of Eg vs. Ehull vs. Score.</li>
+        <li>Use <code>⏪ Previous</code> to step back through your history, and grab your CSV/TXT/DOCX via the Download tab.</li>
       </ul>
-      <p>
-        <strong>Research opportunities:</strong>  
-        Whether you’re a student learning the ropes or an engineer scouting new compositions, you can:
-      </p>
-      <ul>
-        <li>Map how mixing A-site cations (Cs⁺ vs. MA⁺/FA⁺) shifts band gaps and stability.</li>
-        <li>Screen Bi- or Sb-rich layered phases for charge-carrier lifetimes.</li>
-        <li>Explore vacancy ordering (e.g. Cs₂SnI₆) to resist moisture and oxidation.</li>
-        <li>Tune double-perovskite alloys (Cs₂AgBiBr₆ ↔ Cs₂AgInCl₆) for lead-free tandem cells.</li>
-        <li>Investigate humidity/temperature effects on phase stability (Eₕᵤₗₗ) in real time.</li>
-      </ul>
-      <p>
-        By combining high-throughput compositional scans with instant PCEₘₐₓ ranking, EnerMat Explorer slashes weeks of lab trial-and-error down to seconds of interactive browsing.
-      </p>
+      <p><em>
+        Instantly visualize how band-gap, phase-stability and oxidation-resistance trade off with theoretical efficiency—no DFT required! 
+      </em></p>
     </div>
     """,
     unsafe_allow_html=True,
