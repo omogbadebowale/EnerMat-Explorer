@@ -17,9 +17,6 @@ import base64
 
 ASSETS_DIR = Path(__file__).with_name("assets")
 svg_path   = ASSETS_DIR / "enermat_logo.svg"
-png_path   = ASSETS_DIR / "enermat_logo.png"
-webp_path  = ASSETS_DIR / "enermat_logo.png.webp"      # allow .webp
-
 if svg_path.exists():
     logo_bytes = svg_path.read_bytes()
     mime = "image/svg+xml"
