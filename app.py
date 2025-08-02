@@ -156,53 +156,54 @@ st.markdown(
     """
     <style>
     .problem-box {
-      background: linear-gradient(135deg, #FFD54F 0%, #FFB74D 100%);
+      background: linear-gradient(135deg, #CFF4FF 0%, #E8F9FF 100%);
       padding: 20px;
       border-radius: 12px;
       margin-bottom: 24px;
-      color: #422;
+      color: #12213A;                 /* nearly-black for AA contrast */
       font-family: Arial, sans-serif;
     }
     .problem-box h2 {
       margin: 0 0 8px;
       font-size: 1.8rem;
-      color: #fff;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+      color: #005FAD;                 /* deep brand-blue */
+      text-shadow: 0 1px 1px rgba(0,0,0,0.15);
     }
     .problem-box p {
       margin: 0 0 12px;
       font-size: 1rem;
       line-height: 1.5;
-      color: #333;
     }
     .problem-box ul {
       margin: 0;
       padding-left: 1.2em;
       font-size: 0.95rem;
-      color: #333;
     }
     </style>
+
     <div class="problem-box">
-      <h2>Context & Value</h2>
+      <h2>Context &amp; Value</h2>
       <p>
         Lead–halide perovskites deliver record solar efficiencies but suffer from
         environmental toxicity and rapid degradation under heat, moisture, or oxygen.
-        Tin–based, lead‑free analogues offer a safer path but balancing their
-        <strong>Eg</strong> (band gap), <strong>Eₕᵤₗₗ</strong> (phase stability),
-        <strong>ΔEₒₓ</strong> (oxidation resistance) and
-        <strong>PCEₘₐₓ</strong> (theoretical solar efficiency) remains a major hurdle.
+        Tin-based, lead-free analogues offer a safer path, yet optimising their
+        <strong>Eg</strong> (band gap), <strong>E<sub>hull</sub></strong> (phase stability),
+        <strong>ΔE<sub>ox</sub></strong> (oxidation resistance) and
+        <strong>PCE<sub>max</sub></strong> (theoretical efficiency) remains a hurdle.
       </p>
       <ul>
-        <li><strong>Eg</strong>: Direct band gap (eV) governing light absorption (ideal ~1.3 eV).</li>
-        <li><strong>Eₕᵤₗₗ</strong>: Energy above the convex hull (eV/atom), a measure of thermodynamic stability.</li>
-        <li><strong>ΔEₒₓ</strong>: Oxidation enthalpy (eV per Sn), quantifying Sn²⁺→Sn⁴⁺ drive.</li>
-        <li><strong>PCEₘₐₓ</strong>: Shockley–Queisser power‑conversion efficiency (%), the detailed‑balance limit.</li>
+        <li><strong>Eg</strong>: ideal ≈ 1.3 eV for single-junction PV.</li>
+        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
+        <li><strong>ΔE<sub>ox</sub></strong>: positive values resist Sn²⁺ → Sn⁴⁺.</li>
+        <li><strong>PCE<sub>max</sub></strong>: Shockley–Queisser limit (%).</li>
       </ul>
       <p>
-        This app will help materials scientists, solar‑cell engineers and educators to quickly pinpoint promising perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
+        <em>EnerMat Explorer</em> helps scientists and engineers pinpoint promising
+        lead-free alloys in seconds, cutting costly trial-and-error loops.
       </p>
       <p>
-        It will also assist Industry partners gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while students enjoy an interactive platform to explore perovskite design principles hands‑on.
+        Industry partners gain a transparent trade-off dashboard, while students
+        explore perovskite design hands-on.
       </p>
     </div>
     """,
