@@ -175,7 +175,7 @@ def screen_binary(
         center, sigma = cfg["center"], cfg["sigma"]
 
     return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma)
+                    z=z, y=0.0, center=center, sigma=sigma)
 
 def mix_abx3(
     A: str,
