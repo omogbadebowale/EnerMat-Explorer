@@ -189,6 +189,62 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ─────────── SCOPE & RESEARCH OPPORTUNITIES ───────────
+st.markdown(
+    """
+    <style>
+      .scope-box {
+        background: linear-gradient(135deg, #F0F4C3 0%, #E6EE9C 100%);
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        color: #334D00;
+        font-family: Arial, sans-serif;
+      }
+      .scope-box h2 {
+        margin: 0 0 8px;
+        font-size: 1.6rem;
+        color: #827717;
+      }
+      .scope-box p, .scope-box ul {
+        margin: 0 0 12px;
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+      .scope-box ul {
+        padding-left: 1.2em;
+      }
+    </style>
+    <div class="scope-box">
+      <h2>🔍 Halides Covered & Research Pathways</h2>
+      <p>
+        EnerMat Explorer currently supports a broad palette of lead-free perovskite end-members:
+      </p>
+      <ul>
+        <li><strong>Tin-based:</strong> CsSnX₃, MASnX₃, FASnX₃ (X = I, Br, Cl)</li>
+        <li><strong>Germanium analogues:</strong> CsGeBr₃, CsGeCl₃</li>
+        <li><strong>Vacancy-ordered:</strong> Cs₂SnI₆</li>
+        <li><strong>Layered Bi/Sb:</strong> Cs₃Bi₂Br₉, Cs₃Sb₂I₉</li>
+        <li><strong>Double perovskites:</strong> Cs₂AgBiBr₆, Cs₂AgInCl₆</li>
+      </ul>
+      <p>
+        <strong>Research opportunities:</strong>  
+        Whether you’re a student learning the ropes or an engineer scouting new compositions, you can:
+      </p>
+      <ul>
+        <li>Map how mixing A-site cations (Cs⁺ vs. MA⁺/FA⁺) shifts band gaps and stability.</li>
+        <li>Screen Bi- or Sb-rich layered phases for charge-carrier lifetimes.</li>
+        <li>Explore vacancy ordering (e.g. Cs₂SnI₆) to resist moisture and oxidation.</li>
+        <li>Tune double-perovskite alloys (Cs₂AgBiBr₆ ↔ Cs₂AgInCl₆) for lead-free tandem cells.</li>
+        <li>Investigate humidity/temperature effects on phase stability (Eₕᵤₗₗ) in real time.</li>
+      </ul>
+      <p>
+        By combining high-throughput compositional scans with instant PCEₘₐₓ ranking, EnerMat Explorer slashes weeks of lab trial-and-error down to seconds of interactive browsing.
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
