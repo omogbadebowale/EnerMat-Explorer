@@ -81,12 +81,12 @@ with st.sidebar:
     )
 
     # ── Clear history button ──
-    if st.button("🗑 Clear history"):
-        # Only clear if the key exists
+   if st.button("🗑 Clear history"):
+        # Safely clear
         if "history" in st.session_state:
             st.session_state.history = []
-        # (optional) reset any other session counters here
-        st.experimental_rerun()
+        # Re-run with clean state
+        st.rerun()
 
     # ── Developer credit in sidebar footer ──
     st.markdown(
