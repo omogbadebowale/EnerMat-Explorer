@@ -13,64 +13,9 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-
-# ─── Branded header with large, responsive SVG/PNG logo ──────────
-ASSETS_DIR = Path(__file__).with_name("assets")
-for name, mime in [
-    ("enermat_logo.svg", "image/svg+xml"),
-    ("enermat_logo.png", "image/png"),
-    ("enermat_logo.png.webp", "image/webp"),
-]:
-    p = ASSETS_DIR / name
-    if p.exists():
-        logo_b64 = base64.b64encode(p.read_bytes()).decode()
-        logo_mime = mime
-        break
-else:
-    logo_b64, logo_mime = "", "image/png"      # graceful fallback
-
-st.markdown(
-    f"""
-    <style>
-      .em-logo {{
-        text-align:center;
-        margin:0 0 1.4rem 0;
-        padding-top:.4rem;
-      }}
-      .em-logo img {{
-        height:min(45vw,320px);   /* responsive, caps at 220 px */
-        width:auto;
-      }}
-      .em-logo h1 {{
-        margin:.5rem 0 0 0;
-        font-size:2.3rem;
-        font-weight:700;
-      }}
-      .em-logo small {{
-        opacity:.75;
-        font-size:.95rem;
-      }}
-    </style>
-
-  <div class="em-logo">
-    <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
-    <h1>EnerMat Explorer</h1>
-    <small>Lead-free PV discovery tool</small>
-    <small style="font-size:0.8rem;opacity:0.7">
-        © 2025 Dr Gbadebo Taofeek Yusuf
-    </small>
-</div>
-
-    """,
-    unsafe_allow_html=True,
-)
-# ─────────────────────────────────────────────────────────────────
-
-# ─────────── STREAMLIT PAGE CONFIG ───────────
-st.set_page_config(page_title="EnerMat Explorer", layout="wide")
-
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
+st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
 st.markdown(
     """
     <style>
@@ -82,7 +27,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
     st.session_state.history = []
