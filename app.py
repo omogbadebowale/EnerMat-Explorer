@@ -11,46 +11,45 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-# ─── START: large icon header + title  ────────────────────────────
-from pathlib import Path
-import base64, streamlit as st
-
+# ─── Branded header with large, responsive SVG/PNG logo ──────────
 ASSETS_DIR = Path(__file__).with_name("assets")
-for name, mime in [("enermat_logo.svg","image/svg+xml"),
-                   ("enermat_logo.png","image/png"),
-                   ("enermat_logo.png.webp","image/webp")]:
+for name, mime in [
+    ("enermat_logo.svg", "image/svg+xml"),
+    ("enermat_logo.png", "image/png"),
+    ("enermat_logo.png.webp", "image/webp"),
+]:
     p = ASSETS_DIR / name
     if p.exists():
         logo_b64 = base64.b64encode(p.read_bytes()).decode()
         logo_mime = mime
         break
-else:                              # no image found → nothing will crash
-    logo_b64, logo_mime = "", "image/png"
+else:
+    logo_b64, logo_mime = "", "image/png"      # graceful fallback
 
 st.markdown(
     f"""
     <style>
-      .em-header {{
+      .em-logo {{
         text-align:center;
-        margin: 0 0 1.2rem 0;
-        padding-top: .4rem;
+        margin:0 0 1.4rem 0;
+        padding-top:.4rem;
       }}
-      .em-header img {{
-        height:min(25vw,180px);   /* responsive, max 180 px */
+      .em-logo img {{
+        height:min(30vw,220px);   /* responsive, caps at 220 px */
         width:auto;
       }}
-      .em-header h1 {{
-        margin: .4rem 0 0 0;
-        font-size: 2.2rem;
-        font-weight: 700;
+      .em-logo h1 {{
+        margin:.5rem 0 0 0;
+        font-size:2.3rem;
+        font-weight:700;
       }}
-      .em-header small {{
-        opacity: .75;
-        font-size: .9rem;
+      .em-logo small {{
+        opacity:.75;
+        font-size:.95rem;
       }}
     </style>
 
-    <div class="em-header">
+    <div class="em-logo">
         <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
         <h1>EnerMat Explorer</h1>
         <small>Lead-free PV discovery tool</small>
@@ -58,7 +57,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ─── END header ──────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
