@@ -215,7 +215,7 @@ st.markdown(
     """
     <style>
       .usage-box {
-        background: linear-gradient(135deg,  #F5FAFF 0%, #E3F2FD 100%);
+        background: linear-gradient(135deg, #E4F4FF 0%, #E4F4FF 100%);
         padding: 20px;
         border-radius: 12px;
         margin-bottom: 24px;
