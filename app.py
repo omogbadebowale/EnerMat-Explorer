@@ -39,7 +39,7 @@ st.markdown(
     f"""
     <div style="display:flex;align-items:center;gap:1rem;
                 margin-bottom:1rem;padding-top:0.2rem">
-        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo" height="500">
+        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo" height="150">
         <div>
             <h1 style="margin:0">EnerMat&nbsp;Explorer</h1>
             <small style="opacity:0.75">Lead-free&nbsp;PV discovery tool</small>
