@@ -20,15 +20,6 @@ svg_path   = ASSETS_DIR / "enermat_logo.svg"
 if svg_path.exists():
     logo_bytes = svg_path.read_bytes()
     mime = "image/svg+xml"
-elif png_path.exists():
-    logo_bytes = png_path.read_bytes()
-    mime = "image/png"
-elif webp_path.exists():
-    logo_bytes = webp_path.read_bytes()
-    mime = "image/webp"
-else:
-    logo_bytes = b""
-    mime = "image/png"
 
 b64_logo = base64.b64encode(logo_bytes).decode()
 
