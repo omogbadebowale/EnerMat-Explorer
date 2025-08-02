@@ -11,11 +11,10 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-# ───────────  NEW: logo header  ───────────
-# ─── START: branded header (SVG-first, responsive) ───────────────
+# ─── START: icon-only header (SVG-first, responsive) ─────────────
 from pathlib import Path
 import base64
-import streamlit as st                             # already imported above
+import streamlit as st        # already imported above
 
 ASSETS_DIR = Path(__file__).with_name("assets")
 svg_path  = ASSETS_DIR / "enermat_logo.svg"
@@ -36,30 +35,25 @@ b64_logo = base64.b64encode(data).decode()
 st.markdown(
     f"""
     <style>
-    .em-header {{
-        display:flex;
-        align-items:center;
-        gap:1rem;
+    .em-logo-only {{
+        text-align:center;
         margin-bottom:1rem;
-        padding-top:0.2rem;
+        padding-top:0.3rem;
     }}
-    .em-header img {{
-        height:min(12vw,120px);      /* responsive but max 120 px */
+    .em-logo-only img {{
+        height:min(18vw,160px);   /* responsive, max 160 px */
         width:auto;
-        vertical-align:middle;
     }}
     </style>
 
-    <div class="em-header">
+    <div class="em-logo-only">
         <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo">
-        <div>
-            <h1 style="margin:0">EnerMat&nbsp;Explorer</h1>
-            <small style="opacity:0.75">Lead-free&nbsp;PV discovery tool</small>
-        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+# ─── END icon-only header ────────────────────────────────────────
+
 # ─── END: branded header ──────────────────────────────────────────
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
