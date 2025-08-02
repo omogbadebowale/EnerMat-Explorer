@@ -27,7 +27,7 @@ for name, mime in [
         logo_mime = mime
         break
 else:
-    logo_b64, logo_mime = "", "image/png"      # graceful fallback
+    logo_b64, logo_mime = "", "image/png"  # graceful fallback
 
 st.markdown(
     f"""
@@ -38,7 +38,7 @@ st.markdown(
         padding-top:.4rem;
       }}
       .em-logo img {{
-        height:min(45vw,320px);   /* responsive, caps at 220 px */
+        height:min(45vw,320px);
         width:auto;
       }}
       .em-logo h1 {{
@@ -50,34 +50,21 @@ st.markdown(
         opacity:.75;
         font-size:.95rem;
       }}
+      /* widen content to give the larger logo breathing space */
+      .block-container {{ max-width:1080px; }}
     </style>
 
     <div class="em-logo">
         <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
         <h1>EnerMat Explorer</h1>
-        <small>Lead-free PV discovery tool</small>
+        <small>Lead‑free PV discovery tool</small>
     </div>
     """,
     unsafe_allow_html=True,
 )
 # ─────────────────────────────────────────────────────────────────
 
-# ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config(page_title="EnerMat Explorer", layout="wide")
-
-# ─────────── STREAMLIT PAGE CONFIG ───────────
-st.set_page_config("EnerMat Explorer", layout="wide")
-st.markdown(
-    """
-    <style>
-      /* Target the sidebar wrapper and give it a colored left border */
-      .css-1d391kg {
-        border-right: 3px solid #0D47A1 !important;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
@@ -86,51 +73,42 @@ if "history" not in st.session_state:
 # ─────────── SIDEBAR ───────────
 with st.sidebar:
     st.header("Mode")
-    mode = st.radio(
-        "Choose screening type",
-        ["Binary A–B", "Ternary A–B–C"]
-    )
+    mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"])
 
-    st.header("End-members")
+    st.header("End‑members")
     preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
     preset_B = st.selectbox("Preset B", END_MEMBERS, 1)
     custom_A = st.text_input("Custom A (optional)").strip()
     custom_B = st.text_input("Custom B (optional)").strip()
     A = custom_A or preset_A
     B = custom_B or preset_B
+
     if mode.startswith("Ternary"):
         preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
         custom_C = st.text_input("Custom C (optional)").strip()
         C = custom_C or preset_C
 
     st.header("Application")
-    application = st.selectbox(
-        "Select application",
-        ["single", "tandem", "indoor", "detector"]
-    )
+    application = st.selectbox("Select application", ["single", "tandem", "indoor", "detector"])
 
     st.header("Environment")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
+    rh   = st.slider("Humidity [%]", 0, 100, 50)
     temp = st.slider("Temperature [°C]", -20, 100, 25)
 
-    st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider(
-        "Gap window", 0.50, 3.00, (1.00, 1.40), 0.01
-    )
+    st.header("Target band‑gap [eV]")
+    bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.50, (1.00, 1.40), 0.01)
 
-    st.header("Model settings")
-    bow = st.number_input(
-        "Bowing (eV, negative ⇒ gap↑)",
-        -1.0, 1.0, -0.15, 0.05
-    )
-    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
-    if mode.startswith("Ternary"):
-        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
-
-    z = st.slider(
-        "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
-        help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
-    )
+    # ── Advanced settings in expander ──
+    with st.expander("⚙️  Advanced settings", expanded=False):
+        bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
+        dx  = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+        if mode.startswith("Ternary"):
+            dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
+        z = st.slider("Ge fraction z", 0.00, 0.80, 0.10, 0.05,
+                      help="B-site Ge²⁺ in CsSn₁₋zGe_zX₃")
+        # NEW dopant controls
+        dopant = st.selectbox("Optional dopant", ["none", "Mn", "Fe", "Na"])
+        x_dop = st.slider("dopant fraction x", 0.00, 0.15, 0.00, 0.01)
 
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
@@ -147,124 +125,8 @@ def _run_binary(*args, **kwargs):
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
-# ─────────── PROBLEM STATEMENT / SIGNIFICANCE ───────────
-st.markdown(
-    """
-    <style>
-    .problem-box {
-      background: linear-gradient(135deg, #FFD54F 0%, #FFB74D 100%);
-      padding: 20px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      color: #333;
-      font-family: Arial, sans-serif;
-    }
-    .problem-box h2 {
-      margin: 0 0 8px;
-      font-size: 1.8rem;
-      color: #fff;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    }
-    .problem-box p {
-      margin: 0 0 12px;
-      font-size: 1rem;
-      line-height: 1.5;
-      color: #333;
-    }
-    .problem-box ul {
-      margin: 0;
-      padding-left: 1.2em;
-      font-size: 0.95rem;
-      color: #333;
-    }
-    </style>
-    <div class="problem-box">
-      <h2>Context & Value</h2>
-      <p>
-        Lead–halide perovskites deliver record solar efficiencies but suffer from
-        environmental toxicity and rapid degradation under heat, moisture, or oxygen.
-        Tin–based, lead‑free analogues offer a safer path but balancing their
-        <strong>Eg</strong> (band gap), <strong>Eₕᵤₗₗ</strong> (phase stability),
-        <strong>ΔEₒₓ</strong> (oxidation resistance) and
-        <strong>PCEₘₐₓ</strong> (theoretical solar efficiency) remains a major hurdle.
-      </p>
-      <ul>
-        <li><strong>Eg</strong>: Direct band gap (eV) governing light absorption (ideal ~1.3 eV).</li>
-        <li><strong>Eₕᵤₗₗ</strong>: Energy above the convex hull (eV/atom), a measure of thermodynamic stability.</li>
-        <li><strong>ΔEₒₓ</strong>: Oxidation enthalpy (eV per Sn), quantifying Sn²⁺→Sn⁴⁺ drive.</li>
-        <li><strong>PCEₘₐₓ</strong>: Shockley–Queisser power‑conversion efficiency (%), the detailed‑balance limit.</li>
-      </ul>
-      <p>
-        This app will help materials scientists, solar‑cell engineers and educators to quickly pinpoint promising perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
-      </p>
-      <p>
-        It will also assist Industry partners gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while students enjoy an interactive platform to explore perovskite design principles hands‑on.
-      </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ─────────── HOW TO USE ───────────
-st.markdown(
-    """
-    <style>
-      .usage-box {
-        background: linear-gradient(135deg, #BBDEFB 0%, #E3F2FD 100%);
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-        color: #0D47A1;
-        font-family: Arial, sans-serif;
-      }
-      .usage-box h2 {
-        margin: 0 0 8px;
-        font-size: 1.6rem;
-        text-shadow: 1px 1px 2px rgba(255,255,255,0.6);
-      }
-      .usage-box p {
-        margin: 0 0 12px;
-        font-size: 0.95rem;
-        line-height: 1.5;
-      }
-      .usage-box ul {
-        margin: 0;
-        padding-left: 1.2em;
-        font-size: 0.9rem;
-      }
-    </style>
-    <div class="usage-box">
-      <h2>🔧 How to Use EnerMat</h2>
-      <p>
-        Follow these simple steps to identify your optimal lead‑free perovskite:
-      </p>
-      <ul>
-        <li>
-          <strong>Select End‑members</strong> (A & B, and optionally C) from the dropdowns on the left.
-        </li>
-        <li>
-          <strong>Set Environment</strong>: adjust humidity (%) and temperature (°C) sliders.
-        </li>
-        <li>
-          <strong>Tune Model</strong>: choose your target band‑gap window, bowing parameter, composition step‑sizes, and Ge‑fraction.
-        </li>
-        <li>
-          Hit the <code>▶ Run screening</code> button to generate an interactive table & plot of Eg vs. Ehull vs. Score.
-        </li>
-        <li>
-          Use <code>⏪ Previous</code> to step back through prior results, and download CSV/TXT/DOCX via the Download tab.
-        </li>
-      </ul>
-      <p style="font-style:italic; font-size:0.85rem;">
-        Instantly visualize how band‐gap, phase‐stability, oxidation‐resistance, and theoretical efficiency trade off — no DFT runs required!
-      </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ─────────── RUNNING SCREEN ───────────
-col_run, col_prev = st.columns([3,1])
+# ─────────── RUN SCREENING ───────────
+col_run, col_prev = st.columns([3, 1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
 
@@ -275,7 +137,6 @@ if do_prev:
     st.success("Showing previous result")
 
 elif do_run:
-    # sanity-check
     for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
         if f not in END_MEMBERS:
             st.error(f"❌ Unknown end-member: {f}")
@@ -284,67 +145,53 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application
+            z=z, dopant=dopant, x_dop=x_dop, application=application
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
-            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application
+            (bg_lo, bg_hi), {"AB": bow, "AC": bow, "BC": bow},
+            dx=dx, dy=dy, z=z, dopant=dopant, x_dop=x_dop,
+            application=application
         )
-    st.session_state.history.append({"mode":mode, "df":df})
+    st.session_state.history.append({"mode": mode, "df": df})
 
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-  # ─────────── DISPLAY RESULTS ───────────
-df = st.session_state.history[-1]["df"]
+# ─────────── DISPLAY RESULTS ───────────
+df   = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
-tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
 
 with tab_tbl:
     st.dataframe(df, use_container_width=True, height=440)
 
 with tab_plot:
-    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
+    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=df["Ehull"], y=df["Eg"], mode="markers",
             marker=dict(
-                size=8+12*df["score"], color=df["score"],
+                size=8 + 12 * df["score"], color=df["score"],
                 colorscale="Viridis", cmin=0, cmax=1,
-                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
+                colorbar=dict(title="Score"),
+                line=dict(width=0.5, color="black")
             ),
             hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
             customdata=df.to_numpy()
         ))
         fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-                      line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
-        fig.update_layout(
-    title="EnerMat Binary Screen",
-    xaxis_title="Ehull (eV/atom)",
-    yaxis_title="Eg (eV)",
-    template="simple_white",
-    font=dict(
-        family="Arial",
-        size=12,
-        color="black"
-    ),
-    width=720,
-    height=540,
-    margin=dict(l=60, r=60, t=60, b=60),
-    coloraxis_colorbar=dict(
-        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
-        tickfont=dict(size=12)
-    )
-)
+                      line_width=0, fillcolor="rgba(0,95,173,0.15)")
+        fig.update_layout(title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)",
+                          yaxis_title="Eg (eV)", template="simple_white", width=720, height=540)
         st.plotly_chart(fig, use_container_width=True)
-    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
                             color_continuous_scale="Viridis",
-                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
+                            labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
