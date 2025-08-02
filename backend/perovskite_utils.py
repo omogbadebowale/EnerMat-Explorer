@@ -31,23 +31,73 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-END_MEMBERS = ["CsSnI3", "CsSnBr3", "CsSnCl3", "CsGeBr3", "CsGeCl3",  "CsPbCl3", "CsPbBr3", "CsPbI3"]
+
+END_MEMBERS = [
+    # classic Sn / Ge
+    "CsSnI3", "CsSnBr3", "CsSnCl3",
+    "CsGeBr3", "CsGeCl3",
+    # organic Sn
+    "FASnI3", "MASnBr3",
+    # vacancy-ordered
+    "Cs2SnI6",
+    # layered Bi / Sb
+    "Cs3Bi2Br9", "Cs3Sb2I9",
+    # double perovskites
+    "Cs2AgBiBr6", "Cs2AgInCl6",
+    # Pb references
+    "CsPbCl3", "CsPbBr3", "CsPbI3",
+]
 
 CALIBRATED_GAPS = {
-    "CsSnBr3": 1.75,
-    "CsSnCl3": 2.98,
-    "CsSnI3":  1.00,
-    "CsGeBr3": 2.32,
-    "CsGeCl3": 3.67,
-    "CsPbI3": 1.68,
-    "CsPbBr3": 2.36,
-    "CsPbCl3": 3.03,
-
+    # … (unchanged block you pasted)
 }
 
-GAP_OFFSET = {"I": 1.3-0.45, "Br": 1.75-0.97, "Cl": 2.98-0.98, "Pb": 1.31, }
-IONIC_RADII = {"Cs": 1.88, "Sn": 1.18, "Ge": 0.73,
-               "I": 2.20, "Br": 1.96, "Cl": 1.81, "Pb": 1.31, }
+# Halide-only offsets – still adequate
+GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
+
+IONIC_RADII = {
+    # A / B cations
+    "Cs": 1.88, "FA": 2.79, "MA": 2.70,
+    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31,
+    "Bi": 1.03, "Sb": 0.76, "Ag": 1.15, "In": 0.81,
+    # X anions
+    "I": 2.20, "Br": 1.96, "Cl": 1.81,
+}
+
+K_T_EFF = 0.20  # soft-penalty “kT” (eV)
+# ─────────── reference data ───────────
+
+END_MEMBERS = [
+    # classic Sn / Ge
+    "CsSnI3", "CsSnBr3", "CsSnCl3",
+    "CsGeBr3", "CsGeCl3",
+    # organic Sn
+    "FASnI3", "MASnBr3",
+    # vacancy-ordered
+    "Cs2SnI6",
+    # layered Bi / Sb
+    "Cs3Bi2Br9", "Cs3Sb2I9",
+    # double perovskites
+    "Cs2AgBiBr6", "Cs2AgInCl6",
+    # Pb references
+    "CsPbCl3", "CsPbBr3", "CsPbI3",
+]
+
+CALIBRATED_GAPS = {
+    # … (unchanged block you pasted)
+}
+
+# Halide-only offsets – still adequate
+GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
+
+IONIC_RADII = {
+    # A / B cations
+    "Cs": 1.88, "FA": 2.79, "MA": 2.70,
+    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31,
+    "Bi": 1.03, "Sb": 0.76, "Ag": 1.15, "In": 0.81,
+    # X anions
+    "I": 2.20, "Br": 1.96, "Cl": 1.81,
+}
 
 K_T_EFF = 0.20  # soft-penalty “kT” (eV)
 
