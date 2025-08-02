@@ -90,16 +90,14 @@ with st.sidebar:
 
     # ── Developer credit in sidebar footer ──
     st.markdown(
-        """
-        <div style="font-size:0.8rem; color:grey; margin-top:2rem;">
-          Developed by <strong>Dr. Gbadebo Taofeek Yusuf</strong>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
-
+    """
+    <div style="font-size:0.85rem; color:#555; margin-top:0.5rem;">
+      <strong>Developer:</strong> Dr Gbadebo Taofeek Yusuf (Academic World)  
+      📞 +44 7776 727237  ✉️ das@academicworld.co.uk
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
