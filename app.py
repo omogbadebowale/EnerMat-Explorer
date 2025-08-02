@@ -60,10 +60,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ─────────────────────────────────────────────────────────────────
-
-# ─────────── STREAMLIT PAGE CONFIG ───────────
-st.set_page_config(page_title="EnerMat Explorer", layout="wide")
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
@@ -131,7 +127,14 @@ with st.sidebar:
         "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
-
+# NEW — show only if a Bi or Sb preset is selected
+if any(elem in f for elem in ("Bi", "Sb") for f in (A, B)):
+    y = st.slider(
+        "Sb fraction y", 0.00, 1.00, 0.00, 0.05,
+        help="B-site Sb³⁺ in Cs₃(Bi₁₋ySb_y)₂X₉ or Cs₂Ag(Bi₁₋ySb_y)X₆"
+    )
+else:
+    y = 0.00          # keeps legacy path unchanged
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
@@ -284,13 +287,13 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, application=application
+            z=z, y=y, application=application
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, application=application
+            dx=dx, dy=dy, z=z, y=y, application=application
         )
     st.session_state.history.append({"mode":mode, "df":df})
 
