@@ -1,359 +1,238 @@
-from __future__ import annotations
-import math
-import os
-from functools import lru_cache
+import datetime
+import io
 
-import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
 import streamlit as st
-from mp_api.client import MPRester
-from pymatgen.core import Composition
+import pandas as pd
+import plotly.express as px
+from plotly import graph_objects as go
+from docx import Document
+from backend.perovskite_utils import (
+    screen_binary,
+    screen_ternary,
+    END_MEMBERS,
+)
 
-# ─────────── Shockley–Queisser helper ───────────
-# Make sure you have backend/sq.py with `def sq_efficiency(Eg: float) -> float: ...`
-from backend.sq import sq_efficiency
+# ─────────── STREAMLIT PAGE CONFIG ───────────
+st.set_page_config("EnerMat Explorer", layout="wide")
+st.title("🔬 EnerMat **Perovskite** Explorer v9.6")
 
-# ─────────── API key ───────────
-load_dotenv()
-API_KEY = os.getenv("MP_API_KEY") or st.secrets.get("MP_API_KEY")
-if not API_KEY or len(API_KEY) != 32:
-    raise RuntimeError("🛑 32-character MP_API_KEY missing")
+# ─────────── SESSION STATE ───────────
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-mpr = MPRester(API_KEY)
-
-# ─────────── application-based band-gap targets ───────────
-APPLICATION_CONFIG = {
-    "single": {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
-    "tandem": {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
-    "indoor": {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
-    "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
-}
-
-# ─────────── reference data ───────────
-
-END_MEMBERS = [
-    # classic Sn / Ge
-    "CsSnI3", "CsSnBr3", "CsSnCl3",
-    "CsGeBr3", "CsGeCl3",
-    # organic Sn
-    "FASnI3", "MASnBr3",
-    # vacancy-ordered
-    "Cs2SnI6",
-    # layered Bi / Sb
-    "Cs3Bi2Br9", "Cs3Sb2I9",
-    # double perovskites
-    "Cs2AgBiBr6", "Cs2AgInCl6",
-    # Pb references
-    "CsPbCl3", "CsPbBr3", "CsPbI3",
-]
-
-CALIBRATED_GAPS = {
-    # … (unchanged block you pasted)
-}
-
-# Halide-only offsets – still adequate
-GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
-
-IONIC_RADII = {
-    # A / B cations
-    "Cs": 1.88, "FA": 2.79, "MA": 2.70,
-    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31,
-    "Bi": 1.03, "Sb": 0.76, "Ag": 1.15, "In": 0.81,
-    # X anions
-    "I": 2.20, "Br": 1.96, "Cl": 1.81,
-}
-
-K_T_EFF = 0.20  # soft-penalty “kT” (eV)
-# ─────────── reference data ───────────
-
-END_MEMBERS = [
-    # classic Sn / Ge
-    "CsSnI3", "CsSnBr3", "CsSnCl3",
-    "CsGeBr3", "CsGeCl3",
-    # organic Sn
-    "FASnI3", "MASnBr3",
-    # vacancy-ordered
-    "Cs2SnI6",
-    # layered Bi / Sb
-    "Cs3Bi2Br9", "Cs3Sb2I9",
-    # double perovskites
-    "Cs2AgBiBr6", "Cs2AgInCl6",
-    # Pb references
-    "CsPbCl3", "CsPbBr3", "CsPbI3",
-]
-
-CALIBRATED_GAPS = {
-    # … (unchanged block you pasted)
-}
-
-# Halide-only offsets – still adequate
-GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
-
-IONIC_RADII = {
-    # A / B cations
-    "Cs": 1.88, "FA": 2.79, "MA": 2.70,
-    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31,
-    "Bi": 1.03, "Sb": 0.76, "Ag": 1.15, "In": 0.81,
-    # X anions
-    "I": 2.20, "Br": 1.96, "Cl": 1.81,
-}
-
-K_T_EFF = 0.20  # soft-penalty “kT” (eV)
-
-# ─────────── band-gap scoring ───────────
-def _score_band_gap(
-    Eg: float,
-    lo: float, hi: float,
-    center: float | None,
-    sigma: float | None
-) -> float:
-    if Eg < lo or Eg > hi:
-        return 0.0
-    if center is None or sigma is None:
-        return 1.0
-    # Gaussian weighting
-    return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
-
-score_band_gap = _score_band_gap  # alias
-
-# ─────────── helpers ───────────
-def fetch_mp_data(formula: str, fields: list[str]):
-    docs = mpr.summary.search(formula=formula, fields=tuple(fields))
-    if not docs:
-        return None
-    ent = docs[0]
-    out = {f: getattr(ent, f, None) for f in fields}
-
-    if "band_gap" in fields:
-        if formula in CALIBRATED_GAPS:
-            out["band_gap"] = CALIBRATED_GAPS[formula]
-        else:
-            hal = next(h for h in ("I", "Br", "Cl") if h in formula)
-            out["band_gap"] = (out.get("band_gap", 0.0) or 0.0) + GAP_OFFSET[hal]
-    return out
-
-@lru_cache(maxsize=64)
-def oxidation_energy(formula_sn2: str) -> float:
-    """ΔEₒₓ per Sn for CsSnX₃ + ½ O₂ → ½ (Cs₂SnX₆ + SnO₂)."""
-    if "Sn" not in formula_sn2:
-        return 0.0
-    hal = next((h for h in ("I", "Br", "Cl") if h in formula_sn2), None)
-    if hal is None:
-        return 0.0
-
-    def formation_energy_fu(formula: str) -> float:
-        doc = fetch_mp_data(formula, ["formation_energy_per_atom"])
-        if not doc or doc.get("formation_energy_per_atom") is None:
-            raise ValueError(f"Missing formation-energy for {formula}")
-        comp = Composition(formula)
-        return doc["formation_energy_per_atom"] * comp.num_atoms
-
-    H_reac  = formation_energy_fu(formula_sn2)
-    H_prod1 = formation_energy_fu(f"Cs2Sn{hal}6")
-    H_prod2 = formation_energy_fu("SnO2")
-    return 0.5 * (H_prod1 + H_prod2) - H_reac
-
-# ─────────── binary screen ───────────
-def screen_binary(
-    A: str,
-    B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bow: float,
-    dx: float,
-    *,
-    z: float = 0.0,
-    application: str | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
-
-    return mix_abx3(A, B, rh, temp, (lo, hi), bow, dx,
-                    z=z, center=center, sigma=sigma)
-
-def mix_abx3(
-    A: str,
-    B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bow: float,
-    dx: float,
-    *,
-    z: float = 0.0,
-    alpha: float = 1.0,
-    beta: float = 1.0,
-    center: float | None = None,
-    sigma: float | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    if not (dA and dB):
-        return pd.DataFrame()
-
-    # optional Ge branch (binary)
-    if z > 0:
-        A_Ge = A.replace("Sn", "Ge")
-        B_Ge = B.replace("Sn", "Ge")
-        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
-        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
-        oxA_Ge = oxidation_energy(A_Ge)
-        oxB_Ge = oxidation_energy(B_Ge)
-    else:
-        dA_Ge, dB_Ge = dA, dB
-        oxA_Ge, oxB_Ge = oxidation_energy(A), oxidation_energy(B)
-
-    hal = next(h for h in ("I", "Br", "Cl") if h in A)
-    rA = IONIC_RADII["Cs"]
-    rB = (1 - z) * IONIC_RADII["Sn"] + z * IONIC_RADII["Ge"]
-    rX = IONIC_RADII[hal]
-
-    oxA, oxB = oxidation_energy(A), oxidation_energy(B)
-
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        # Sn branch
-        Eg_Sn   = (1 - x) * dA["band_gap"] + x * dB["band_gap"] - bow * x * (1 - x)
-        Eh_Sn   = (1 - x) * dA["energy_above_hull"] + x * dB["energy_above_hull"]
-        dEox_Sn = (1 - x) * oxA + x * oxB
-        # Ge branch
-        Eg_Ge   = (1 - x) * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] - bow * x * (1 - x)
-        Eh_Ge   = (1 - x) * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"]
-        dEox_Ge = (1 - x) * oxA_Ge + x * oxB_Ge
-
-        # interpolate
-        Eg   = (1.0 - z) * Eg_Sn   + z * Eg_Ge
-        Eh   = (1.0 - z) * Eh_Sn   + z * Eh_Ge
-        dEox = (1.0 - z) * dEox_Sn + z * dEox_Ge
-
-        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-        raw = (
-            sbg
-            * math.exp(-Eh / (alpha * 0.0259))
-            * math.exp(dEox / K_T_EFF)
-            * math.exp(-beta * abs((rA + rX) / (math.sqrt(2) * (rB + rX)) - 0.95))
-        )
-
-        # Shockley–Queisser PCE limit
-        pce = sq_efficiency(Eg)
-
-        rows.append({
-            "x":           round(x, 3),
-            "z":           round(z, 2),
-            "Eg":          round(Eg, 3),
-            "Ehull":       round(Eh, 4),
-            "Eox":         round(dEox, 3),
-            "raw":         raw,
-            "formula":     f"{A}-{B} x={x:.2f} z={z:.2f}",
-            "PCE_max (%)": round(pce * 100, 1),
-        })
-
-    if not rows:
-        return pd.DataFrame()
-    m = max(r["raw"] for r in rows) or 1.0
-    for r in rows:
-        r["score"] = round(r.pop("raw") / m, 3)
-
-    return (
-        pd.DataFrame(rows)
-        .sort_values("score", ascending=False)
-        .reset_index(drop=True)
+# ─────────── SIDEBAR ───────────
+with st.sidebar:
+    st.header("Mode")
+    mode = st.radio(
+        "Choose screening type",
+        ["Binary A–B", "Ternary A–B–C"]
     )
 
-# ─────────── ternary screen ───────────
-def screen_ternary(
-    A: str,
-    B: str,
-    C: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
-    bows: dict[str, float],
-    *,
-    dx: float = 0.10,
-    dy: float = 0.10,
-    z: float = 0.0,
-    application: str | None = None,
-) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
+    st.header("End-members")
+    preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
+    preset_B = st.selectbox("Preset B", END_MEMBERS, 1)
+    custom_A = st.text_input("Custom A (optional)").strip()
+    custom_B = st.text_input("Custom B (optional)").strip()
+    A = custom_A or preset_A
+    B = custom_B or preset_B
+    if mode.startswith("Ternary"):
+        preset_C = st.selectbox("Preset C", END_MEMBERS, 2)
+        custom_C = st.text_input("Custom C (optional)").strip()
+        C = custom_C or preset_C
 
-    dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
-    dB = fetch_mp_data(B, ["band_gap", "energy_above_hull"])
-    dC = fetch_mp_data(C, ["band_gap", "energy_above_hull"])
-    if not (dA and dB and dC):
-        return pd.DataFrame()
+    st.header("Doping Element")
+    doping_element = st.selectbox(
+        "Select Doping Element",
+        ["Ge", "Sb", "Cu", "Mg", "Ca", "Ba", "Ni", "Zn"]
+    )
 
-    # Ge-branch setup
-    if z > 0:
-        A_Ge = A.replace("Sn", "Ge")
-        B_Ge = B.replace("Sn", "Ge")
-        C_Ge = C.replace("Sn", "Ge")
-        dA_Ge = fetch_mp_data(A_Ge, ["band_gap", "energy_above_hull"]) or dA
-        dB_Ge = fetch_mp_data(B_Ge, ["band_gap", "energy_above_hull"]) or dB
-        dC_Ge = fetch_mp_data(C_Ge, ["band_gap", "energy_above_hull"]) or dC
+    st.header("Ge fraction (z)")
+    z = st.slider("Ge fraction z", 0.00, 0.30, 0.10, 0.05)
+
+    st.header("Application")
+    application = st.selectbox(
+        "Select application",
+        ["single", "tandem", "indoor", "detector"]
+    )
+
+    st.header("Environment")
+    rh = st.slider("Humidity [%]", 0, 100, 50)
+    temp = st.slider("Temperature [°C]", -20, 100, 25)
+
+    st.header("Target band-gap [eV]")
+    bg_lo, bg_hi = st.slider(
+        "Gap window", 0.50, 3.00, (1.00, 1.40), 0.01
+    )
+
+    st.header("Model settings")
+    bow = st.number_input(
+        "Bowing (eV, negative ⇒ gap↑)",
+        -1.0, 1.0, -0.15, 0.05
+    )
+    dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
+    if mode.startswith("Ternary"):
+        dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
+
+    if st.button("🗑 Clear history"):
+        st.session_state.history.clear()
+        st.experimental_rerun()
+
+    st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
+
+# ─────────── CACHE WRAPPERS ───────────
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
+def _run_binary(*args, **kwargs):
+    return screen_binary(*args, **kwargs)
+
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
+def _run_ternary(*args, **kwargs):
+    return screen_ternary(*args, **kwargs)
+
+# ─────────── RUNNING SCREEN ───────────
+col_run, col_prev = st.columns([3,1])
+do_run  = col_run.button("▶ Run screening", type="primary")
+do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+
+if do_prev:
+    st.session_state.history.pop()
+    prev = st.session_state.history[-1]
+    df, mode = prev["df"], prev["mode"]
+    st.success("Showing previous result")
+
+elif do_run:
+    # sanity-check
+    for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
+        if f not in END_MEMBERS:
+            st.error(f"❌ Unknown end-member: {f}")
+            st.stop()
+
+    if mode.startswith("Binary"):
+        df = _run_binary(
+            A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
+            z=z, application=application, doping_element=doping_element
+        )
     else:
-        dA_Ge, dB_Ge, dC_Ge = dA, dB, dC
+        df = _run_ternary(
+            A, B, C, rh, temp,
+            (bg_lo, bg_hi), {"AB":bow, "AC":bow, "BC":bow},
+            dx=dx, dy=dy, z=z, application=application, doping_element=doping_element
+        )
+    st.session_state.history.append({"mode":mode, "df":df})
 
-    oxA, oxB, oxC = (oxidation_energy(f) for f in (A, B, C))
-    rows: list[dict] = []
-    for x in np.arange(0.0, 1.0 + 1e-9, dx):
-        for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
-            w = 1.0 - x - y
-            # Sn gap
-            Eg_Sn = (
-                w * dA["band_gap"] + x * dB["band_gap"] + y * dC["band_gap"]
-                - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
+
+elif not st.session_state.history:
+    st.info("Press ▶ Run screening to begin.")
+    st.stop()
+
+# ─────────── DISPLAY RESULTS ───────────
+df = st.session_state.history[-1]["df"]
+mode = st.session_state.history[-1]["mode"]
+
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
+
+with tab_tbl:
+    st.dataframe(df, use_container_width=True, height=440)
+
+with tab_plot:
+    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["Ehull"], y=df["Eg"], mode="markers",
+            marker=dict(
+                size=8 + 12 * df["score"], color=df["score"],
+                colorscale="Viridis", cmin=0, cmax=1,  # You can change "Viridis" to "Cividis", "Plasma", or "Inferno"
+                colorbar=dict(title="Score", tickvals=[0, 0.25, 0.5, 0.75, 1], ticks="outside"),
+                line=dict(width=1)
+            ),
+            hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
+            customdata=df.to_numpy()
+        ))
+        fig.add_shape(
+            type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+            line=dict(color="LightSeaGreen", dash="dash"),
+            fillcolor="LightSeaGreen", opacity=0.1
+        )
+        fig.update_layout(
+            title="EnerMat Binary Screen", xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)",
+            template="simple_white", font_size=16, height=500,
+            margin=dict(t=50, b=50, l=50, r=50),  # Adjust margins to prevent clipping
+            plot_bgcolor='white',  # Clean white background
+            showlegend=True,
+            legend=dict(
+                x=1, y=0.5,   # Positioning legend closer to plot
+                xanchor='left', yanchor='middle',  # Anchor legend position
+                title="Score", font=dict(size=12),  # Font size for the legend
+                traceorder="normal",  # Optional: Order of trace items
+                bgcolor="rgba(255, 255, 255, 0.6)",  # Background color for legend for better visibility
+                bordercolor="Black", borderwidth=1  # Optional: border around the legend
             )
-            # Ge gap
-            Eg_Ge = (
-                w * dA_Ge["band_gap"] + x * dB_Ge["band_gap"] + y * dC_Ge["band_gap"]
-                - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
+        )
+        fig.update_xaxes(tickfont=dict(size=14))  # Larger tick font
+        fig.update_yaxes(tickfont=dict(size=14))  # Larger tick font
+        st.plotly_chart(fig, use_container_width=True)
+
+    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",  # You can change the scale here too
+                            labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
+        fig.update_layout(
+            title="EnerMat Ternary Screen", margin=dict(t=50, b=50, l=50, r=50),
+            font_size=16, plot_bgcolor='white',
+            showlegend=True,
+            legend=dict(
+                x=1, y=0.5,
+                xanchor='left', yanchor='middle',
+                title="Score", font=dict(size=12),
+                traceorder="normal", bgcolor="rgba(255, 255, 255, 0.6)",
+                bordercolor="Black", borderwidth=1
             )
-            Eg = (1.0 - z) * Eg_Sn + z * Eg_Ge
+        )
+        fig.update_traces(marker=dict(size=6, line=dict(width=1)))  # Sharp markers
+        st.plotly_chart(fig, use_container_width=True)
 
-            Eh_Sn = (
-                w * dA["energy_above_hull"] + x * dB["energy_above_hull"] + y * dC["energy_above_hull"]
-            )
-            Eh_Ge = (
-                w * dA_Ge["energy_above_hull"] + x * dB_Ge["energy_above_hull"] + y * dC_Ge["energy_above_hull"]
-            )
-            Eh = (1.0 - z) * Eh_Sn + z * Eh_Ge
+with tab_dl:
+    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
 
-            dEox = w * oxA + x * oxB + y * oxC
-            sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-            raw = sbg * math.exp(-Eh / 0.0518) * math.exp(dEox / K_T_EFF)
 
-            # Shockley–Queisser PCE limit
-            pce = sq_efficiency(Eg)
+# ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
+_top = df.iloc[0]
+formula = str(_top["formula"])
+coords  = ", ".join(
+    f"{c}={_top[c]:.2f}"
+    for c in ("x", "y", "z", "ge_frac") if c in _top and pd.notna(_top[c])
+)
+label = formula if len(df) == 1 else f"{formula} ({coords})"
 
-            rows.append({
-                "x": round(x, 3),
-                "y": round(y, 3),
-                "z": round(z, 2),
-                "Eg": round(Eg, 3),
-                "Ehull": round(Eh, 4),
-                "Eox": round(dEox, 3),
-                "PCE_max (%)": round(pce * 100, 1),
-                "raw": raw,
-                "formula": f"{A}-{B}-{C} x={x:.2f} y={y:.2f} z={z:.2f}",
-            })
+_txt = (
+    "EnerMat auto-report  "
+    f"{datetime.date.today()}\n"
+    f"Top candidate   : {label}\n"
+    f"Band-gap [eV]   : {_top['Eg']}\n"
+    f"Ehull [eV/at.]  : {_top['Ehull']}\n"
+    f"Eox_e [eV/e⁻]   : {_top.get('Eox_e', 'N/A')}\n"
+    f"Score           : {_top['score']}\n"
+)
 
-    if not rows:
-        return pd.DataFrame()
-    m = max(r["raw"] for r in rows) or 1.0
-    for r in rows:
-        r["score"] = round(r.pop("raw") / m, 3)
+st.download_button("📄 Download TXT", _txt,
+                   "EnerMat_report.txt", mime="text/plain")
 
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+_doc = Document()
+_doc.add_heading("EnerMat Report", level=0)
+_doc.add_paragraph(f"Date : {datetime.date.today()}")
+_doc.add_paragraph(f"Top candidate : {label}")
+
+table = _doc.add_table(rows=1, cols=2)
+table.style = "LightShading-Accent1"
+hdr = table.rows[0].cells
+hdr[0].text, hdr[1].text = "Property", "Value"
+for k in ("Eg", "Ehull", "Eox_e", "score"):
+    if k in _top:
+        row = table.add_row().cells
+        row[0].text, row[1].text = k, str(_top[k])
+
+buf = io.BytesIO()
+_doc.save(buf)
+buf.seek(0)
+st.download_button("📝 Download DOCX", buf,
+                   "EnerMat_report.docx",
+                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
