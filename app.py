@@ -95,117 +95,79 @@ def _run_binary(*args, **kwargs):
 def _run_ternary(*args, **kwargs):
     return screen_ternary(*args, **kwargs)
 
-# ─────────── PROBLEM STATEMENT / SIGNIFICANCE ───────────
+# ─────────── CONTEXT, VALUE & USAGE ───────────
 st.markdown(
     """
     <style>
-    .problem-box {
-      background: linear-gradient(135deg, #CFF4FF 0%, #E8F9FF 100%);
-      padding: 20px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      color: #12213A;                 /* nearly-black for AA contrast */
-      font-family: Arial, sans-serif;
-    }
-    .problem-box h2 {
-      margin: 0 0 8px;
-      font-size: 1.8rem;
-      color: #005FAD;                 /* deep brand-blue */
-      text-shadow: 0 1px 1px rgba(0,0,0,0.15);
-    }
-    .problem-box p {
-      margin: 0 0 12px;
-      font-size: 1rem;
-      line-height: 1.5;
-    }
-    .problem-box ul {
-      margin: 0;
-      padding-left: 1.2em;
-      font-size: 0.95rem;
-    }
+      .em-section {
+        background: #E8F9FF;
+        padding: 24px;
+        border-radius: 14px;
+        margin-bottom: 32px;
+        font-family: Arial, sans-serif;
+        color: #12213A;
+      }
+      .em-section h2 {
+        margin-top: 0;
+        font-size: 1.9rem;
+        color: #005FAD;
+        text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+      }
+      .em-section p {
+        margin: 0.8em 0;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+      .em-section ul {
+        margin: 0.8em 0 1.2em 1.2em;
+        font-size: 0.95rem;
+      }
+      .em-section code {
+        background: rgba(13,71,161,0.08);
+        padding: 2px 4px;
+        border-radius: 4px;
+      }
     </style>
 
-    <div class="problem-box">
+    <div class="em-section">
       <h2>Context &amp; Value</h2>
       <p>
-        Lead–halide perovskites deliver record solar efficiencies but suffer from
-        environmental toxicity and rapid degradation under heat, moisture, or oxygen.
-        Tin-based, lead-free analogues offer a safer path, yet optimising their
-        <strong>Eg</strong> (band gap), <strong>E<sub>hull</sub></strong> (phase stability),
-        <strong>ΔE<sub>ox</sub></strong> (oxidation resistance) and
-        <strong>PCE<sub>max</sub></strong> (theoretical efficiency) remains a hurdle.
+        Lead–halide perovskites deliver record solar efficiencies but suffer
+        from environmental toxicity and rapid degradation under heat,
+        moisture, or oxygen. Tin-based, lead-free analogues offer a safer path,
+        yet optimising their <strong>Eg</strong> (band gap), 
+        <strong>E<sub>hull</sub></strong> (phase stability), 
+        <strong>ΔE<sub>ox</sub></strong> (oxidation resistance) and 
+        <strong>PCE<sub>max</sub></strong> (theoretical conversion efficiency) 
+        remains a formidable challenge.
       </p>
       <ul>
-        <li><strong>Eg</strong>: ideal ≈ 1.3 eV for single-junction PV.</li>
-        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
-        <li><strong>ΔE<sub>ox</sub></strong>: positive values resist Sn²⁺ → Sn⁴⁺.</li>
-        <li><strong>PCE<sub>max</sub></strong>: Shockley–Queisser limit (%).</li>
+        <li><strong>Eg</strong>: ideal ≈ 1.3 eV for single-junction PV absorption.</li>
+        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
+        <li><strong>ΔE<sub>ox</sub></strong>: positive values resist Sn²⁺ → Sn⁴⁺ oxidation.</li>
+        <li><strong>PCE<sub>max</sub></strong>: Shockley–Queisser theoretical limit (%).</li>
       </ul>
       <p>
-        <em>EnerMat Explorer</em> helps scientists and engineers pinpoint promising
-        lead-free alloys in seconds, cutting costly trial-and-error loops.
+        <em>EnerMat Explorer</em> empowers researchers, engineers, and educators
+        to pinpoint optimal lead-free perovskite alloys within seconds—slashing
+        costly trial-and-error cycles.
       </p>
-      <p>
-        Industry partners gain a transparent trade-off dashboard, while students
-        explore perovskite design hands-on.
-      </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
-# ─────────── HOW TO USE ───────────
-st.markdown(
-    """
-    <style>
-      .usage-box {
-        background: linear-gradient(135deg, #E4F4FF 0%, #E4F4FF 100%);
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-        color: #0D47A1;
-        font-family: Arial, sans-serif;
-      }
-      .usage-box h2 {
-        margin: 0 0 8px;
-        font-size: 1.6rem;
-        text-shadow: 1px 1px 2px rgba(255,255,255,0.6);
-      }
-      .usage-box p {
-        margin: 0 0 12px;
-        font-size: 0.95rem;
-        line-height: 1.5;
-      }
-      .usage-box ul {
-        margin: 0;
-        padding-left: 1.2em;
-        font-size: 0.9rem;
-      }
-    </style>
-    <div class="usage-box">
       <h2>🔧 How to Use EnerMat</h2>
-      <p>
-        Follow these simple steps to identify your optimal lead‑free perovskite:
-      </p>
+      <p>Follow these steps to explore your next-generation perovskite:</p>
       <ul>
-        <li>
-          <strong>Select End‑members</strong> (A & B, and optionally C) from the dropdowns on the left.
-        </li>
-        <li>
-          <strong>Set Environment</strong>: adjust humidity (%) and temperature (°C) sliders.
-        </li>
-        <li>
-          <strong>Tune Model</strong>: choose your target band‑gap window, bowing parameter, composition step‑sizes, and Ge‑fraction.
-        </li>
-        <li>
-          Hit the <code>▶ Run screening</code> button to generate an interactive table & plot of Eg vs. Ehull vs. Score.
-        </li>
-        <li>
-          Use <code>⏪ Previous</code> to step back through prior results, and download CSV/TXT/DOCX via the Download tab.
-        </li>
+        <li><strong>Select End-members</strong> (A &amp; B, optionally C) from the sidebar.</li>
+        <li><strong>Set Environment</strong>: adjust humidity (%) and temperature (°C) sliders.</li>
+        <li><strong>Tune Model</strong>: choose your band-gap window, bowing parameter, 
+            composition step-sizes, and Ge-fraction.</li>
+        <li>Hit the <code>▶ Run screening</code> button to compute an interactive table 
+            and plot of Eg vs. Ehull vs. Score.</li>
+        <li>Use <code>⏪ Previous</code> to step back through your screening history, 
+            and download CSV/TXT/DOCX via the Download tab.</li>
       </ul>
-      <p style="font-style:italic; font-size:0.85rem;">
-        Instantly visualize how band‐gap, phase‐stability, oxidation‐resistance, and theoretical efficiency trade off — no DFT runs required!
+      <p style="font-style:italic; color: #005FAD;">
+        Instantly visualize how band-gap, phase-stability, oxidation-resistance, 
+        and theoretical efficiency trade off—no DFT runs required!
       </p>
     </div>
     """,
