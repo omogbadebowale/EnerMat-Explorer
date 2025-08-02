@@ -100,7 +100,8 @@ st.markdown(
     """
     <style>
       .em-section {
-        background: #E8F9FF;
+        /* cooler, lab-style gradient */
+        background: linear-gradient(135deg, #EEF5FF 0%, #FFFFFF 100%);
         padding: 24px;
         border-radius: 14px;
         margin-bottom: 32px;
@@ -110,8 +111,8 @@ st.markdown(
       .em-section h2 {
         margin-top: 0;
         font-size: 1.9rem;
-        color: #005FAD;
-        text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+        color: #0B3D91;    /* deep navy-blue */
+        text-shadow: 0 1px 1px rgba(0,0,0,0.10);
       }
       .em-section p {
         margin: 0.8em 0;
@@ -123,7 +124,7 @@ st.markdown(
         font-size: 0.95rem;
       }
       .em-section code {
-        background: rgba(13,71,161,0.08);
+        background: rgba(11,61,145,0.08);
         padding: 2px 4px;
         border-radius: 4px;
       }
@@ -138,12 +139,11 @@ st.markdown(
         yet optimising their <strong>Eg</strong> (band gap), 
         <strong>E<sub>hull</sub></strong> (phase stability), 
         <strong>ΔE<sub>ox</sub></strong> (oxidation resistance) and 
-        <strong>PCE<sub>max</sub></strong> (theoretical conversion efficiency) 
-        remains a formidable challenge.
+        <strong>PCE<sub>max</sub></strong> (theoretical efficiency) remains a hurdle.
       </p>
       <ul>
         <li><strong>Eg</strong>: ideal ≈ 1.3 eV for single-junction PV absorption.</li>
-        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
+        <li><strong>E<sub>hull</sub></strong>: &lt; 0.05 eV/atom ⇒ likely synthesizable.</li>
         <li><strong>ΔE<sub>ox</sub></strong>: positive values resist Sn²⁺ → Sn⁴⁺ oxidation.</li>
         <li><strong>PCE<sub>max</sub></strong>: Shockley–Queisser theoretical limit (%).</li>
       </ul>
@@ -165,7 +165,7 @@ st.markdown(
         <li>Use <code>⏪ Previous</code> to step back through your screening history, 
             and download CSV/TXT/DOCX via the Download tab.</li>
       </ul>
-      <p style="font-style:italic; color: #005FAD;">
+      <p style="font-style:italic; color: #0B3D91;">
         Instantly visualize how band-gap, phase-stability, oxidation-resistance, 
         and theoretical efficiency trade off—no DFT runs required!
       </p>
@@ -173,6 +173,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 # ─────────── RUNNING SCREEN ───────────
 col_run, col_prev = st.columns([3,1])
