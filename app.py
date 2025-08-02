@@ -197,8 +197,6 @@ with tab_plot:
 with tab_dl:
     st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
 
-
-
 # ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
 _top = df.iloc[0]
 formula = str(_top["formula"])
