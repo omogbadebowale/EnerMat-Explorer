@@ -38,7 +38,7 @@ st.markdown(
         padding-top:.4rem;
       }}
       .em-logo img {{
-        height:min(40vw,260px);   /* responsive, caps at 220 px */
+        height:min(70vw,3000px);   /* responsive, caps at 220 px */
         width:auto;
       }}
       .em-logo h1 {{
