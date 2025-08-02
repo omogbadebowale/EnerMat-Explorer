@@ -267,7 +267,7 @@ st.markdown(
 )
 
 # ─────────── RUNNING SCREEN ───────────
-col_run, col_prev = st.columns([3,1])
+col_run, col_prev = st.columns([3, 1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
 
@@ -278,7 +278,7 @@ if do_prev:
     st.success("Showing previous result")
 
 elif do_run:
-    # sanity-check
+    # sanity-check: all chosen formulae must be in END_MEMBERS
     for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
         if f not in END_MEMBERS:
             st.error(f"❌ Unknown end-member: {f}")
@@ -287,15 +287,16 @@ elif do_run:
     if mode.startswith("Binary"):
         df = _run_binary(
             A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z, y=y, application=application
+            z=z, application=application
         )
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
-            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
-            dx=dx, dy=dy, z=z, y=y, application=application
+            (bg_lo, bg_hi), {"AB": bow, "AC": bow, "BC": bow},
+            dx=dx, dy=dy, z=z, application=application
         )
-    st.session_state.history.append({"mode":mode, "df":df})
+
+    st.session_state.history.append({"mode": mode, "df": df})
 
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
