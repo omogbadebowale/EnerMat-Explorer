@@ -51,7 +51,6 @@ st.markdown(
 # ───────────────────────────────────────────
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
-st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
 st.markdown(
     """
     <style>
