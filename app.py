@@ -60,6 +60,10 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ─────────────────────────────────────────────────────────────────
+
+# ─────────── STREAMLIT PAGE CONFIG ───────────
+st.set_page_config(page_title="EnerMat Explorer", layout="wide")
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
@@ -127,14 +131,7 @@ with st.sidebar:
         "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
-# NEW — show only if a Bi or Sb preset is selected
-if any(elem in f for elem in ("Bi", "Sb") for f in (A, B)):
-    y = st.slider(
-        "Sb fraction y", 0.00, 1.00, 0.00, 0.05,
-        help="B-site Sb³⁺ in Cs₃(Bi₁₋ySb_y)₂X₉ or Cs₂Ag(Bi₁₋ySb_y)X₆"
-    )
-else:
-    y = 0.00          # keeps legacy path unchanged
+
     if st.button("🗑 Clear history"):
         st.session_state.history.clear()
         st.experimental_rerun()
@@ -267,7 +264,7 @@ st.markdown(
 )
 
 # ─────────── RUNNING SCREEN ───────────
-col_run, col_prev = st.columns([3, 1])
+col_run, col_prev = st.columns([3,1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
 
@@ -278,7 +275,7 @@ if do_prev:
     st.success("Showing previous result")
 
 elif do_run:
-    # sanity-check: all chosen formulae must be in END_MEMBERS
+    # sanity-check
     for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
         if f not in END_MEMBERS:
             st.error(f"❌ Unknown end-member: {f}")
@@ -292,11 +289,10 @@ elif do_run:
     else:
         df = _run_ternary(
             A, B, C, rh, temp,
-            (bg_lo, bg_hi), {"AB": bow, "AC": bow, "BC": bow},
+            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
             dx=dx, dy=dy, z=z, application=application
         )
-
-    st.session_state.history.append({"mode": mode, "df": df})
+    st.session_state.history.append({"mode":mode, "df":df})
 
 elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
