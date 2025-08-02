@@ -12,22 +12,46 @@ from backend.perovskite_utils import (
     END_MEMBERS,
 )
 # ───────────  NEW: logo header  ───────────
+# ─── START: branded header (SVG-first, responsive) ───────────────
 from pathlib import Path
 import base64
+import streamlit as st                             # already imported above
 
 ASSETS_DIR = Path(__file__).with_name("assets")
-svg_path   = ASSETS_DIR / "enermat_logo.svg"
-if svg_path.exists():
-    logo_bytes = svg_path.read_bytes()
-    mime = "image/svg+xml"
+svg_path  = ASSETS_DIR / "enermat_logo.svg"
+png_path  = ASSETS_DIR / "enermat_logo.png"
+webp_path = ASSETS_DIR / "enermat_logo.png.webp"
 
-b64_logo = base64.b64encode(logo_bytes).decode()
+if svg_path.exists():
+    mime, data = "image/svg+xml", svg_path.read_bytes()
+elif png_path.exists():
+    mime, data = "image/png", png_path.read_bytes()
+elif webp_path.exists():
+    mime, data = "image/webp", webp_path.read_bytes()
+else:
+    mime, data = "image/png", b""
+
+b64_logo = base64.b64encode(data).decode()
 
 st.markdown(
     f"""
-    <div style="display:flex;align-items:center;gap:1rem;
-                margin-bottom:1rem;padding-top:0.2rem">
-        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo" height="150">
+    <style>
+    .em-header {{
+        display:flex;
+        align-items:center;
+        gap:1rem;
+        margin-bottom:1rem;
+        padding-top:0.2rem;
+    }}
+    .em-header img {{
+        height:min(12vw,120px);      /* responsive but max 120 px */
+        width:auto;
+        vertical-align:middle;
+    }}
+    </style>
+
+    <div class="em-header">
+        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo">
         <div>
             <h1 style="margin:0">EnerMat&nbsp;Explorer</h1>
             <small style="opacity:0.75">Lead-free&nbsp;PV discovery tool</small>
@@ -36,7 +60,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ───────────────────────────────────────────
+# ─── END: branded header ──────────────────────────────────────────
+
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
 st.markdown(
