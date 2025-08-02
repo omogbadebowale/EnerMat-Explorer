@@ -52,11 +52,15 @@ st.markdown(
       }}
     </style>
 
-    <div class="em-logo">
-        <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
-        <h1>EnerMat Explorer</h1>
-        <small>Lead-free PV discovery tool</small>
-    </div>
+  <div class="em-logo">
+    <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
+    <h1>EnerMat Explorer</h1>
+    <small>Lead-free PV discovery tool</small>
+    <small style="font-size:0.8rem;opacity:0.7">
+        © 2025 Dr Gbadebo Taofeek Yusuf
+    </small>
+</div>
+
     """,
     unsafe_allow_html=True,
 )
