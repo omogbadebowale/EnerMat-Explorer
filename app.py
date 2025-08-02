@@ -156,7 +156,7 @@ st.markdown(
       padding: 20px;
       border-radius: 12px;
       margin-bottom: 24px;
-      color: #333;
+      color: #422;
       font-family: Arial, sans-serif;
     }
     .problem-box h2 {
