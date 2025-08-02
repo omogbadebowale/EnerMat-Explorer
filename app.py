@@ -1,7 +1,5 @@
 import datetime
 import io
-from pathlib import Path
-import base64
 
 import streamlit as st
 import pandas as pd
@@ -14,59 +12,9 @@ from backend.perovskite_utils import (
     END_MEMBERS,
 )
 
-# ─── Branded header with large, responsive SVG/PNG logo ──────────
-ASSETS_DIR = Path(__file__).with_name("assets")
-for name, mime in [
-    ("enermat_logo.svg", "image/svg+xml"),
-    ("enermat_logo.png", "image/png"),
-    ("enermat_logo.png.webp", "image/webp"),
-]:
-    p = ASSETS_DIR / name
-    if p.exists():
-        logo_b64 = base64.b64encode(p.read_bytes()).decode()
-        logo_mime = mime
-        break
-else:
-    logo_b64, logo_mime = "", "image/png"      # graceful fallback
-
-st.markdown(
-    f"""
-    <style>
-      .em-logo {{
-        text-align:center;
-        margin:0 0 1.4rem 0;
-        padding-top:.4rem;
-      }}
-      .em-logo img {{
-        height:min(45vw,320px);   /* responsive, caps at 220 px */
-        width:auto;
-      }}
-      .em-logo h1 {{
-        margin:.5rem 0 0 0;
-        font-size:2.3rem;
-        font-weight:700;
-      }}
-      .em-logo small {{
-        opacity:.75;
-        font-size:.95rem;
-      }}
-    </style>
-
-    <div class="em-logo">
-        <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
-        <h1>EnerMat Explorer</h1>
-        <small>Lead-free PV discovery tool</small>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-# ─────────────────────────────────────────────────────────────────
-
-# ─────────── STREAMLIT PAGE CONFIG ───────────
-st.set_page_config(page_title="EnerMat Explorer", layout="wide")
-
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
+st.title("☀️ EnerMat **Perovskite** Explorer v9.6")
 st.markdown(
     """
     <style>
@@ -195,7 +143,7 @@ st.markdown(
         <li><strong>PCEₘₐₓ</strong>: Shockley–Queisser power‑conversion efficiency (%), the detailed‑balance limit.</li>
       </ul>
       <p>
-        This app will help materials scientists, solar‑cell engineers and educators to quickly pinpoint promising perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
+        This app will help materials scientists, solar‑cell engineers and educators to quickly pinpoint promising lead‑free perovskite alloys, cutting down costly trial‑and‑error experiments and speeding up innovation.
       </p>
       <p>
         It will also assist Industry partners gain a transparent decision‑making tool to evaluate trade‑offs between efficiency and stability, while students enjoy an interactive platform to explore perovskite design principles hands‑on.
