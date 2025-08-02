@@ -80,7 +80,6 @@ END_MEMBERS = [
     # double perovskites
     "Cs2AgBiBr6", "Cs2AgInCl6",
     # Pb references
-    "CsPbCl3", "CsPbBr3", "CsPbI3",
 ]
 
 CALIBRATED_GAPS = {
