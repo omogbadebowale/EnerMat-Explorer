@@ -15,7 +15,7 @@ from backend.perovskite_utils import (
 )
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer – Lead-Free Perovskite PV Discovery Tool", layout="wide")
-st.title("☀️ Lead-Free Perovskite PV Discovery Tool")
+st.title("☀️ EnerMat Explorer | Lead-Free Perovskite PV Discovery Tool")
 st.markdown(
     """
     <style>
