@@ -1,5 +1,7 @@
 import datetime
 import io
+from pathlib import Path
+import base64
 
 import streamlit as st
 import pandas as pd
@@ -11,16 +13,8 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-# ─── Branded header with large, responsive SVG/PNG logo ──────────
-import datetime
-import io
-+from pathlib import Path          # ▲ moved up so Path exists
-+import base64                     # ▲ moved up so logo_b64 works
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from plotly import graph_objects as go
+# ─── Branded header with large, responsive SVG/PNG logo ──────────
 ASSETS_DIR = Path(__file__).with_name("assets")
 for name, mime in [
     ("enermat_logo.svg", "image/svg+xml"),
@@ -66,6 +60,10 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ─────────────────────────────────────────────────────────────────
+
+# ─────────── STREAMLIT PAGE CONFIG ───────────
+st.set_page_config(page_title="EnerMat Explorer", layout="wide")
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
