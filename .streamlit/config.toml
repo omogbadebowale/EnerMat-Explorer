@@ -1,0 +1,7 @@
+[theme]
+base                     = "light"      # keep white backgrounds
+primaryColor             = "#005FAD"    # deep logo-blue
+accentColor              = "#28C4D8"    # aqua lead-free slash
+secondaryBackgroundColor = "#F5FAFD"    # soft ice-white cards & sidebar
+textColor                = "#12213A"    # almost-black for readability
+font                     = "sans serif"
