@@ -80,11 +80,26 @@ with st.sidebar:
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
 
+    # ── Clear history button ──
     if st.button("🗑 Clear history"):
-        st.session_state.history.clear()
+        # Only clear if the key exists
+        if "history" in st.session_state:
+            st.session_state.history = []
+        # (optional) reset any other session counters here
         st.experimental_rerun()
 
+    # ── Developer credit in sidebar footer ──
+    st.markdown(
+        """
+        <div style="font-size:0.8rem; color:grey; margin-top:2rem;">
+          Developed by <strong>Dr. Gbadebo Taofeek Yusuf</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.caption(f"⚙️ Build SHA : dev • 🕒 {datetime.datetime.now():%Y-%m-%d %H:%M}")
+
 
 # ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
