@@ -80,8 +80,8 @@ with st.sidebar:
         help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
     )
 
-    # ── Clear history button ──
-   if st.button("🗑 Clear history"):
+   # ── Clear history button ──
+    if st.button("🗑 Clear history"):
         # Safely clear
         if "history" in st.session_state:
             st.session_state.history = []
