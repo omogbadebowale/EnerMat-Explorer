@@ -11,50 +11,54 @@ from backend.perovskite_utils import (
     screen_ternary,
     END_MEMBERS,
 )
-# ─── START: icon-only header (SVG-first, responsive) ─────────────
+# ─── START: large icon header + title  ────────────────────────────
 from pathlib import Path
-import base64
-import streamlit as st        # already imported above
+import base64, streamlit as st
 
 ASSETS_DIR = Path(__file__).with_name("assets")
-svg_path  = ASSETS_DIR / "enermat_logo.svg"
-png_path  = ASSETS_DIR / "enermat_logo.png"
-webp_path = ASSETS_DIR / "enermat_logo.png.webp"
-
-if svg_path.exists():
-    mime, data = "image/svg+xml", svg_path.read_bytes()
-elif png_path.exists():
-    mime, data = "image/png", png_path.read_bytes()
-elif webp_path.exists():
-    mime, data = "image/webp", webp_path.read_bytes()
-else:
-    mime, data = "image/png", b""
-
-b64_logo = base64.b64encode(data).decode()
+for name, mime in [("enermat_logo.svg","image/svg+xml"),
+                   ("enermat_logo.png","image/png"),
+                   ("enermat_logo.png.webp","image/webp")]:
+    p = ASSETS_DIR / name
+    if p.exists():
+        logo_b64 = base64.b64encode(p.read_bytes()).decode()
+        logo_mime = mime
+        break
+else:                              # no image found → nothing will crash
+    logo_b64, logo_mime = "", "image/png"
 
 st.markdown(
     f"""
     <style>
-    .em-logo-only {{
+      .em-header {{
         text-align:center;
-        margin-bottom:1rem;
-        padding-top:0.3rem;
-    }}
-    .em-logo-only img {{
-        height:min(18vw,160px);   /* responsive, max 160 px */
+        margin: 0 0 1.2rem 0;
+        padding-top: .4rem;
+      }}
+      .em-header img {{
+        height:min(25vw,180px);   /* responsive, max 180 px */
         width:auto;
-    }}
+      }}
+      .em-header h1 {{
+        margin: .4rem 0 0 0;
+        font-size: 2.2rem;
+        font-weight: 700;
+      }}
+      .em-header small {{
+        opacity: .75;
+        font-size: .9rem;
+      }}
     </style>
 
-    <div class="em-logo-only">
-        <img src="data:{mime};base64,{b64_logo}" alt="EnerMat logo">
+    <div class="em-header">
+        <img src="data:{logo_mime};base64,{logo_b64}" alt="EnerMat logo">
+        <h1>EnerMat Explorer</h1>
+        <small>Lead-free PV discovery tool</small>
     </div>
     """,
     unsafe_allow_html=True,
 )
-# ─── END icon-only header ────────────────────────────────────────
-
-# ─── END: branded header ──────────────────────────────────────────
+# ─── END header ──────────────────────────────────────────────────
 
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer", layout="wide")
