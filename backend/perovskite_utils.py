@@ -278,6 +278,7 @@ def screen_binary(
     dopant_fraction: float | None = None,
     custom_center: float | None = None,  # for 'custom' mode
     custom_sigma: float | None = None,   # for 'custom' mode
+    **kwargs,  # ← NEW: swallow any extra keywords
 ) -> pd.DataFrame:
     # Resolve application config
     app = (application or "single").lower()
@@ -379,6 +380,7 @@ def screen_ternary(
     dopant_fraction: float | None = None,
     custom_center: float | None = None,   # for 'custom'
     custom_sigma: float | None = None,    # for 'custom'
+    **kwargs,  # ← NEW
 ) -> pd.DataFrame:
     app = (application or "single").lower()
     if app == "custom":
