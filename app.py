@@ -64,7 +64,7 @@ with st.sidebar:
     gamma_t = st.number_input("γ_t (Temp weight, 0 = off)", 0.0, 2.0, 0.0, 0.05)
 
     st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.40), 0.01)
+    bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.60), 0.01)
 
     st.header("Model settings")
     bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
