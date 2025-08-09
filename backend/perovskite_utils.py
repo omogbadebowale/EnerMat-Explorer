@@ -403,7 +403,7 @@ def screen_ternary(
     dopant_fraction: float | None = None,
     t0: float = 0.95,
     beta: float = 1.0,
-) -> pd.DataFrame]:
+) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
     if application in APPLICATION_CONFIG:
