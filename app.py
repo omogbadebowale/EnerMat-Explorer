@@ -270,20 +270,35 @@ with tab_dl:
                        "EnerMat_results.csv", "text/csv")
 
     # Batch CSV of all runs
+        # Batch CSV of all runs
     if st.session_state.history:
         all_rows = []
+
+        def _freeze(v):
+            # turn non-scalars into compact JSON strings so pandas can broadcast
+            if isinstance(v, (dict, list, tuple, set)):
+                try:
+                    return json.dumps(v, separators=(",", ":"))
+                except Exception:
+                    return str(v)
+            return v
+
         for i, h in enumerate(st.session_state.history, 1):
             dfi = pd.DataFrame(h["df"]).copy()
+            # attach params safely (broadcast scalar/string to all rows)
             for k, v in h.get("params", {}).items():
-                dfi[f"param_{k}"] = v
+                dfi[f"param_{k}"] = _freeze(v)
             dfi["run_id"] = i
             all_rows.append(dfi)
+
         big = pd.concat(all_rows, ignore_index=True)
         st.download_button(
             "📦 Download ALL runs (CSV)",
             big.to_csv(index=False).encode(),
-            "EnerMat_all_runs.csv", "text/csv"
+            "EnerMat_all_runs.csv",
+            "text/csv"
         )
+
 
     # Auto TXT report (top row)
     _top = df.iloc[0]
