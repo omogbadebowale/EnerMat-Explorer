@@ -339,7 +339,7 @@ def screen_binary(
 
     return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
 
-# ─────────── Ternary screen (unchanged logic, generalized dopant) ───────────
+# ─────────── Ternary screen (accepts t0/beta; uses tolerance penalty) ───────────
 def screen_ternary(
     A: str,
     B: str,
@@ -351,12 +351,15 @@ def screen_ternary(
     *,
     dx: float = 0.10,
     dy: float = 0.10,
-    z: float = 0.0,                          # backward-compat
+    z: float = 0.0,                          # backward-compat (dopant fraction)
     application: str | None = None,
     gamma_h: float = 0.0,
     gamma_t: float = 0.0,
-    dopant_element: str | None = "Ge",       # NEW
-    dopant_fraction: float | None = None,    # NEW
+    dopant_element: str | None = "Ge",
+    dopant_fraction: float | None = None,
+    # NEW: accept structural penalty args (UI sends these)
+    t0: float = 0.95,
+    beta: float = 1.0,
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
@@ -368,6 +371,7 @@ def screen_ternary(
     if dopant_fraction is None:
         dopant_fraction = float(z or 0.0)
     dopant = dopant_element or "Ge"
+
     in_scope, scope_msg = _dopant_scope(dopant if dopant_fraction > 0 else None)
 
     dA = fetch_mp_data(A, ["band_gap", "energy_above_hull"])
@@ -385,13 +389,18 @@ def screen_ternary(
     else:
         dA_D, dB_D, dC_D = dA, dB, dC
 
+    # penalties
     env_pen = _environment_penalty(rh, temp, gamma_h=gamma_h, gamma_t=gamma_t)
     zf = float(max(0.0, min(1.0, dopant_fraction)))
+    hal = _infer_halide(A) or _infer_halide(B) or _infer_halide(C) or "I"
+    rB = _b_site_radius(dopant, zf)
+    tol_pen_const = _tolerance_penalty(rB, hal, t0=t0, beta=beta)
 
     rows: list[dict] = []
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
         for y in np.arange(0.0, 1.0 - x + 1e-9, dy):
             w = 1.0 - x - y
+            # Eg with pairwise bowing
             Eg_Sn = (
                 w * float(dA["band_gap"]) + x * float(dB["band_gap"]) + y * float(dC["band_gap"])
                 - bows["AB"] * x * w - bows["AC"] * y * w - bows["BC"] * x * y
@@ -402,20 +411,22 @@ def screen_ternary(
             )
             Eg = (1.0 - zf) * Eg_Sn + zf * Eg_D
 
+            # Ehull interpolation
             Eh_Sn = w * float(dA["energy_above_hull"]) + x * float(dB["energy_above_hull"]) + y * float(dC["energy_above_hull"])
             Eh_D  = w * float(dA_D["energy_above_hull"]) + x * float(dB_D["energy_above_hull"]) + y * float(dC_D["energy_above_hull"])
             Eh = (1.0 - zf) * Eh_Sn + zf * Eh_D
 
-            # Oxidation: neutral for dopant branch unless Sn present (keeps app safe)
+            # Oxidation: keep neutral for dopant branch; rely on Sn path
             oxA, oxB, oxC = oxidation_energy(A), oxidation_energy(B), oxidation_energy(C)
             dEox = w * oxA + x * oxB + y * oxC
 
+            # scoring + bounds
             sbg    = _score_band_gap(Eg, lo, hi, center, sigma)
             sbg_lo = _score_band_gap(Eg - DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
             sbg_hi = _score_band_gap(Eg + DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
 
-            raw  = _score_raw(Eg, Eh, dEox, sbg, env_pen, 1.0)
-            rawL, rawH = _score_bounds(Eg, Eh, dEox, sbg_lo, sbg_hi, env_pen, 1.0)
+            raw  = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
+            rawL, rawH = _score_bounds(Eg, Eh, dEox, sbg_lo, sbg_hi, env_pen, tol_pen_const)
 
             pce = sq_efficiency(Eg)
 
