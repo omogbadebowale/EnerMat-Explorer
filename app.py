@@ -57,7 +57,9 @@ with st.sidebar:
         ["single", "tandem", "indoor", "detector"]
     )
 
-    # ── Environment sliders removed ──
+    st.header("Environment")
+    rh = st.slider("Humidity [%]", 0, 100, 50)
+    temp = st.slider("Temperature [°C]", -20, 100, 25)
 
     st.header("Target band-gap [eV]")
     bg_lo, bg_hi = st.slider(
@@ -80,8 +82,10 @@ with st.sidebar:
 
    # ── Clear history button ──
     if st.button("🗑 Clear history"):
+        # Safely clear
         if "history" in st.session_state:
             st.session_state.history = []
+        # Re-run with clean state
         st.rerun()
 
     # ── Developer credit in sidebar footer ──
@@ -109,8 +113,8 @@ st.markdown(
     """
     <style>
       .overview-box {
-        background-color: #ffffff;
-        border: 1px solid #dddddd;
+        background-color: #ffffff;       /* white for max contrast */
+        border: 1px solid #dddddd;       /* light grey border */
         border-radius: 8px;
         padding: 24px;
         margin-bottom: 32px;
@@ -119,7 +123,7 @@ st.markdown(
       }
       .overview-box h2 {
         margin-top: 0;
-        color: #005FAD;
+        color: #005FAD;                  /* deep brand-blue */
         font-size: 1.8rem;
       }
       .overview-box p {
@@ -178,6 +182,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ─────────── HOW TO USE ───────────
 st.markdown(
     """
@@ -232,6 +237,7 @@ if do_prev:
     st.success("Showing previous result")
 
 elif do_run:
+    # sanity-check
     for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
         if f not in END_MEMBERS:
             st.error(f"❌ Unknown end-member: {f}")
@@ -239,12 +245,12 @@ elif do_run:
 
     if mode.startswith("Binary"):
         df = _run_binary(
-            A, B, (bg_lo, bg_hi), bow, dx,
+            A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
             z=z, application=application
         )
     else:
         df = _run_ternary(
-            A, B, C,
+            A, B, C, rh, temp,
             (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
             dx=dx, dy=dy, z=z, application=application
         )
@@ -254,7 +260,7 @@ elif not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────── DISPLAY RESULTS ───────────
+  # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
@@ -279,18 +285,23 @@ with tab_plot:
         fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
                       line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
         fig.update_layout(
-            title="EnerMat Binary Screen",
-            xaxis_title="Ehull (eV/atom)",
-            yaxis_title="Eg (eV)",
-            template="simple_white",
-            font=dict(family="Arial", size=12, color="black"),
-            width=720, height=540,
-            margin=dict(l=60, r=60, t=60, b=60),
-            coloraxis_colorbar=dict(
-                title=dict(text="Score", font=dict(size=12)),
-                tickfont=dict(size=12)
-            )
-        )
+    title="EnerMat Binary Screen",
+    xaxis_title="Ehull (eV/atom)",
+    yaxis_title="Eg (eV)",
+    template="simple_white",
+    font=dict(
+        family="Arial",
+        size=12,
+        color="black"
+    ),
+    width=720,
+    height=540,
+    margin=dict(l=60, r=60, t=60, b=60),
+    coloraxis_colorbar=dict(
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
+    )
+)
         st.plotly_chart(fig, use_container_width=True)
     elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
@@ -319,7 +330,9 @@ _txt = (
     f"Eox_e [eV/e⁻]   : {_top.get('Eox_e', 'N/A')}\n"
     f"Score           : {_top['score']}\n"
 )
-st.download_button("📄 Download TXT", _txt, "EnerMat_report.txt", mime="text/plain")
+
+st.download_button("📄 Download TXT", _txt,
+                   "EnerMat_report.txt", mime="text/plain")
 
 _doc = Document()
 _doc.add_heading("EnerMat Report", level=0)
@@ -338,6 +351,7 @@ for k in ("Eg", "Ehull", "Eox_e", "score"):
 buf = io.BytesIO()
 _doc.save(buf)
 buf.seek(0)
-st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
+st.download_button("📝 Download DOCX", buf,
+                   "EnerMat_report.docx",
                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 # ─────────────────────────────────────────────────────────────────────────────
