@@ -118,96 +118,96 @@ elif not st.session_state.history:
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
-# Tabs: results, plot, provenance, download
+tab_tbl, tab_plot, tab_prov, tab_dl = st.tabs(["📊 Table", "📈 Plot", "ℹ️ Provenance", "📥 Download"])
 
-with st.tabs(["📊 Table", "📈 Plot", "ℹ️ Provenance", "📥 Download"]) as (tab_tbl, tab_plot, tab_prov, tab_dl):
-    with tab_tbl:
-        st.dataframe(df, use_container_width=True, height=500)
+with tab_tbl:
+    st.dataframe(df, use_container_width=True, height=500)
 
-    with tab_plot:
-        if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df["Ehull"], y=df["Eg"], mode="markers",
-                marker=dict(
-                    size=8 + 12 * df["score"], color=df["score"],
-                    colorscale="Viridis", cmin=0, cmax=1,
-                    colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
-                ),
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>"
-                    "Eg=%{y:.3f} eV\nEhull=%{x:.4f} eV/at\n"
-                    "Score=%{marker.color:.3f}\n"
-                    "Eox (env)=%{customdata[1]:.3f} eV\n"
-                    "t=%{customdata[2]:.3f}\nPCEmax=%{customdata[3]:.1f}%<extra></extra>"
-                ),
-                customdata=df[["formula", "Eox_env", "t_factor", "PCE_max (%)"]].values
-            ))
-            fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-                          line=dict(color="LightSeaGreen", dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
-            fig.update_layout(
-                title="EnerMat Binary Screen",
-                xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)", template="simple_white",
-                font=dict(family="Arial", size=12, color="black"), width=720, height=540,
-                margin=dict(l=60, r=60, t=60, b=60),
-                coloraxis_colorbar=dict(title=dict(text="Score", font=dict(size=12)), tickfont=dict(size=12))
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
-            fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
-                                color_continuous_scale="Viridis",
-                                labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tab_prov:
-        st.subheader("Data provenance & calibration")
-        # Condense unique provenance rows
-        prov_cols = [c for c in ["A_mpid", "B_mpid", "C_mpid", "A_gap_route", "B_gap_route", "C_gap_route", "T_K", "RH_%"] if c in df.columns]
-        if prov_cols:
-            st.dataframe(df[prov_cols].drop_duplicates(), use_container_width=True)
-        st.caption("Gap routes: 'calibrated' uses curated experimental gaps if provided; 'offset+X' applies a halide-specific offset (I/Br/Cl) aligned with manuscript.")
-
-    with tab_dl:
-        st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
-
-        # Auto-report (TXT / DOCX)
-        _top = df.iloc[0]
-        formula = str(_top["formula"])
-        coords = ", ".join(
-            f"{c}={_top[c]:.2f}" for c in ("x", "y", "z") if c in _top and pd.notna(_top[c])
+with tab_plot:
+    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["Ehull"], y=df["Eg"], mode="markers",
+            marker=dict(
+                size=8 + 12 * df["score"], color=df["score"],
+                colorscale="Viridis", cmin=0, cmax=1,
+                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
+            ),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>"
+                "Score=%{marker.color:.3f}<br>"
+                "Eox (env)=%{customdata[1]:.3f} eV<br>"
+                "t=%{customdata[2]:.3f}<br>PCEmax=%{customdata[3]:.1f}%<extra></extra>"
+            ),
+            customdata=df[["formula", "Eox_env", "t_factor", "PCE_max (%)"]].values
+        ))
+        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+                      line=dict(color="LightSeaGreen", dash="dash"),
+                      fillcolor="LightSeaGreen", opacity=0.1)
+        fig.update_layout(
+            title="EnerMat Binary Screen",
+            xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)",
+            template="simple_white",
+            font=dict(family="Arial", size=12, color="black"),
+            width=720, height=540, margin=dict(l=60, r=60, t=60, b=60),
+            coloraxis_colorbar=dict(title=dict(text="Score", font=dict(size=12)), tickfont=dict(size=12))
         )
-        label = formula if len(df) == 1 else f"{formula} ({coords})"
+        st.plotly_chart(fig, use_container_width=True)
+    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",
+                            labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
+        st.plotly_chart(fig, use_container_width=True)
 
-        _txt = (
-            "EnerMat auto-report  "
-            f"{datetime.date.today()}\n"
-            f"Top candidate   : {label}\n"
-            f"Band-gap [eV]   : {_top['Eg']}\n"
-            f"Ehull [eV/at.]  : {_top['Ehull']}\n"
-            f"Eox [eV per Sn] : {_top.get('Eox', 'N/A')}\n"
-            f"Eox_env [eV/Sn] : {_top.get('Eox_env', 'N/A')}\n"
-            f"t_factor        : {_top.get('t_factor', 'N/A')}\n"
-            f"PCE_max [%]     : {_top.get('PCE_max (%)', 'N/A')}\n"
-            f"Score           : {_top['score']}\n"
-        )
-        st.download_button("📄 Download TXT", _txt, "EnerMat_report.txt", mime="text/plain")
+with tab_prov:
+    st.subheader("Data provenance & calibration")
+    prov_cols = [c for c in ["A_mpid", "B_mpid", "C_mpid", "A_gap_route", "B_gap_route", "C_gap_route", "T_K", "RH_%"] if c in df.columns]
+    if prov_cols:
+        st.dataframe(df[prov_cols].drop_duplicates(), use_container_width=True)
+    st.caption("Gap routes: 'calibrated' uses curated experimental gaps if provided; 'offset+X' applies a halide-specific offset (I/Br/Cl) aligned with manuscript.")
 
-        _doc = Document()
-        _doc.add_heading("EnerMat Report", level=0)
-        _doc.add_paragraph(f"Date : {datetime.date.today()}")
-        _doc.add_paragraph(f"Top candidate : {label}")
-        table = _doc.add_table(rows=1, cols=2)
-        table.style = "LightShading-Accent1"
-        hdr = table.rows[0].cells
-        hdr[0].text, hdr[1].text = "Property", "Value"
-        for k in ("Eg", "Ehull", "Eox", "Eox_env", "t_factor", "PCE_max (%)", "score"):
-            if k in _top:
-                row = table.add_row().cells
-                row[0].text, row[1].text = k, str(_top[k])
-        buf = io.BytesIO()
-        _doc.save(buf)
-        buf.seek(0)
-        st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+with tab_dl:
+    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
+    # Auto-report (TXT / DOCX)
+    _top = df.iloc[0]
+    formula = str(_top["formula"])
+    coords = ", ".join(f"{c}={_top[c]:.2f}" for c in ("x", "y", "z") if c in _top and pd.notna(_top[c]))
+    label = formula if len(df) == 1 else f"{formula} ({coords})"
+
+    _txt = (
+        "EnerMat auto-report  "
+        f"{datetime.date.today()}\n"
+        f"Top candidate   : {label}\n"
+        f"Band-gap [eV]   : {_top['Eg']}\n"
+        f"Ehull [eV/at.]  : {_top['Ehull']}\n"
+        f"Eox [eV per Sn] : {_top.get('Eox', 'N/A')}\n"
+        f"Eox_env [eV/Sn] : {_top.get('Eox_env', 'N/A')}\n"
+        f"t_factor        : {_top.get('t_factor', 'N/A')}\n"
+        f"PCE_max [%]     : {_top.get('PCE_max (%)', 'N/A')}\n"
+        f"Score           : {_top['score']}\n"
+    )
+    st.download_button("📄 Download TXT", _txt, "EnerMat_report.txt", mime="text/plain")
+
+    _doc = Document()
+    _doc.add_heading("EnerMat Report", level=0)
+    _doc.add_paragraph(f"Date : {datetime.date.today()}")
+    _doc.add_paragraph(f"Top candidate : {label}")
+    table = _doc.add_table(rows=1, cols=2)
+    table.style = "LightShading-Accent1"
+    hdr = table.rows[0].cells
+    hdr[0].text, hdr[1].text = "Property", "Value"
+    for k in ("Eg", "Ehull", "Eox", "Eox_env", "t_factor", "PCE_max (%)", "score"):
+        if k in _top:
+            row = table.add_row().cells
+            row[0].text, row[1].text = k, str(_top[k])
+    buf = io.BytesIO()
+    _doc.save(buf)
+    buf.seek(0)
+    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
+                       mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
 
 # (Optional) Session export/import
 with st.expander("💾 Session export/import"):
