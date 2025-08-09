@@ -84,10 +84,9 @@ IONIC_RADII = {
 
 K_T_EFF  = 0.20
 K_T_HULL = 0.0259
-DEFAULT_ERRS = {"Eg": 0.10, "Ehull": 0.01}
 ISOVALENT_B_SITE = {"Ge", "Si", "Pb"}
 
-# ─────────── Small chemistry helpers ───────────
+# ─────────── helpers ───────────
 def _infer_halide(formula: str) -> str | None:
     for h in ("I", "Br", "Cl"):
         if h in formula:
@@ -95,10 +94,6 @@ def _infer_halide(formula: str) -> str | None:
     return None
 
 def _parse_abx3(formula: str) -> tuple[str | None, str | None]:
-    """
-    Very simple parser for A-site label and halide (I/Br/Cl) in strings like 'CsSnI3' or 'FASnI3'.
-    Returns (A_site, X) or (None, None) if not recognized.
-    """
     for X in ("I", "Br", "Cl"):
         tag = f"Sn{X}3"
         if formula.endswith(tag):
@@ -112,7 +107,6 @@ def _subnum(x: float, nd=2) -> str:
     return s.translate(SUBS)
 
 def _fmt_bsite(sn_frac: float, dopant: str | None) -> tuple[str, str]:
-    """Return (unicode, ascii) B-site string like 'Sn₀.₅₅Ge₀.₄₅'."""
     sn = max(0.0, min(1.0, sn_frac))
     z  = 1.0 - sn
     if not dopant or dopant == "None" or z <= 1e-6:
@@ -122,7 +116,6 @@ def _fmt_bsite(sn_frac: float, dopant: str | None) -> tuple[str, str]:
     return (u, a)
 
 def _fmt_xmix_binary(XA: str, XB: str, x: float) -> tuple[str, str]:
-    """Return (unicode, ascii) for anion part: X₃ or (I₁₋ₓBrₓ)₃ with numeric fractions."""
     x = max(0.0, min(1.0, x))
     if XA == XB:
         return (f"{XA}₃", f"{XA}3")
@@ -137,7 +130,6 @@ def _fmt_xmix_binary(XA: str, XB: str, x: float) -> tuple[str, str]:
     return (f"({''.join(parts_u)})₃", f"({''.join(parts_a)})3")
 
 def _fmt_xmix_ternary(Ax: str, Bx: str, Cx: str, w: float, x: float, y: float) -> tuple[str, str]:
-    """Combine anions from three end-members; returns (unicode, ascii)."""
     fracs = {"I": 0.0, "Br": 0.0, "Cl": 0.0}
     for frac, X in ((w, Ax), (x, Bx), (y, Cx)):
         if X in fracs: fracs[X] += frac
@@ -160,11 +152,10 @@ def _b_site_radius(dopant: str | None, z: float) -> float:
     return (1.0 - z) * r_sn + z * r_d
 
 def _score_band_gap(Eg: float, lo: float, hi: float, center: float | None, sigma: float | None) -> float:
-    if Eg < lo or Eg > hi: return 0.0
-    if center is None or sigma is None: return 1.0
-    return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
-
-score_band_gap = _score_band_gap
+    # Gaussian when center/sigma exist (no hard clipping), else rectangular window
+    if center is not None and sigma is not None and sigma > 0:
+        return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
+    return 1.0 if (lo <= Eg <= hi) else 0.0
 
 # ─────────── MP data (offline-safe) ───────────
 _OFFLINE_SUMMARY: dict[str, dict] = {
@@ -225,7 +216,7 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_per_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
-# ─────────── Penalties & bounds ───────────
+# ─────────── penalties & raw score ───────────
 def _environment_penalty(rh: float, temp_c: float, *, gamma_h: float, gamma_t: float) -> float:
     rh_n = max(0.0, min(1.0, rh / 100.0))
     dt   = max(0.0, temp_c - 25.0)
@@ -241,11 +232,6 @@ def _tolerance_penalty(rB: float, X: str, *, t0: float, beta: float, A: str = "C
 
 def _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen, *, alpha=1.0) -> float:
     return sbg * math.exp(-Eh / (alpha * K_T_HULL)) * math.exp(dEox / K_T_EFF) * env_pen * tol_pen
-
-def _score_bounds(Eg, Eh, dEox, sbg_lo, sbg_hi, env_pen, tol_pen) -> tuple[float, float]:
-    raw_lo = _score_raw(Eg, Eh + DEFAULT_ERRS["Ehull"], dEox, sbg_lo, env_pen, tol_pen)
-    raw_hi = _score_raw(Eg, Eh - DEFAULT_ERRS["Ehull"], dEox, sbg_hi, env_pen, tol_pen)
-    return raw_lo, raw_hi
 
 def _suggest_bowing(EA: float, EB: float, *, center: float | None) -> float | None:
     if center is None: return None
@@ -288,10 +274,11 @@ def screen_binary(
     beta: float = 1.0,
     dopant_element: str | None = "Ge",
     dopant_fraction: float | None = None,
+    use_app_window: bool = True,   # NEW: whether to override slider with preset window
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
-    if application in APPLICATION_CONFIG:
+    if use_app_window and application in APPLICATION_CONFIG:
         cfg = APPLICATION_CONFIG[application]
         lo, hi = cfg["range"]
         center, sigma = cfg["center"], cfg["sigma"]
@@ -340,16 +327,10 @@ def screen_binary(
         Eh   = (1.0 - zf) * Eh_Sn + zf * Eh_D
         dEox = (1.0 - zf) * dEox_Sn + zf * dEox_D
 
-        sbg    = _score_band_gap(Eg, lo, hi, center, sigma)
-        sbg_lo = _score_band_gap(Eg - DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
-        sbg_hi = _score_band_gap(Eg + DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
-
-        raw  = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
-        rawL, rawH = _score_bounds(Eg, Eh, dEox, sbg_lo, sbg_hi, env_pen, tol_pen_const)
-
+        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+        raw = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
         pce = sq_efficiency(Eg)
 
-        # ---- pretty formula (binary) ----
         sn_frac = 1.0 - zf
         b_u, b_a = _fmt_bsite(sn_frac, dopant if zf > 0 else None)
         x_u, x_a = _fmt_xmix_binary(halA, halB, x)
@@ -361,27 +342,24 @@ def screen_binary(
             "z": round(zf, 2),
             "dopant": dopant if zf > 0 else "None",
             "Eg": round(Eg, 3),
-            "Eg_err": DEFAULT_ERRS["Eg"],
             "Ehull": round(Eh, 4),
-            "Ehull_err": DEFAULT_ERRS["Ehull"],
             "Eox_e": round(dEox, 3),
             "PCE_max (%)": round(pce * 100, 1),
-            "raw": raw, "raw_low": rawL, "raw_high": rawH,
-            "formula": f_u,               # ← unicode pretty
-            "formula_ascii": f_a,         # ← csv/ASCII friendly
+            "raw": raw,
+            "formula": f_u,
+            "formula_ascii": f_a,
             "scope": scope_msg, "in_scope": bool(in_scope),
         })
 
     if not rows:
         return pd.DataFrame()
-    m  = max(r["raw"] for r in rows) or 1.0
-    mL = max(r["raw_low"] for r in rows) or 1.0
-    mH = max(r["raw_high"] for r in rows) or 1.0
+    m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"]      = round(r.pop("raw") / m, 3)
-        r["score_low"]  = round(r.pop("raw_low") / mL, 3)
-        r["score_high"] = round(r.pop("raw_high") / mH, 3)
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        r["score"] = round(r.pop("raw") / m, 3)
+
+    # keep only relevant columns
+    keep = ["formula","formula_ascii","x","z","dopant","Eg","Ehull","Eox_e","PCE_max (%)","score","scope","in_scope"]
+    return pd.DataFrame(rows)[keep].sort_values("score", ascending=False).reset_index(drop=True)
 
 # ─────────── Ternary screen ───────────
 def screen_ternary(
@@ -403,10 +381,11 @@ def screen_ternary(
     dopant_fraction: float | None = None,
     t0: float = 0.95,
     beta: float = 1.0,
+    use_app_window: bool = True,   # NEW
 ) -> pd.DataFrame:
     lo, hi = bg
     center = sigma = None
-    if application in APPLICATION_CONFIG:
+    if use_app_window and application in APPLICATION_CONFIG:
         cfg = APPLICATION_CONFIG[application]
         lo, hi = cfg["range"]
         center, sigma = cfg["center"], cfg["sigma"]
@@ -422,7 +401,6 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
-    # Dopant branches
     if dopant_fraction > 0:
         A_D, B_D, C_D = A.replace("Sn", dopant), B.replace("Sn", dopant), C.replace("Sn", dopant)
         dA_D = fetch_mp_data(A_D, ["band_gap", "energy_above_hull"]) or dA
@@ -466,16 +444,10 @@ def screen_ternary(
             oxA, oxB, oxC = oxidation_energy(A), oxidation_energy(B), oxidation_energy(C)
             dEox = w * oxA + x * oxB + y * oxC
 
-            sbg    = _score_band_gap(Eg, lo, hi, center, sigma)
-            sbg_lo = _score_band_gap(Eg - DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
-            sbg_hi = _score_band_gap(Eg + DEFAULT_ERRS["Eg"], lo, hi, center, sigma)
-
-            raw  = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
-            rawL, rawH = _score_bounds(Eg, Eh, dEox, sbg_lo, sbg_hi, env_pen, tol_pen_const)
-
+            sbg = _score_band_gap(Eg, lo, hi, center, sigma)
+            raw = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
             pce = sq_efficiency(Eg)
 
-            # ---- pretty formula (ternary) ----
             sn_frac = 1.0 - zf
             b_u, b_a = _fmt_bsite(sn_frac, dopant if zf > 0 else None)
             x_u, x_a = _fmt_xmix_ternary(halA, halB, halC, w, x, y)
@@ -485,11 +457,11 @@ def screen_ternary(
             rows.append({
                 "x": round(x, 3), "y": round(y, 3),
                 "z": round(zf, 2), "dopant": dopant if zf > 0 else "None",
-                "Eg": round(Eg, 3), "Eg_err": DEFAULT_ERRS["Eg"],
-                "Ehull": round(Eh, 4), "Ehull_err": DEFAULT_ERRS["Ehull"],
+                "Eg": round(Eg, 3),
+                "Ehull": round(Eh, 4),
                 "Eox_e": round(dEox, 3),
                 "PCE_max (%)": round(pce * 100, 1),
-                "raw": raw, "raw_low": rawL, "raw_high": rawH,
+                "raw": raw,
                 "formula": f_u,
                 "formula_ascii": f_a,
                 "scope": scope_msg, "in_scope": bool(in_scope),
@@ -497,11 +469,9 @@ def screen_ternary(
 
     if not rows:
         return pd.DataFrame()
-    m  = max(r["raw"] for r in rows) or 1.0
-    mL = max(r["raw_low"] for r in rows) or 1.0
-    mH = max(r["raw_high"] for r in rows) or 1.0
+    m = max(r["raw"] for r in rows) or 1.0
     for r in rows:
-        r["score"]      = round(r.pop("raw") / m, 3)
-        r["score_low"]  = round(r.pop("raw_low") / mL, 3)
-        r["score_high"] = round(r.pop("raw_high") / mH, 3)
-    return pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+        r["score"] = round(r.pop("raw") / m, 3)
+
+    keep = ["formula","formula_ascii","x","y","z","dopant","Eg","Ehull","Eox_e","PCE_max (%)","score","scope","in_scope"]
+    return pd.DataFrame(rows)[keep].sort_values("score", ascending=False).reset_index(drop=True)
