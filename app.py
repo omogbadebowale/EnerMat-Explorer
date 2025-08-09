@@ -1,27 +1,32 @@
-# ===============================
-# File: app.py
-# ===============================
 import datetime
 import io
-import json
 from pathlib import Path
+import base64
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from plotly import graph_objects as go
 from docx import Document
-
 from backend.perovskite_utils import (
     screen_binary,
     screen_ternary,
     END_MEMBERS,
 )
-
 # ─────────── STREAMLIT PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer – Lead-Free Perovskite PV Discovery Tool", layout="wide")
-st.title("☀️ EnerMat Explorer | Lead-Free Perovskite PV Discovery Tool (Physics-Tightened)")
-
+st.title("☀️ EnerMat Explorer | Lead-Free Perovskite PV Discovery Tool")
+st.markdown(
+    """
+    <style>
+      /* Target the sidebar wrapper and give it a colored left border */
+      .css-1d391kg {
+        border-right: 3px solid #0D47A1 !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 # ─────────── SESSION STATE ───────────
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -29,7 +34,10 @@ if "history" not in st.session_state:
 # ─────────── SIDEBAR ───────────
 with st.sidebar:
     st.header("Mode")
-    mode = st.radio("Choose screening type", ["Binary A–B", "Ternary A–B–C"]) 
+    mode = st.radio(
+        "Choose screening type",
+        ["Binary A–B", "Ternary A–B–C"]
+    )
 
     st.header("End-members")
     preset_A = st.selectbox("Preset A", END_MEMBERS, 0)
@@ -44,186 +52,104 @@ with st.sidebar:
         C = custom_C or preset_C
 
     st.header("Application")
-    application = st.selectbox("Select application", ["single", "tandem", "indoor", "detector", "(manual)"])
-    manual_eg = application == "(manual)"
+    application = st.selectbox(
+        "Select application",
+        ["single", "tandem", "indoor", "detector"]
+    )
 
-    st.header("Environment")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
+    # ── Environment sliders removed ──
 
     st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.40), 0.01)
+    bg_lo, bg_hi = st.slider(
+        "Gap window", 0.50, 3.00, (1.00, 1.40), 0.01
+    )
 
     st.header("Model settings")
-    bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
+    bow = st.number_input(
+        "Bowing (eV, negative ⇒ gap↑)",
+        -1.0, 1.0, -0.15, 0.05
+    )
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode.startswith("Ternary"):
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
-    z = st.slider("Ge fraction z", 0.00, 0.80, 0.10, 0.05, help="B-site Ge²⁺ in CsSn₁₋zGe_zX₃")
+    z = st.slider(
+        "Ge fraction z", 0.00, 0.80, 0.10, 0.05,
+        help="B-site Ge²⁺ in CsSn₁₋zGeₓX₃"
+    )
 
-    # Structural penalty sharpness
-    beta_struct = st.slider("Structural penalty β", 0.1, 3.0, 1.0, 0.1)
-
-    # Clear history
+   # ── Clear history button ──
     if st.button("🗑 Clear history"):
-        st.session_state.history = []
+        # Safely clear
+        if "history" in st.session_state:
+            st.session_state.history = []
+        # Re-run with clean state
         st.rerun()
 
-# ─────────── INFO BOXES ───────────
-st.info(
-    "This version couples Temperature to the thermodynamic penalty (kT), applies Humidity to the oxidation enthalpy (ΔEₒₓ → ΔEₒₓ − λ·RH), and uses composition-weighted radii for the tolerance factor. Choose ‘(manual)’ to fully override application gap presets.")
+    # ── Developer credit in sidebar footer ──
+    st.markdown(
+    """
+    <div style="font-size:0.85rem; color:#555; margin-top:0.5rem;">
+      <strong>Developer:</strong> Dr Gbadebo Taofeek Yusuf (Academic World)  
+      📞 +44 7776 727237  ✉️ das@academicworld.co.uk
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# ─────────── RUN ───────────
-col_run, col_prev = st.columns([3, 1])
-do_run = col_run.button("▶ Run screening", type="primary")
-do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+# ─────────── CACHE WRAPPERS ───────────
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
+def _run_binary(*args, **kwargs):
+    return screen_binary(*args, **kwargs)
 
-if do_prev:
-    st.session_state.history.pop()
-    prev = st.session_state.history[-1]
-    df, mode = prev["df"], prev["mode"]
-    st.success("Showing previous result")
+@st.cache_data(show_spinner="⏳ Screening …", max_entries=10)
+def _run_ternary(*args, **kwargs):
+    return screen_ternary(*args, **kwargs)
 
-elif do_run:
-    # sanity-check: restrict to known end-members unless you extend backend to parse more
-    for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
-        if f not in END_MEMBERS:
-            st.error(f"❌ Unknown end-member: {f}")
-            st.stop()
+# ─────────── OVERVIEW & RESEARCH OPPORTUNITIES ───────────
+st.markdown(
+    """
+    <style>
+      .overview-box {
+        background-color: #ffffff;       /* white for max contrast */
+        border: 1px solid #dddddd;       /* light grey border */
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 32px;
+        color: #333333;
+        font-family: Arial, sans-serif;
+      }
+      .overview-box h2 {
+        margin-top: 0;
+        color: #005FAD;                  /* deep brand-blue */
+        font-size: 1.8rem;
+      }
+      .overview-box p {
+        font-size: 1rem;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+      .overview-box ul {
+        margin: 0 0 16px 1.2em;
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+      .overview-box ul li {
+        margin-bottom: 8px;
+      }
+    </style>
 
-    if mode.startswith("Binary"):
-        df = screen_binary(
-            A, B, rh, temp, (bg_lo, bg_hi), bow, dx,
-            z=z,
-            application=None if manual_eg else application,
-            manual_eg=manual_eg,
-            beta_struct=beta_struct,
-        )
-    else:
-        df = screen_ternary(
-            A, B, C, rh, temp, (bg_lo, bg_hi), {"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy, z=z,
-            application=None if manual_eg else application,
-            manual_eg=manual_eg,
-            beta_struct=beta_struct,
-        )
-    st.session_state.history.append({"mode": mode, "df": df})
-
-elif not st.session_state.history:
-    st.info("Press ▶ Run screening to begin.")
-    st.stop()
-
-# ─────────── DISPLAY ───────────
-df = st.session_state.history[-1]["df"]
-mode = st.session_state.history[-1]["mode"]
-
-tab_tbl, tab_plot, tab_prov, tab_dl = st.tabs(["📊 Table", "📈 Plot", "ℹ️ Provenance", "📥 Download"])
-
-with tab_tbl:
-    st.dataframe(df, use_container_width=True, height=500)
-
-with tab_plot:
-    if mode.startswith("Binary") and {"Ehull", "Eg"}.issubset(df.columns):
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df["Ehull"], y=df["Eg"], mode="markers",
-            marker=dict(
-                size=8 + 12 * df["score"], color=df["score"],
-                colorscale="Viridis", cmin=0, cmax=1,
-                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
-            ),
-            hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
-                "Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>"
-                "Score=%{marker.color:.3f}<br>"
-                "Eox (env)=%{customdata[1]:.3f} eV<br>"
-                "t=%{customdata[2]:.3f}<br>PCEmax=%{customdata[3]:.1f}%<extra></extra>"
-            ),
-            customdata=df[["formula", "Eox_env", "t_factor", "PCE_max (%)"]].values
-        ))
-        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-                      line=dict(color="LightSeaGreen", dash="dash"),
-                      fillcolor="LightSeaGreen", opacity=0.1)
-        fig.update_layout(
-            title="EnerMat Binary Screen",
-            xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)",
-            template="simple_white",
-            font=dict(family="Arial", size=12, color="black"),
-            width=720, height=540, margin=dict(l=60, r=60, t=60, b=60),
-            coloraxis_colorbar=dict(title=dict(text="Score", font=dict(size=12)), tickfont=dict(size=12))
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
-        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
-                            color_continuous_scale="Viridis",
-                            labels={"x": "B2 fraction", "y": "B3 fraction"}, height=500)
-        st.plotly_chart(fig, use_container_width=True)
-
-with tab_prov:
-    st.subheader("Data provenance & calibration")
-    prov_cols = [c for c in ["A_mpid", "B_mpid", "C_mpid", "A_gap_route", "B_gap_route", "C_gap_route", "T_K", "RH_%"] if c in df.columns]
-    if prov_cols:
-        st.dataframe(df[prov_cols].drop_duplicates(), use_container_width=True)
-    st.caption("Gap routes: 'calibrated' uses curated experimental gaps if provided; 'offset+X' applies a halide-specific offset (I/Br/Cl) aligned with manuscript.")
-
-with tab_dl:
-    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
-
-    # Auto-report (TXT / DOCX)
-    _top = df.iloc[0]
-    formula = str(_top["formula"])
-    coords = ", ".join(f"{c}={_top[c]:.2f}" for c in ("x", "y", "z") if c in _top and pd.notna(_top[c]))
-    label = formula if len(df) == 1 else f"{formula} ({coords})"
-
-    _txt = (
-        "EnerMat auto-report  "
-        f"{datetime.date.today()}\n"
-        f"Top candidate   : {label}\n"
-        f"Band-gap [eV]   : {_top['Eg']}\n"
-        f"Ehull [eV/at.]  : {_top['Ehull']}\n"
-        f"Eox [eV per Sn] : {_top.get('Eox', 'N/A')}\n"
-        f"Eox_env [eV/Sn] : {_top.get('Eox_env', 'N/A')}\n"
-        f"t_factor        : {_top.get('t_factor', 'N/A')}\n"
-        f"PCE_max [%]     : {_top.get('PCE_max (%)', 'N/A')}\n"
-        f"Score           : {_top['score']}\n"
-    )
-    st.download_button("📄 Download TXT", _txt, "EnerMat_report.txt", mime="text/plain")
-
-    _doc = Document()
-    _doc.add_heading("EnerMat Report", level=0)
-    _doc.add_paragraph(f"Date : {datetime.date.today()}")
-    _doc.add_paragraph(f"Top candidate : {label}")
-    table = _doc.add_table(rows=1, cols=2)
-    table.style = "LightShading-Accent1"
-    hdr = table.rows[0].cells
-    hdr[0].text, hdr[1].text = "Property", "Value"
-    for k in ("Eg", "Ehull", "Eox", "Eox_env", "t_factor", "PCE_max (%)", "score"):
-        if k in _top:
-            row = table.add_row().cells
-            row[0].text, row[1].text = k, str(_top[k])
-    buf = io.BytesIO()
-    _doc.save(buf)
-    buf.seek(0)
-    st.download_button("📝 Download DOCX", buf, "EnerMat_report.docx",
-                       mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-
-# (Optional) Session export/import
-with st.expander("💾 Session export/import"):
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Export last result as JSON"):
-            st.download_button(
-                "Download JSON",
-                json.dumps(st.session_state.history[-1]["df"].to_dict(orient="records"), indent=2).encode(),
-                file_name="EnerMat_results.json",
-                mime="application/json",
-            )
-    with c2:
-        up = st.file_uploader("Import results JSON", type=["json"], accept_multiple_files=False)
-        if up:
-            recs = json.load(up)
-            df_imp = pd.DataFrame.from_records(recs)
-            st.session_state.history.append({"mode": "Imported", "df": df_imp})
-            st.success("Imported. Switch to tabs above to view.")
+    <div class="overview-box">
+      <h2>Context &amp; Scientific Justification</h2>
+      <p>
+        Lead–halide perovskites deliver record solar efficiencies but suffer from environmental toxicity and rapid degradation under heat, moisture, or oxygen.
+        Tin-based, lead-free analogues offer a safer path, yet optimising their key metrics remains a major hurdle:
+      </p>
+      <ul>
+        <li><strong>Eg</strong> (band gap): ideal ≈ 1.3 eV for single-junction PV absorption.</li>
+        <li><strong>E<sub>hull</sub></strong> (phase stability): &lt; 0.05 eV / atom ⇒ likely synthesizable.</li>
+        <li><strong>ΔE<sub>ox</sub></strong> (oxidation resistance): positive values resist Sn²⁺ → Sn⁴⁺.</li>
+        <li><strong>PCE<sub>max</sub></strong> (Shockley–Queisser limit): theoretical upper bound on efficiency.</li>
+      </ul>
+      <p>
+        <em>EnerMa
