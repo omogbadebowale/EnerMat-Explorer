@@ -33,14 +33,17 @@ try:
 except Exception:
     offline_mode = True
 
-# ─────────── App config ───────────
+# ─────────── Application profiles ───────────
+# For plotting convenience, a 'range' is provided where relevant.
 APPLICATION_CONFIG = {
-    "single":   {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
-    "tandem":   {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
-    "indoor":   {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
-    "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
+    "single":   {"range": (1.10, 1.40), "center": None,  "sigma": None,  "spectrum": "AM1.5G"},
+    "tandem":   {"range": (1.60, 1.90), "center": 1.75,  "sigma": 0.10,  "spectrum": "AM1.5G"},
+    "indoor":   {"range": (1.80, 2.10), "center": 1.95,  "sigma": 0.15,  "spectrum": "AM1.5G"},  # using AM1.5G SQ as proxy
+    "detector": {"range": None,         "center": None,  "sigma": None,  "spectrum": None},
+    # 'custom' will be provided by caller (center/sigma), spectrum=AM1.5G by default
 }
 
+# ─────────── End-members list ───────────
 END_MEMBERS = [
     "CsSnI3", "CsSnBr3", "CsSnCl3",
     "CsGeBr3", "CsGeCl3",
@@ -51,6 +54,7 @@ END_MEMBERS = [
     "CsPbCl3", "CsPbBr3", "CsPbI3",
 ]
 
+# ─────────── Calibrated gaps (lightweight fallback) ───────────
 def _load_calibrated_gaps() -> dict[str, float]:
     j = getattr(st, "secrets", {}).get("CALIBRATED_GAPS_JSON")
     if j:
@@ -76,17 +80,18 @@ GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
 
 IONIC_RADII = {
     "Cs": 1.88, "FA": 2.79, "MA": 2.70,
-    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31,
-    "Si": 0.54, "Mn": 0.83, "Zn": 0.74,
+    "Sn": 1.18, "Ge": 0.73, "Pb": 1.31, "Si": 0.54, "Mn": 0.83, "Zn": 0.74,
     "Bi": 1.03, "Sb": 0.76, "Ag": 1.15, "In": 0.81,
     "I": 2.20, "Br": 1.96, "Cl": 1.81,
 }
 
-K_T_EFF  = 0.20
-K_T_HULL = 0.0259
+# Softness scales
+K_T_EFF  = 0.20    # oxidation softness
+K_T_HULL = 0.0259  # hull softness (~kT at 300K)
+
 ISOVALENT_B_SITE = {"Ge", "Si", "Pb"}
 
-# ─────────── helpers ───────────
+# ─────────── Small chemistry helpers ───────────
 def _infer_halide(formula: str) -> str | None:
     for h in ("I", "Br", "Cl"):
         if h in formula:
@@ -151,12 +156,6 @@ def _b_site_radius(dopant: str | None, z: float) -> float:
     r_d = IONIC_RADII.get(dopant, r_sn)
     return (1.0 - z) * r_sn + z * r_d
 
-def _score_band_gap(Eg: float, lo: float, hi: float, center: float | None, sigma: float | None) -> float:
-    # Gaussian when center/sigma exist (no hard clipping), else rectangular window
-    if center is not None and sigma is not None and sigma > 0:
-        return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
-    return 1.0 if (lo <= Eg <= hi) else 0.0
-
 # ─────────── MP data (offline-safe) ───────────
 _OFFLINE_SUMMARY: dict[str, dict] = {
     "CsSnI3":     {"band_gap": CALIBRATED_GAPS.get("CsSnI3", 1.3), "energy_above_hull": 0.02},
@@ -216,27 +215,33 @@ def oxidation_energy(formula_sn2: str) -> float:
     H_prod2 = formation_energy_per_fu("SnO2")
     return 0.5 * (H_prod1 + H_prod2) - H_reac
 
-# ─────────── penalties & raw score ───────────
-def _environment_penalty(rh: float, temp_c: float, *, gamma_h: float, gamma_t: float) -> float:
-    rh_n = max(0.0, min(1.0, rh / 100.0))
-    dt   = max(0.0, temp_c - 25.0)
-    pen_h = math.exp(-gamma_h * rh_n)
-    pen_t = math.exp(-gamma_t * (dt / 50.0))
-    return max(0.0, min(1.0, pen_h * pen_t))
-
+# ─────────── penalties & composite score ───────────
 def _tolerance_penalty(rB: float, X: str, *, t0: float, beta: float, A: str = "Cs") -> float:
     rA = IONIC_RADII.get(A, 1.88)
     rX = IONIC_RADII.get(X, 2.0)
     t  = (rA + rX) / (math.sqrt(2.0) * (rB + rX))
     return math.exp(-beta * abs(t - t0))
 
-def _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen, *, alpha=1.0) -> float:
-    return sbg * math.exp(-Eh / (alpha * K_T_HULL)) * math.exp(dEox / K_T_EFF) * env_pen * tol_pen
+def _gaussian_weight(Eg: float, center: float | None, sigma: float | None) -> float:
+    if center is None or sigma is None or sigma <= 0:
+        return 1.0
+    return math.exp(-((Eg - center) ** 2) / (2 * sigma * sigma))
 
-def _suggest_bowing(EA: float, EB: float, *, center: float | None) -> float | None:
-    if center is None: return None
-    return ((EA + EB) * 0.5 - center) / 0.25
+def _performance_term(Eg: float, spectrum: str | None = "AM1.5G") -> float:
+    if spectrum is None:
+        return 1.0
+    # Using AM1.5G SQ for single/tandem/indoor (proxy for indoor)
+    return max(0.0, float(sq_efficiency(Eg)))
 
+def _composite_score(Eg: float, Eh: float, dEox: float, *, center: float | None,
+                     sigma: float | None, spectrum: str | None, tol_pen: float) -> float:
+    perf = _performance_term(Eg, spectrum=spectrum)
+    g    = _gaussian_weight(Eg, center, sigma)
+    thermo = math.exp(-Eh / K_T_HULL)
+    oxstab = math.exp(dEox / K_T_EFF)
+    return perf * g * thermo * oxstab * tol_pen
+
+# ─────────── scaffolding for dopant scope ───────────
 def _dopant_scope(dopant_element: str | None) -> tuple[bool, str]:
     if not dopant_element or dopant_element == "None":
         return True, "No B-site doping"
@@ -259,29 +264,27 @@ def _fetch_sn_and_dopant_data(A: str, B: str, dopant: str | None) -> tuple[dict,
 def screen_binary(
     A: str,
     B: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
+    rh_unused: float,      # retained for API stability; currently unused
+    temp_unused: float,    # retained
+    bg_unused: tuple[float, float],  # retained
     bow: float,
     dx: float,
     *,
     z: float = 0.0,
     application: str | None = None,
-    use_bowing_suggestion: bool = False,
-    gamma_h: float = 0.0,
-    gamma_t: float = 0.0,
     t0: float = 0.95,
     beta: float = 1.0,
     dopant_element: str | None = "Ge",
     dopant_fraction: float | None = None,
-    use_app_window: bool = True,   # NEW: whether to override slider with preset window
+    custom_center: float | None = None,  # for 'custom' mode
+    custom_sigma: float | None = None,   # for 'custom' mode
 ) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if use_app_window and application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
+    # Resolve application config
+    app = (application or "single").lower()
+    if app == "custom":
+        cfg = {"center": custom_center, "sigma": custom_sigma, "spectrum": "AM1.5G", "range": None}
+    else:
+        cfg = APPLICATION_CONFIG.get(app, APPLICATION_CONFIG["single"])
 
     if dopant_fraction is None:
         dopant_fraction = float(z or 0.0)
@@ -292,12 +295,6 @@ def screen_binary(
     if not (dA and dB):
         return pd.DataFrame()
 
-    EA, EB = float(dA["band_gap"]), float(dB["band_gap"])
-    if use_bowing_suggestion:
-        b_suggest = _suggest_bowing(EA, EB, center=center)
-        if b_suggest is not None:
-            bow = float(np.clip(b_suggest, -1.0, 1.0))
-
     Ax, XA = _parse_abx3(A)
     Bx, XB = _parse_abx3(B)
     halA = XA or _infer_halide(A) or "I"
@@ -305,32 +302,34 @@ def screen_binary(
     A_site = Ax or Bx or "A"
 
     rB = _b_site_radius(dopant, dopant_fraction)
-    oxA_sn, oxB_sn = oxidation_energy(A), oxidation_energy(B)
-    oxA_d = oxidation_energy(A.replace("Sn", dopant)) if (dopant and "Sn" in A and dopant in ISOVALENT_B_SITE) else 0.0
-    oxB_d = oxidation_energy(B.replace("Sn", dopant)) if (dopant and "Sn" in B and dopant in ISOVALENT_B_SITE) else 0.0
-
-    env_pen = _environment_penalty(rh, temp, gamma_h=gamma_h, gamma_t=gamma_t)
     tol_pen_const = _tolerance_penalty(rB, halA, t0=t0, beta=beta)
+
+    EA, EB = float(dA["band_gap"]), float(dB["band_gap"])
 
     rows: list[dict] = []
     zf = float(max(0.0, min(1.0, dopant_fraction)))
     for x in np.arange(0.0, 1.0 + 1e-9, dx):
+        # Sn branch
         Eg_Sn   = (1 - x) * EA + x * float(dB["band_gap"]) - bow * x * (1 - x)
         Eh_Sn   = (1 - x) * float(dA["energy_above_hull"]) + x * float(dB["energy_above_hull"])
-        dEox_Sn = (1 - x) * oxA_sn + x * oxB_sn
+        dEox_Sn = (1 - x) * oxidation_energy(A) + x * oxidation_energy(B)
 
+        # Dopant branch
         Eg_D    = (1 - x) * float(dA_D["band_gap"]) + x * float(dB_D["band_gap"]) - bow * x * (1 - x)
         Eh_D    = (1 - x) * float(dA_D["energy_above_hull"]) + x * float(dB_D["energy_above_hull"])
-        dEox_D  = (1 - x) * oxA_d + x * oxB_d
+        dEox_D  = 0.0  # neutral for dopant proxy; rely on Sn oxidation proxy
 
-        Eg   = (1.0 - zf) * Eg_Sn + zf * Eg_D
-        Eh   = (1.0 - zf) * Eh_Sn + zf * Eh_D
+        # Interpolate by dopant fraction
+        Eg   = (1.0 - zf) * Eg_Sn   + zf * Eg_D
+        Eh   = (1.0 - zf) * Eh_Sn   + zf * Eh_D
         dEox = (1.0 - zf) * dEox_Sn + zf * dEox_D
 
-        sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-        raw = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
+        raw = _composite_score(Eg, Eh, dEox,
+                               center=cfg["center"], sigma=cfg["sigma"],
+                               spectrum=cfg["spectrum"], tol_pen=tol_pen_const)
         pce = sq_efficiency(Eg)
 
+        # pretty formula
         sn_frac = 1.0 - zf
         b_u, b_a = _fmt_bsite(sn_frac, dopant if zf > 0 else None)
         x_u, x_a = _fmt_xmix_binary(halA, halB, x)
@@ -357,7 +356,6 @@ def screen_binary(
     for r in rows:
         r["score"] = round(r.pop("raw") / m, 3)
 
-    # keep only relevant columns
     keep = ["formula","formula_ascii","x","z","dopant","Eg","Ehull","Eox_e","PCE_max (%)","score","scope","in_scope"]
     return pd.DataFrame(rows)[keep].sort_values("score", ascending=False).reset_index(drop=True)
 
@@ -366,29 +364,27 @@ def screen_ternary(
     A: str,
     B: str,
     C: str,
-    rh: float,
-    temp: float,
-    bg: tuple[float, float],
+    rh_unused: float,
+    temp_unused: float,
+    bg_unused: tuple[float, float],
     bows: dict[str, float],
     *,
     dx: float = 0.10,
     dy: float = 0.10,
     z: float = 0.0,
     application: str | None = None,
-    gamma_h: float = 0.0,
-    gamma_t: float = 0.0,
-    dopant_element: str | None = "Ge",
-    dopant_fraction: float | None = None,
     t0: float = 0.95,
     beta: float = 1.0,
-    use_app_window: bool = True,   # NEW
+    dopant_element: str | None = "Ge",
+    dopant_fraction: float | None = None,
+    custom_center: float | None = None,   # for 'custom'
+    custom_sigma: float | None = None,    # for 'custom'
 ) -> pd.DataFrame:
-    lo, hi = bg
-    center = sigma = None
-    if use_app_window and application in APPLICATION_CONFIG:
-        cfg = APPLICATION_CONFIG[application]
-        lo, hi = cfg["range"]
-        center, sigma = cfg["center"], cfg["sigma"]
+    app = (application or "single").lower()
+    if app == "custom":
+        cfg = {"center": custom_center, "sigma": custom_sigma, "spectrum": "AM1.5G", "range": None}
+    else:
+        cfg = APPLICATION_CONFIG.get(app, APPLICATION_CONFIG["single"])
 
     if dopant_fraction is None:
         dopant_fraction = float(z or 0.0)
@@ -401,6 +397,7 @@ def screen_ternary(
     if not (dA and dB and dC):
         return pd.DataFrame()
 
+    # Dopant branches
     if dopant_fraction > 0:
         A_D, B_D, C_D = A.replace("Sn", dopant), B.replace("Sn", dopant), C.replace("Sn", dopant)
         dA_D = fetch_mp_data(A_D, ["band_gap", "energy_above_hull"]) or dA
@@ -409,8 +406,6 @@ def screen_ternary(
     else:
         dA_D, dB_D, dC_D = dA, dB, dC
 
-    env_pen = _environment_penalty(rh, temp, gamma_h=gamma_h, gamma_t=gamma_t)
-    zf = float(max(0.0, min(1.0, dopant_fraction)))
     halA = _infer_halide(A) or "I"
     halB = _infer_halide(B) or halA
     halC = _infer_halide(C) or halA
@@ -420,6 +415,7 @@ def screen_ternary(
     Cx, _ = _parse_abx3(C)
     A_site = Ax or Bx or Cx or "A"
 
+    zf = float(max(0.0, min(1.0, dopant_fraction)))
     rB = _b_site_radius(dopant, zf)
     tol_pen_const = _tolerance_penalty(rB, halA, t0=t0, beta=beta)
 
@@ -444,10 +440,12 @@ def screen_ternary(
             oxA, oxB, oxC = oxidation_energy(A), oxidation_energy(B), oxidation_energy(C)
             dEox = w * oxA + x * oxB + y * oxC
 
-            sbg = _score_band_gap(Eg, lo, hi, center, sigma)
-            raw = _score_raw(Eg, Eh, dEox, sbg, env_pen, tol_pen_const)
+            raw = _composite_score(Eg, Eh, dEox,
+                                   center=cfg["center"], sigma=cfg["sigma"],
+                                   spectrum=cfg["spectrum"], tol_pen=tol_pen_const)
             pce = sq_efficiency(Eg)
 
+            # pretty formula
             sn_frac = 1.0 - zf
             b_u, b_a = _fmt_bsite(sn_frac, dopant if zf > 0 else None)
             x_u, x_a = _fmt_xmix_ternary(halA, halB, halC, w, x, y)
