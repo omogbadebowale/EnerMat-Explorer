@@ -152,4 +152,167 @@ st.markdown(
         <li><strong>PCE<sub>max</sub></strong> (Shockley–Queisser limit): theoretical upper bound on efficiency.</li>
       </ul>
       <p>
-        <em>EnerMa
+        <em>EnerMat Explorer</em> translates these metrics into an interactive, high-throughput screening platform:
+        instantly ranking compositions by PCE<sub>max</sub>, phase stability and oxidation resistance—no DFT runs required.
+      </p>
+
+      <h2>Halides Covered &amp; Research Pathways</h2>
+      <ul>
+        <li><strong>Tin-based perovskites:</strong> CsSnX₃, MASnX₃, FASnX₃ (X = I, Br, Cl).</li>
+        <li><strong>Germanium analogues:</strong> CsGeBr₃, CsGeCl₃.</li>
+        <li><strong>Vacancy-ordered phases:</strong> Cs₂SnI₆.</li>
+        <li><strong>Layered Bi/Sb phases:</strong> Cs₃Bi₂Br₉, Cs₃Sb₂I₉.</li>
+        <li><strong>Double perovskites:</strong> Cs₂AgBiBr₆, Cs₂AgInCl₆.</li>
+      </ul>
+      <p>
+        <strong>Explore opportunities:</strong><br>
+        • Map how A-site mixing (Cs⁺ vs. MA⁺/FA⁺) shifts Eg & stability.<br>
+        • Screen Bi/Sb phases for moisture and carrier-lifetime enhancements.<br>
+        • Investigate vacancy ordering to boost oxidation resilience.<br>
+        • Tune double-perovskite alloys for next-gen tandem cells.<br>
+        • Visualize humidity/temperature effects on E<sub>hull</sub> in real time.
+      </p>
+      <p>
+        Whether you’re a student learning perovskite design or an engineer scouting new compositions, EnerMat Explorer turns weeks of trial-and-error into seconds of interactive insight.
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ─────────── HOW TO USE ───────────
+st.markdown(
+    """
+    <style>
+      .usage-box {
+        background-color: #ffffff;
+        border: 1px solid #dddddd;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 32px;
+        color: #333333;
+        font-family: Arial, sans-serif;
+      }
+      .usage-box h2 {
+        margin-top: 0;
+        color: #005FAD;
+        font-size: 1.6rem;
+      }
+      .usage-box ul {
+        margin: 0 0 16px 1.2em;
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+    </style>
+
+    <div class="usage-box">
+      <h2>🔧 How to Use EnerMat Explorer</h2>
+      <ul>
+        <li><strong>Select End-members</strong> (A &amp; B, optionally C) from the sidebar dropdowns.</li>
+        <li><strong>Set Environment:</strong> adjust Humidity (%) and Temperature (°C) sliders.</li>
+        <li><strong>Tune Model:</strong> define your Band-gap window, Bowing parameter, x-step (and y-step), and Ge-fraction z.</li>
+        <li>Hit the <code>▶ Run screening</code> button to compute an interactive table and scatter/3D plot of Eg vs. Ehull vs. Score.</li>
+        <li>Use <code>⏪ Previous</code> to step back through your history, and grab your CSV/TXT/DOCX via the Download tab.</li>
+      </ul>
+      <p><em>
+        Instantly visualize how band-gap, phase-stability and oxidation-resistance trade off with theoretical efficiency—no DFT required! 
+      </em></p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ─────────── RUNNING SCREEN ───────────
+col_run, col_prev = st.columns([3,1])
+do_run  = col_run.button("▶ Run screening", type="primary")
+do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
+
+if do_prev:
+    st.session_state.history.pop()
+    prev = st.session_state.history[-1]
+    df, mode = prev["df"], prev["mode"]
+    st.success("Showing previous result")
+
+elif do_run:
+    # sanity-check
+    for f in ([A, B] if mode.startswith("Binary") else [A, B, C]):
+        if f not in END_MEMBERS:
+            st.error(f"❌ Unknown end-member: {f}")
+            st.stop()
+
+    if mode.startswith("Binary"):
+        df = _run_binary(
+            A, B, (bg_lo, bg_hi), bow, dx,
+            z=z, application=application
+        )
+    else:
+        df = _run_ternary(
+            A, B, C,
+            (bg_lo, bg_hi), {"AB":bow,"AC":bow,"BC":bow},
+            dx=dx, dy=dy, z=z, application=application
+        )
+    st.session_state.history.append({"mode":mode, "df":df})
+
+elif not st.session_state.history:
+    st.info("Press ▶ Run screening to begin.")
+    st.stop()
+
+  # ─────────── DISPLAY RESULTS ───────────
+df = st.session_state.history[-1]["df"]
+mode = st.session_state.history[-1]["mode"]
+
+tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table","📈 Plot","📥 Download"])
+
+with tab_tbl:
+    st.dataframe(df, use_container_width=True, height=440)
+
+with tab_plot:
+    if mode.startswith("Binary") and {"Ehull","Eg"}.issubset(df.columns):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["Ehull"], y=df["Eg"], mode="markers",
+            marker=dict(
+                size=8+12*df["score"], color=df["score"],
+                colorscale="Viridis", cmin=0, cmax=1,
+                colorbar=dict(title="Score"), line=dict(width=0.5, color="black")
+            ),
+            hovertemplate="<b>%{customdata[6]}</b><br>Eg=%{y:.3f} eV<br>Ehull=%{x:.4f} eV/at<br>Score=%{marker.color:.3f}<extra></extra>",
+            customdata=df.to_numpy()
+        ))
+        fig.add_shape(type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
+                      line=dict(color="LightSeaGreen",dash="dash"), fillcolor="LightSeaGreen", opacity=0.1)
+        fig.update_layout(
+    title="EnerMat Binary Screen",
+    xaxis_title="Ehull (eV/atom)",
+    yaxis_title="Eg (eV)",
+    template="simple_white",
+    font=dict(
+        family="Arial",
+        size=12,
+        color="black"
+    ),
+    width=720,
+    height=540,
+    margin=dict(l=60, r=60, t=60, b=60),
+    coloraxis_colorbar=dict(
+        title=dict(text="Score", font=dict(size=12)),  # ✅ Fix applied here
+        tickfont=dict(size=12)
+    )
+)
+        st.plotly_chart(fig, use_container_width=True)
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
+        fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
+                            color_continuous_scale="Viridis",
+                            labels={"x":"B2 fraction","y":"B3 fraction"}, height=500)
+        st.plotly_chart(fig, use_container_width=True)
+
+with tab_dl:
+    st.download_button("📥 Download CSV", df.to_csv(index=False).encode(), "EnerMat_results.csv", "text/csv")
+
+# ╭─────────────────────  AUTO-REPORT  (TXT / DOCX)  ────────────────╮
+_top = df.iloc[0]
+formula = str(_top["formula"])
+coords  = ", ".join(
+    f"{c}={_top[c]:.2f}"
+    for c in ("x", "y", "z", "ge_frac") if c in _top and pd.
