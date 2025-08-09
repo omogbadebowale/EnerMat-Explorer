@@ -52,7 +52,10 @@ with st.sidebar:
         C = custom_C or preset_C
 
     st.header("Application")
-    application = st.selectbox("Select application", ["single", "tandem", "indoor", "detector"])
+    application = st.selectbox(
+        "Select application",
+        ["single", "tandem", "indoor", "detector", "chen2019"]  # ← added
+    )
 
     st.header("Environment (penalty hook)")
     rh = st.slider("Humidity [%]", 0, 100, 50)
