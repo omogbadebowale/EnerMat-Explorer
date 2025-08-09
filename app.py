@@ -17,7 +17,7 @@ from backend.perovskite_utils import (
     offline_mode,
 )
 
-# ─────────── PAGE CONFIG (unchanged) ───────────
+# ─────────── PAGE CONFIG ───────────
 st.set_page_config("EnerMat Explorer – Lead-Free Perovskite PV Discovery Tool", layout="wide")
 st.title("☀️ EnerMat Explorer | Lead-Free Perovskite PV Discovery Tool")
 st.markdown(
@@ -62,6 +62,11 @@ with st.sidebar:
 
     st.header("Target band-gap [eV]")
     bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.40), 0.01)
+    use_app_window = st.checkbox(
+        "Use application preset window",
+        value=True,
+        help="When on, the preset for the chosen application overrides the slider."
+    )
 
     st.header("Model settings")
     bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
@@ -70,30 +75,23 @@ with st.sidebar:
     if mode.startswith("Ternary"):
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
-    # ── B-site dopant tuning (NEW, backward-compatible with Ge) ──
     st.subheader("B-site dopant tuning")
-    dopant_element = st.selectbox(
-        "Choose dopant element",
-        options=["Ge", "Si", "Pb", "Mn", "Zn", "None"],
-        index=0
-    )
+    dopant_element = st.selectbox("Choose dopant element", ["Ge", "Si", "Pb", "Mn", "Zn", "None"], index=0)
     dopant_fraction = st.slider(
         f"{dopant_element} fraction z in Sn₁₋z{dopant_element}z",
         0.00, 0.80, 0.10 if dopant_element != "None" else 0.00, 0.05,
         help="Set to 0.10 for the same default behavior as earlier Ge tests."
     )
 
-    # Structural penalty (kept)
     st.header("Structural penalty")
     t0 = st.number_input("Target tolerance factor t₀", 0.80, 1.10, 0.95, 0.01)
     beta = st.number_input("Penalty stiffness β", 0.0, 5.0, 1.0, 0.1)
 
-    # Clear history
     if st.button("🗑 Clear history"):
         st.session_state.history = []
         st.rerun()
 
-    # Save/Load session (as before)
+    # Save/Load session
     st.subheader("Session")
     col_sav, col_ld = st.columns(2)
     with col_sav:
@@ -120,11 +118,10 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-# Status
 if offline_mode:
     st.warning("Running in offline/demo mode (no valid MP API key found). Some formulas may return no data.")
 
-# ─────────── CACHE WRAPPERS (unchanged) ───────────
+# ─────────── CACHE WRAPPERS ───────────
 @st.cache_data(show_spinner="⏳ Screening …", max_entries=20)
 def _run_binary(args: dict):
     return screen_binary(**args)
@@ -133,36 +130,10 @@ def _run_binary(args: dict):
 def _run_ternary(args: dict):
     return screen_ternary(**args)
 
-# ─────────── Overview/How-to (kept) ───────────
-st.markdown(
-    """
-    <style>
-      .overview-box, .usage-box {
-        background-color: #ffffff; border: 1px solid #dddddd; border-radius: 8px;
-        padding: 24px; margin-bottom: 32px; color: #333333; font-family: Arial, sans-serif;
-      }
-      .overview-box h2, .usage-box h2 { margin-top: 0; color: #005FAD; }
-    </style>
-    <div class="overview-box">
-      <h2>Context &amp; Scientific Justification</h2>
-      <p>
-        EnerMat integrates calibrated band gaps, convex-hull stability, an oxidation-resistance proxy,
-        tolerance-factor penalty and SQ-limit PCE into a sortable score for lead-free perovskites.
-      </p>
-    </div>
-    <div class="usage-box">
-      <h2>🔧 How to Use EnerMat Explorer</h2>
-      <ul>
-        <li>Pick end-members A &amp; B (and C) or type custom formulas.</li>
-        <li>Set application, gap window, bowing, steps, and optional B-site dopant.</li>
-        <li>Run, compare, export CSV/TXT/DOCX; save or load sessions as JSON.</li>
-      </ul>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# ─────────── Overview (brief) ───────────
+st.info("EnerMat ranks lead-free perovskite alloys by gap target, phase stability, oxidation proxy, tolerance penalty, and SQ limit.")
 
-# ─────────── RUN / PREVIOUS (unchanged flow) ───────────
+# ─────────── RUN / PREVIOUS ───────────
 col_run, col_prev = st.columns([3, 1])
 do_run  = col_run.button("▶ Run screening", type="primary")
 do_prev = col_prev.button("⏪ Previous", disabled=not st.session_state.history)
@@ -180,11 +151,12 @@ if do_run:
         t0=t0, beta=beta,
         dopant_element=dopant_element,
         dopant_fraction=dopant_fraction,
+        use_app_window=use_app_window,
     )
     if mode.startswith("Binary"):
         args = dict(
             A=A, B=B, bg=(bg_lo, bg_hi), bow=bow, dx=dx,
-            z=dopant_fraction,  # backward-compat for downstream
+            z=dopant_fraction,
             use_bowing_suggestion=bool(suggest_bow),
             **base_params
         )
@@ -211,7 +183,7 @@ if do_run:
             "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx, **({"dy": dy} if mode.startswith("Ternary") else {}),
             "z": dopant_fraction, "dopant_element": dopant_element,
             "gamma_h": gamma_h, "gamma_t": gamma_t, "t0": t0, "beta": beta,
-            "suggest_bow": suggest_bow
+            "use_app_window": use_app_window, "suggest_bow": suggest_bow
         }
     })
 
@@ -219,7 +191,7 @@ if not st.session_state.history:
     st.info("Press ▶ Run screening to begin.")
     st.stop()
 
-# ─────────── DISPLAY RESULTS (kept, with minor hover tweaks) ───────────
+# ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
 
@@ -229,13 +201,10 @@ with tab_tbl:
     st.dataframe(df, use_container_width=True, height=460)
 
 with tab_plot:
-    if mode.startswith("Binary") and {"Ehull", "Eg", "score"}.issubset(df.columns):
+    if mode.startswith("Binary") and {"Ehull","Eg","score"}.issubset(df.columns):
         fig = go.Figure()
         custom = pd.DataFrame({
-            "Eg": df["Eg"], "Eg_err": df.get("Eg_err", 0.0),
-            "Ehull_err": df.get("Ehull_err", 0.0),
-            "score_low": df.get("score_low", 0.0),
-            "score_high": df.get("score_high", 0.0),
+            "Eg": df["Eg"],
             "PCE": df.get("PCE_max (%)", 0.0),
             "label": df["formula"],
             "dopant": df.get("dopant", "None"),
@@ -250,14 +219,13 @@ with tab_plot:
                 colorbar=dict(title="Score"),
                 line=dict(width=0.5, color="black"),
             ),
-            hovertemplate="<b>%{customdata[6]}</b><br>"
-                          "Eg=%{customdata[0]:.3f}±%{customdata[1]:.2f} eV<br>"
-                          "Ehull=%{x:.4f}±%{customdata[2]:.2f} eV/at<br>"
-                          "Score=%{marker.color:.3f} "
-                          "[%{customdata[3]:.3f}, %{customdata[4]:.3f}]<br>"
-                          "PCE_max=%{customdata[5]:.1f}%<br>"
-                          "Dopant=%{customdata[7]}<br>"
-                          "Scope=%{customdata[8]}<extra></extra>",
+            hovertemplate="<b>%{customdata[2]}</b><br>"
+                          "Eg=%{customdata[0]:.3f} eV<br>"
+                          "Ehull=%{x:.4f} eV/at<br>"
+                          "Score=%{marker.color:.3f}<br>"
+                          "PCE_max=%{customdata[1]:.1f}%<br>"
+                          "Dopant=%{customdata[3]}<br>"
+                          "Scope=%{customdata[4]}<extra></extra>",
             customdata=custom
         ))
         fig.add_shape(
@@ -273,19 +241,22 @@ with tab_plot:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    elif mode.startswith("Ternary") and {"x", "y", "score"}.issubset(df.columns):
+    elif mode.startswith("Ternary") and {"x","y","score"}.issubset(df.columns):
         fig = px.scatter_3d(df, x="x", y="y", z="score", color="score",
                             color_continuous_scale="Viridis",
-                            labels={"x": "B2 fraction", "y": "B3 fraction"},
+                            labels={"x":"B2 fraction","y":"B3 fraction"},
                             height=520)
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
-    # Current run CSV
-    st.download_button("📥 Download current CSV", df.to_csv(index=False).encode(),
-                       "EnerMat_results.csv", "text/csv")
+    # Current run CSV: keep only relevant columns (already trimmed by backend)
+    st.download_button(
+        "📥 Download current CSV",
+        df.to_csv(index=False).encode(),
+        "EnerMat_results.csv", "text/csv"
+    )
 
-    # Batch CSV of all runs (safe stringify for non-scalars)
+    # ALL runs (keep relevant columns + params stringified safely)
     if st.session_state.history:
         all_rows = []
 
@@ -324,15 +295,13 @@ with tab_dl:
         f"{datetime.date.today()}\n"
         f"Top candidate   : {label}\n"
         f"Dopant / z      : {_top.get('dopant','None')} / {_top.get('z','0.00')}\n"
-        f"Band-gap [eV]   : {_top['Eg']} ± {_top.get('Eg_err', 0.0)}\n"
-        f"Ehull [eV/at.]  : {_top['Ehull']} ± {_top.get('Ehull_err', 0.0)}\n"
+        f"Band-gap [eV]   : {_top['Eg']}\n"
+        f"Ehull [eV/at.]  : {_top['Ehull']}\n"
         f"Eox_e [eV/e⁻]   : {_top.get('Eox_e', 'N/A')}\n"
         f"PCE_max [%]     : {_top.get('PCE_max (%)', 'N/A')}\n"
-        f"Score           : {_top['score']} "
-        f"[{_top.get('score_low', 'N/A')}, {_top.get('score_high', 'N/A')}]\n"
+        f"Score           : {_top['score']}\n"
         f"Scope           : {_top.get('scope','Unknown')}\n"
     )
-
     st.download_button("📄 Download TXT", _txt, "EnerMat_report.txt", mime="text/plain")
 
     # DOCX report
@@ -345,7 +314,7 @@ with tab_dl:
     table.style = "LightShading-Accent1"
     hdr = table.rows[0].cells
     hdr[0].text, hdr[1].text = "Property", "Value"
-    for k in ("dopant", "z", "Eg", "Ehull", "Eox_e", "PCE_max (%)", "score", "score_low", "score_high", "scope"):
+    for k in ("dopant", "z", "Eg", "Ehull", "Eox_e", "PCE_max (%)", "score", "scope"):
         if k in _top:
             row = table.add_row().cells
             row[0].text, row[1].text = k, str(_top[k])
