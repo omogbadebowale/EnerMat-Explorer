@@ -35,7 +35,7 @@ except Exception:
 
 # ─────────── App config ───────────
 APPLICATION_CONFIG = {
-    "single":   {"range": (1.10, 1.40), "center": 1.25, "sigma": 0.10},
+    "single":   {"range": (1.10, 1.40), "center": 1.50, "sigma": 0.10},
     "tandem":   {"range": (1.60, 1.90), "center": 1.75, "sigma": 0.10},
     "indoor":   {"range": (1.70, 2.20), "center": 1.95, "sigma": 0.15},
     "detector": {"range": (0.80, 3.00), "center": None,  "sigma": None},
