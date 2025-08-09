@@ -31,7 +31,6 @@ APPLICATION_CONFIG = {
 }
 
 # ─────────── reference data ───────────
-
 END_MEMBERS = [
     # classic Sn / Ge
     "CsSnI3", "CsSnBr3", "CsSnCl3",
@@ -49,10 +48,10 @@ END_MEMBERS = [
 ]
 
 CALIBRATED_GAPS = {
-    # … (unchanged block you pasted)
+    # … keep as in your current repo (no change)
 }
 
-# Halide-only offsets – still adequate
+# Halide-only offsets – unchanged
 GAP_OFFSET = {"I": 0.85, "Br": 0.78, "Cl": 2.00, "Pb": 1.31}
 
 IONIC_RADII = {
