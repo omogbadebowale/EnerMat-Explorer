@@ -1,8 +1,6 @@
 import datetime
 import io
 import json
-from pathlib import Path
-import base64
 
 import streamlit as st
 import pandas as pd
@@ -14,6 +12,7 @@ from backend.perovskite_utils import (
     screen_binary,
     screen_ternary,
     END_MEMBERS,
+    APPLICATION_CONFIG,
     offline_mode,
 )
 
@@ -52,35 +51,30 @@ with st.sidebar:
         C = custom_C or preset_C
 
     st.header("Application")
-    application = st.selectbox("Select application", ["single", "tandem", "indoor", "detector"])
-
-    st.header("Environment (penalty hook)")
-    rh = st.slider("Humidity [%]", 0, 100, 50)
-    temp = st.slider("Temperature [°C]", -20, 100, 25)
-    gamma_h = st.number_input("γ_h (RH weight, 0 = off)", 0.0, 2.0, 0.0, 0.05)
-    gamma_t = st.number_input("γ_t (Temp weight, 0 = off)", 0.0, 2.0, 0.0, 0.05)
-
-    st.header("Target band-gap [eV]")
-    bg_lo, bg_hi = st.slider("Gap window", 0.50, 3.00, (1.00, 1.40), 0.01)
-    use_app_window = st.checkbox(
-        "Use application preset window",
-        value=True,
-        help="When on, the preset for the chosen application overrides the slider."
+    application = st.selectbox(
+        "Select application",
+        ["single", "tandem", "indoor", "detector", "custom"],
+        help="Fixed, defensible presets. 'custom' reveals Gaussian controls."
     )
+
+    # Custom Gaussian controls (optional)
+    custom_center = custom_sigma = None
+    if application == "custom":
+        st.subheader("Custom target (optional Gaussian)")
+        custom_center = st.number_input("Eg center (eV)", 0.5, 3.0, 1.30, 0.01)
+        custom_sigma  = st.number_input("Eg sigma (eV)", 0.00, 0.50, 0.10, 0.01)
 
     st.header("Model settings")
     bow = st.number_input("Bowing (eV, negative ⇒ gap↑)", -1.0, 1.0, -0.15, 0.05)
-    suggest_bow = st.checkbox("Suggest bowing from target (x=0.5)", value=False)
     dx = st.number_input("x-step", 0.01, 0.50, 0.05, 0.01)
     if mode.startswith("Ternary"):
         dy = st.number_input("y-step", 0.01, 0.50, 0.05, 0.01)
 
-    st.subheader("B-site dopant tuning")
+    st.subheader("B-site dopant")
     dopant_element = st.selectbox("Choose dopant element", ["Ge", "Si", "Pb", "Mn", "Zn", "None"], index=0)
     dopant_fraction = st.slider(
         f"{dopant_element} fraction z in Sn₁₋z{dopant_element}z",
         0.00, 0.80, 0.10 if dopant_element != "None" else 0.00, 0.05,
-        help="Set to 0.10 for the same default behavior as earlier Ge tests."
     )
 
     st.header("Structural penalty")
@@ -90,23 +84,6 @@ with st.sidebar:
     if st.button("🗑 Clear history"):
         st.session_state.history = []
         st.rerun()
-
-    # Save/Load session
-    st.subheader("Session")
-    col_sav, col_ld = st.columns(2)
-    with col_sav:
-        if st.session_state.history:
-            payload = json.dumps(st.session_state.history, default=lambda o: None)
-            st.download_button("💾 Save session (.json)", payload, "EnerMat_session.json", "application/json")
-    with col_ld:
-        up = st.file_uploader("Load session", type=["json"], accept_multiple_files=False)
-        if up:
-            try:
-                st.session_state.history = json.loads(up.read().decode("utf-8"))
-                st.success("Session loaded.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to load session: {e}")
 
     st.markdown(
         """
@@ -131,7 +108,7 @@ def _run_ternary(args: dict):
     return screen_ternary(**args)
 
 # ─────────── Overview (brief) ───────────
-st.info("EnerMat ranks lead-free perovskite alloys by gap target, phase stability, oxidation proxy, tolerance penalty, and SQ limit.")
+st.info("Score = SQ(Eg) × exp(−Ehull/kTmix) × exp(ΔEox/kTeff) × exp(−β|t−t₀|). Top candidate is normalized to 1.0.")
 
 # ─────────── RUN / PREVIOUS ───────────
 col_run, col_prev = st.columns([3, 1])
@@ -146,32 +123,23 @@ if do_prev:
 
 if do_run:
     base_params = dict(
-        rh=rh, temp=temp, application=application,
-        gamma_h=gamma_h, gamma_t=gamma_t,
+        rh_unused=0.0, temp_unused=25.0, bg_unused=(0.0, 0.0),  # kept for API stability
+        application=application,
         t0=t0, beta=beta,
         dopant_element=dopant_element,
         dopant_fraction=dopant_fraction,
-        use_app_window=use_app_window,
+        custom_center=custom_center, custom_sigma=custom_sigma,
     )
     if mode.startswith("Binary"):
-        args = dict(
-            A=A, B=B, bg=(bg_lo, bg_hi), bow=bow, dx=dx,
-            z=dopant_fraction,
-            use_bowing_suggestion=bool(suggest_bow),
-            **base_params
-        )
+        args = dict(A=A, B=B, bow=bow, dx=dx, z=dopant_fraction, **base_params)
         df = _run_binary(args)
     else:
-        args = dict(
-            A=A, B=B, C=C, bg=(bg_lo, bg_hi),
-            bows={"AB": bow, "AC": bow, "BC": bow},
-            dx=dx, dy=dy, z=dopant_fraction,
-            **base_params
-        )
+        args = dict(A=A, B=B, C=C, bows={"AB": bow, "AC": bow, "BC": bow},
+                    dx=dx, dy=dy, z=dopant_fraction, **base_params)
         df = _run_ternary(args)
 
     if df.empty:
-        st.error("No data returned for the chosen inputs. Try different end-members or widen the gap window.")
+        st.error("No data returned for the chosen inputs. Try different end-members.")
         st.stop()
 
     st.session_state.history.append({
@@ -179,11 +147,10 @@ if do_run:
         "df": df,
         "params": {
             "A": A, "B": B, **({"C": C} if mode.startswith("Ternary") else {}),
-            "application": application, "rh": rh, "temp": temp,
-            "bg": (bg_lo, bg_hi), "bow": bow, "dx": dx, **({"dy": dy} if mode.startswith("Ternary") else {}),
+            "application": application, "bow": bow, "dx": dx, **({"dy": dy} if mode.startswith("Ternary") else {}),
             "z": dopant_fraction, "dopant_element": dopant_element,
-            "gamma_h": gamma_h, "gamma_t": gamma_t, "t0": t0, "beta": beta,
-            "use_app_window": use_app_window, "suggest_bow": suggest_bow
+            "t0": t0, "beta": beta,
+            "custom_center": custom_center, "custom_sigma": custom_sigma,
         }
     })
 
@@ -194,6 +161,7 @@ if not st.session_state.history:
 # ─────────── DISPLAY RESULTS ───────────
 df = st.session_state.history[-1]["df"]
 mode = st.session_state.history[-1]["mode"]
+application = st.session_state.history[-1]["params"]["application"]
 
 tab_tbl, tab_plot, tab_dl = st.tabs(["📊 Table", "📈 Plot", "📥 Download"])
 
@@ -201,6 +169,18 @@ with tab_tbl:
     st.dataframe(df, use_container_width=True, height=460)
 
 with tab_plot:
+    # choose a shading window for the plot
+    y0 = y1 = None
+    if application == "custom":
+        cc = st.session_state.history[-1]["params"].get("custom_center")
+        ss = st.session_state.history[-1]["params"].get("custom_sigma")
+        if cc and ss and ss > 0:
+            y0, y1 = cc - 2*ss, cc + 2*ss
+    else:
+        rng = APPLICATION_CONFIG.get(application, {}).get("range")
+        if rng:
+            y0, y1 = rng
+
     if mode.startswith("Binary") and {"Ehull","Eg","score"}.issubset(df.columns):
         fig = go.Figure()
         custom = pd.DataFrame({
@@ -228,13 +208,14 @@ with tab_plot:
                           "Scope=%{customdata[4]}<extra></extra>",
             customdata=custom
         ))
-        fig.add_shape(
-            type="rect", x0=0, x1=0.05, y0=bg_lo, y1=bg_hi,
-            line=dict(color="LightSeaGreen", dash="dash"),
-            fillcolor="LightSeaGreen", opacity=0.10
-        )
+        if y0 is not None and y1 is not None:
+            fig.add_shape(
+                type="rect", x0=0, x1=0.05, y0=y0, y1=y1,
+                line=dict(color="LightSeaGreen", dash="dash"),
+                fillcolor="LightSeaGreen", opacity=0.10
+            )
         fig.update_layout(
-            title="EnerMat Binary Screen",
+            title=f"EnerMat Binary Screen – {application}",
             xaxis_title="Ehull (eV/atom)", yaxis_title="Eg (eV)",
             template="simple_white", width=720, height=540,
             margin=dict(l=60, r=60, t=60, b=60)
@@ -249,14 +230,14 @@ with tab_plot:
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_dl:
-    # Current run CSV: keep only relevant columns (already trimmed by backend)
+    # Current run CSV (already trimmed by backend)
     st.download_button(
         "📥 Download current CSV",
         df.to_csv(index=False).encode(),
         "EnerMat_results.csv", "text/csv"
     )
 
-    # ALL runs (keep relevant columns + params stringified safely)
+    # ALL runs (keep relevant columns + params)
     if st.session_state.history:
         all_rows = []
 
