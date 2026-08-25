@@ -14,7 +14,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 from scipy.stats import qmc, spearmanr
 
-OUT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / 'data'
+FIG_DIR = ROOT / 'figures'
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # 1. Composition space and literature-informed band-gap model
 X_GRID = np.round(np.arange(0.0, 1.0001, 0.05), 2)
@@ -187,17 +191,17 @@ td_summary,td_draws = scoring_sensitivity(grid,(1.60,1.80),20260826,'tandem')
 stress_summary,stress_draws = descriptor_stress(grid)
 
 full = grid.merge(sj_summary,on=['x_Br','z_Ge','composition']).merge(td_summary,on=['x_Br','z_Ge','composition']).merge(stress_summary,on=['x_Br','z_Ge','composition'])
-full.to_csv(OUT/'Supplementary_Data_S1_231_compositions.csv',index=False)
-sj_draws.to_csv(OUT/'Supplementary_Data_S2a_single_sensitivity.csv',index=False)
-td_draws.to_csv(OUT/'Supplementary_Data_S2b_tandem_sensitivity.csv',index=False)
-stress_draws.to_csv(OUT/'Supplementary_Data_S3a_calibration_inputs.csv',index=False)
-stress_summary.to_csv(OUT/'Supplementary_Data_S3b_calibration_summary.csv',index=False)
+full.to_csv(DATA_DIR/'Supplementary_Data_S1_231_compositions.csv',index=False)
+sj_draws.to_csv(DATA_DIR/'Supplementary_Data_S2a_single_sensitivity.csv',index=False)
+td_draws.to_csv(DATA_DIR/'Supplementary_Data_S2b_tandem_sensitivity.csv',index=False)
+stress_draws.to_csv(DATA_DIR/'Supplementary_Data_S3a_calibration_inputs.csv',index=False)
+stress_summary.to_csv(DATA_DIR/'Supplementary_Data_S3b_calibration_summary.csv',index=False)
 
 # --- figures ---
 plt.rcParams.update({'font.size':9,'font.family':'DejaVu Sans'})
 
 def savefig(name):
-    plt.tight_layout(); plt.savefig(OUT/name,dpi=360,bbox_inches='tight'); plt.close()
+    plt.tight_layout(); plt.savefig(FIG_DIR/name,dpi=360,bbox_inches='tight'); plt.close()
 
 # Figure 1: workflow including robustness stage
 fig,ax=plt.subplots(figsize=(10,3.2)); ax.axis('off')
@@ -300,7 +304,7 @@ savefig('Figure_S4_descriptor_stress.png')
 
 # A compact summary text for programmatic checking
 best_sj=grid.loc[grid.Score_single.idxmax()]; best_td=grid.loc[grid.Score_tandem.idxmax()]
-with open(OUT/'analysis_summary.txt','w') as f:
+with open(DATA_DIR/'analysis_summary.txt','w') as f:
     f.write(f"Single reference maximum: x={best_sj.x_Br:.2f}, z={best_sj.z_Ge:.2f}, Eg={best_sj.Eg_eV:.6f}, score={best_sj.Score_single:.6f}\n")
     f.write(f"Tandem reference maximum: x={best_td.x_Br:.2f}, z={best_td.z_Ge:.2f}, Eg={best_td.Eg_eV:.6f}, score={best_td.Score_tandem:.6f}\n")
     for z in (0.40,0.45,0.50):
