@@ -1,18 +1,30 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-title: EnerMat-Explorer: High-throughput perovskite screening dashboard
-version: v1.0.0
-doi: 10.5281/zenodo.15756624
-date-released: 2025-06-27
+message: "If you use this software or its manuscript reproducibility package, please cite the archived software release and associated manuscript."
+title: "EnerMat Explorer: reproducibility package for physics-informed multi-objective screening of lead-free Sn-Ge perovskites"
+version: 2.0.0
+date-released: 2026-08-25
 url: https://github.com/omogbadebowale/EnerMat-Explorer
 repository-code: https://github.com/omogbadebowale/EnerMat-Explorer.git
 license: MIT
+type: software
+keywords:
+  - perovskites
+  - photovoltaics
+  - tin-germanium
+  - materials screening
+  - sensitivity analysis
+  - reproducibility
 authors:
   - family-names: Yusuf
     given-names: Gbadebo Taofeek
     orcid: https://orcid.org/0000-0002-9532-8134
 abstract: >
-  EnerMat-Explorer is an open-source Streamlit dashboard that integrates
-  Materials-Project thermodynamic data, bowing-corrected band-gap models,
-  and an explicit humidity/temperature penalty to screen mixed-halide
-  perovskites for photovoltaic performance and environmental robustness.
+  EnerMat Explorer v2.0.0 contains the manuscript reproducibility package for
+  physics-informed multi-objective screening of 231 lead-free Sn-Ge mixed-halide
+  perovskite compositions. The release includes literature-informed band-gap
+  calibration, interpolation-based stability and oxidation screening proxies,
+  explicit composite-score mathematics, 10,000-draw scoring-model sensitivity
+  analyses, a 5,000-draw descriptor-calibration stress test, synchronized data,
+  and data-derived figures. The earlier interactive Streamlit workflow is retained
+  in the repository for provenance. Composition-specific DFT calculations and
+  experimental validation are outside the scope of this release.
