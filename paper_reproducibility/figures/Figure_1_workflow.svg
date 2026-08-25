@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="600" viewBox="0 0 1800 600">
+  <rect width="1800" height="600" fill="white"/>
+  <style>
+    .box{fill:#fff;stroke:#143d70;stroke-width:3;rx:20;ry:20}.n{fill:#143d70}.t{font-family:Arial,Helvetica,sans-serif;fill:#111;font-size:25px}.small{font-family:Arial,Helvetica,sans-serif;fill:#111;font-size:21px}.num{font-family:Arial,Helvetica,sans-serif;fill:white;font-weight:700;font-size:22px}.arrow{stroke:#143d70;stroke-width:5;fill:none;marker-end:url(#m)}
+  </style>
+  <defs><marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#143d70"/></marker></defs>
+  <g transform="translate(35,85)">
+    <rect class="box" x="0" y="0" width="245" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">1</text>
+    <text class="t" x="122" y="135" text-anchor="middle"><tspan x="122" dy="0">Reference data &amp;</tspan><tspan x="122" dy="34">literature anchors</tspan></text>
+  </g>
+  <path class="arrow" d="M285 222 L320 222"/>
+  <g transform="translate(330,85)">
+    <rect class="box" x="0" y="0" width="245" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">2</text>
+    <text class="t" x="122" y="135" text-anchor="middle"><tspan x="122" dy="0">Explicit descriptor</tspan><tspan x="122" dy="34">models</tspan></text>
+  </g>
+  <path class="arrow" d="M580 222 L615 222"/>
+  <g transform="translate(625,85)">
+    <rect class="box" x="0" y="0" width="245" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">3</text>
+    <text class="t" x="122" y="135" text-anchor="middle"><tspan x="122" dy="0">PV target +</tspan><tspan x="122" dy="34">composite score</tspan></text>
+  </g>
+  <path class="arrow" d="M875 222 L910 222"/>
+  <g transform="translate(920,85)">
+    <rect class="box" x="0" y="0" width="245" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">4</text>
+    <text class="t" x="122" y="135" text-anchor="middle"><tspan x="122" dy="0">10,000-model</tspan><tspan x="122" dy="34">score sensitivity</tspan></text>
+  </g>
+  <path class="arrow" d="M1170 222 L1205 222"/>
+  <g transform="translate(1215,85)">
+    <rect class="box" x="0" y="0" width="245" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">5</text>
+    <text class="t" x="122" y="135" text-anchor="middle"><tspan x="122" dy="0">5,000-draw</tspan><tspan x="122" dy="34">calibration stress</tspan></text>
+  </g>
+  <path class="arrow" d="M1465 222 L1500 222"/>
+  <g transform="translate(1510,85)">
+    <rect class="box" x="0" y="0" width="255" height="275"/>
+    <circle class="n" cx="30" cy="35" r="23"/><text class="num" x="30" y="43" text-anchor="middle">6</text>
+    <text class="t" x="128" y="118" text-anchor="middle"><tspan x="128" dy="0">Candidates for DFT /</tspan><tspan x="128" dy="34">experimental validation</tspan></text>
+  </g>
+  <text class="small" x="55" y="445">Design space: Cs(Sn1−zGez)(I1−xBrx)3; x = 0–1, z = 0–0.50 (231 compositions).</text>
+  <text class="small" x="55" y="500">Interpolated stability descriptors are prioritisation tools; composition-specific DFT and experiments were not performed in this study.</text>
+</svg>
