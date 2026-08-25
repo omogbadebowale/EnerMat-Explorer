@@ -33,7 +33,7 @@ The script recreates the manuscript datasets under `paper_reproducibility/data/`
 ### Figures
 - `figures/Figure_1_workflow.svg` — study workflow and scope.
 - `figures/Figure_2_tradeoff.svg` — band-gap–oxidation trade-off for representative compositions.
-- `figures/Figure_3_landscape_robustness_super_clean.png` — 231-composition single-junction score and robustness landscape.
+- `figures/Figure_3_landscape_robustness.png` — 231-composition single-junction score and robustness landscape.
 - `figures/Figure_S1_tandem_robustness.png` — tandem score and robustness landscape.
 - `figures/Figure_S2_rank_distributions.png` — representative rank distributions.
 - `figures/Figure_S3_parameter_influence.png` — sensitivity of representative ranking to model parameters.
