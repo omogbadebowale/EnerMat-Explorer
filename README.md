@@ -29,6 +29,10 @@ The stability and oxidation quantities are screening proxies. The workflow is in
 
 See [`paper_reproducibility/README.md`](paper_reproducibility/README.md) for the full code, dataset and generated-figure inventory.
 
+### ACS submission snapshot
+
+The final flat ACS supplementary-package text files are preserved under [`paper_reproducibility/acs_submission_exact/`](paper_reproducibility/acs_submission_exact/). The committed S1–S7b CSV files under `paper_reproducibility/data/` have been verified byte-for-byte against the final supplementary ZIP, and the original SHA-256 manifest is retained in the snapshot folder. Repository-native scripts remain in `paper_reproducibility/` because they write outputs into the repository's structured `data/` and `figures/` directories.
+
 ## Interactive EnerMat Explorer dashboard
 
 The original Streamlit application is retained for provenance and exploratory use.
