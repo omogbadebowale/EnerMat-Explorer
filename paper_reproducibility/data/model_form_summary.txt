@@ -1,0 +1,9 @@
+N_DRAWS=10000; seed=20260919
+Ehull anchor span=0.006111 eV/atom; each curvature coefficient range=±0.001528 eV/atom
+Eox anchor span=0.741700 eV/Sn; each curvature coefficient range=±0.185425 eV/Sn
+single-junction: x=0.00, z=0.40, top10=0.9999, top1=0.1287, mean_rank=3.2175
+single-junction: x=0.00, z=0.45, top10=0.9978, top1=0.1004, mean_rank=2.8582
+single-junction: x=0.00, z=0.50, top10=0.9856, top1=0.6019, mean_rank=3.7066
+tandem-top-cell: x=0.35, z=0.50, top10=0.9984, top1=0.2981, mean_rank=3.1241
+tandem-top-cell: x=0.40, z=0.45, top10=1.0000, top1=0.0167, mean_rank=8.2642
+tandem-top-cell: x=0.45, z=0.45, top10=0.9971, top1=0.0150, mean_rank=9.1611

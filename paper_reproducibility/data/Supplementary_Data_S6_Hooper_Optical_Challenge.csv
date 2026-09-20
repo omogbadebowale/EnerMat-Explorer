@@ -1,0 +1,10 @@
+composition,route,z_Ge,model_Eg_eV,Hooper_Eg_eV,model_minus_observed_eV,note
+CsSnBr3,SS,0.0,1.77,1.8,-0.03,single phase
+CsSnBr3,MCS,0.0,1.77,1.8,-0.03,single phase
+CsSnBr3,HT,0.0,1.77,1.8,-0.03,single phase
+CsSn0.5Ge0.5Br3,SS,0.5,2.135,1.8 and 2.2,,two optical edges / phase segregation
+CsSn0.5Ge0.5Br3,MCS,0.5,2.135,2.0,0.1349999999999998,nominal mixed composition
+CsSn0.5Ge0.5Br3,HT,0.5,2.135,1.9,0.23499999999999988,nominal mixed composition
+CsGeBr3,SS,1.0,2.5,2.5,0.0,"diagnostic end line, outside formal z<=0.5 grid"
+CsGeBr3,MCS,1.0,2.5,2.5,0.0,"diagnostic end line, outside formal z<=0.5 grid"
+CsGeBr3,HT,1.0,2.5,2.5,0.0,"diagnostic end line, outside formal z<=0.5 grid"

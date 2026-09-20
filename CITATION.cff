@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software or its manuscript reproducibility package, please cite the archived software release and associated manuscript."
-title: "EnerMat Explorer: reproducibility package for physics-informed multi-objective screening of lead-free Sn-Ge perovskites"
-version: 2.0.0
-date-released: 2026-08-25
+title: "EnerMat Explorer: reproducibility package for uncertainty-aware multi-objective screening of Sn-Ge halide perovskites"
+version: 3.0.0
+date-released: 2026-09-20
 url: https://github.com/omogbadebowale/EnerMat-Explorer
 repository-code: https://github.com/omogbadebowale/EnerMat-Explorer.git
 license: MIT
@@ -12,19 +12,25 @@ keywords:
   - photovoltaics
   - tin-germanium
   - materials screening
-  - sensitivity analysis
+  - uncertainty analysis
+  - multi-objective decision analysis
+  - Pareto analysis
+  - model-form uncertainty
   - reproducibility
 authors:
   - family-names: Yusuf
     given-names: Gbadebo Taofeek
     orcid: https://orcid.org/0000-0002-9532-8134
 abstract: >
-  EnerMat Explorer v2.0.0 contains the manuscript reproducibility package for
-  physics-informed multi-objective screening of 231 lead-free Sn-Ge mixed-halide
+  EnerMat Explorer v3.0.0 contains the final manuscript reproducibility package for
+  uncertainty-aware multi-objective screening of 231 lead-free Sn-Ge mixed-halide
   perovskite compositions. The release includes literature-informed band-gap
-  calibration, interpolation-based stability and oxidation screening proxies,
+  calibration, interpolation-based phase-stability and oxidation screening proxies,
   explicit composite-score mathematics, 10,000-draw scoring-model sensitivity
-  analyses, a 5,000-draw descriptor-calibration stress test, synchronized data,
-  and data-derived figures. The earlier interactive Streamlit workflow is retained
-  in the repository for provenance. Composition-specific DFT calculations and
-  experimental validation are outside the scope of this release.
+  analyses, a 5,000-draw descriptor-calibration stress test, a weight-free Pareto
+  diagnostic, Latin-hypercube convergence testing, an independent synthesis-resolved
+  bromide optical challenge, and a 10,000-draw nonlinear model-form stress test with
+  anchor-preserving curvature in the stability/oxidation proxy surfaces. The release
+  is a transparent materials-prioritisation and robustness framework; no new
+  composition-specific DFT calculations were performed for the inherited
+  stability/oxidation corner inputs.
