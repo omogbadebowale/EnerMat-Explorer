@@ -52,6 +52,10 @@ All routines use fixed random seeds. Code 1 regenerates the base grid, S1–S3 d
 ### Figures
 Code 1 generates Figures 1–3 and Supplementary Figures S1–S4. Code 2 generates the Pareto, convergence and independent optical-challenge figures and a TOC graphic. Code 3 generates the model-form stress figure. Publication graphics can be exported as high-resolution PNG and SVG from the supplied scripts.
 
+### Exact ACS submission snapshot
+
+The exact final ACS text files are archived in [`acs_submission_exact/`](acs_submission_exact/), including the three submitted Python scripts, `README.txt`, and the original `SHA256SUMS.txt`. To avoid duplicating the large datasets, the CSVs themselves remain in `data/`; S1–S7b have been verified byte-for-byte against the final ACS supplementary ZIP. The scripts in the parent directory are repository-native equivalents adapted to write outputs into `data/` and `figures/`.
+
 ## Key v3.0.0 robustness checks
 
 - Single-junction x=0, z=0.40: top-decile occupancy **99.99%** under the combined calibration/model-form stress.
@@ -65,7 +69,7 @@ These are occupancy fractions conditional on the declared stress-test family; th
 
 ## Software requirements
 
-Python 3 with NumPy, pandas, SciPy and Matplotlib. The repository-level `requirements.txt` also contains dependencies for the legacy interactive EnerMat Explorer dashboard.
+Python 3 with NumPy, pandas, SciPy and Matplotlib. For the manuscript-only environment, install `paper_reproducibility/requirements.txt`; the repository-level `requirements.txt` also contains dependencies for the legacy interactive EnerMat Explorer dashboard.
 
 Tested final-analysis environment:
 - Python 3.13.5
